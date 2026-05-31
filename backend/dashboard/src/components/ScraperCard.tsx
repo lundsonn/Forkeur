@@ -17,7 +17,7 @@ const STATUS_DOT: Record<string, string> = {
 
 interface Props {
   status: ScraperStatus
-  onRun: () => void
+  onRun: (fullRun?: boolean) => void
   onStop: () => void
   isRunning: boolean
 }
@@ -67,16 +67,25 @@ export default function ScraperCard({ status, onRun, onStop, isRunning }: Props)
           ⏹ Stop
         </button>
       ) : (
-        <button
-          onClick={onRun}
-          className={`w-full rounded-xl py-2.5 text-sm font-medium transition-colors ${
-            isBad
-              ? 'bg-red-500 hover:bg-red-600 text-white'
-              : 'bg-stone-900 hover:bg-stone-800 text-white'
-          }`}
-        >
-          {isBad ? '↺ Retry' : '▶ Run now'}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => onRun(false)}
+            className={`flex-1 rounded-xl py-2.5 text-sm font-medium transition-colors ${
+              isBad
+                ? 'bg-red-500 hover:bg-red-600 text-white'
+                : 'bg-stone-900 hover:bg-stone-800 text-white'
+            }`}
+          >
+            {isBad ? '↺ Retry' : '▶ Quick'}
+          </button>
+          <button
+            onClick={() => onRun(true)}
+            title="Scrape restaurants + menus"
+            className="flex-1 rounded-xl py-2.5 text-sm font-medium transition-colors bg-orange-500 hover:bg-orange-600 text-white"
+          >
+            ▶▶ Full
+          </button>
+        </div>
       )}
     </div>
   )

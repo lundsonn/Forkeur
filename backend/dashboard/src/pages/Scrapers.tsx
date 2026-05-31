@@ -27,10 +27,10 @@ export default function Scrapers() {
     return () => clearInterval(interval)
   }, [])
 
-  const handleRun = async (platform: string) => {
+  const handleRun = async (platform: string, fullRun = false) => {
     setRunningPlatform(platform)
     try {
-      const { run_id } = await triggerRun(platform)
+      const { run_id } = await triggerRun(platform, { scrape_menus: fullRun, test_mode: false })
       setActiveRunId(run_id)
     } catch (e) {
       alert(String(e))
@@ -62,7 +62,7 @@ export default function Scrapers() {
           <ScraperCard
             key={s.platform}
             status={s}
-            onRun={() => handleRun(s.platform)}
+            onRun={(fullRun) => handleRun(s.platform, fullRun)}
             onStop={() => handleStop(s.platform)}
             isRunning={s.status === 'running'}
           />

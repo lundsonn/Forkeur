@@ -1,12 +1,16 @@
 from __future__ import annotations
 import asyncio
 import math
+import os
 import random
 import re as _re
 from playwright.async_api import async_playwright, Browser, Page
 from playwright_stealth import Stealth as _Stealth
 
 _stealth = _Stealth()
+
+# Kept alive for the process lifetime when headed mode starts Xvfb automatically.
+_virtual_display = None
 
 
 class CloudflareBlockedError(Exception):
@@ -41,6 +45,19 @@ Object.defineProperty(navigator, 'permissions', {
 
 
 async def new_browser(lang: str = "fr-BE", headed: bool = False) -> Browser:
+    global _virtual_display
+
+    # Headed mode on a server with no display (Xvfb virtual framebuffer).
+    # Falls back gracefully if pyvirtualdisplay isn't installed — use
+    # `xvfb-run -a uv run python <script>` as the manual fallback in that case.
+    if headed and not os.environ.get("DISPLAY"):
+        try:
+            from pyvirtualdisplay import Display
+            _virtual_display = Display(visible=False, size=(1920, 1080))
+            _virtual_display.start()
+        except Exception:
+            pass  # xvfb-run fallback
+
     p = await async_playwright().start()
     args = [
         "--no-sandbox",
@@ -54,7 +71,25 @@ async def new_browser(lang: str = "fr-BE", headed: bool = False) -> Browser:
     ]
     if not headed:
         args += ["--disable-gpu", "--disable-extensions"]
-    browser = await p.chromium.launch(headless=not headed, args=args)
+
+    # Residential proxy — required for Takeaway (CF clears to the exit IP).
+    # PROXY_STICKY_SESSION must be a stable session ID so the exit IP never
+    # rotates mid-run (CF binds its clearance cookie to the IP it issued it to).
+    # Sticky-session username format is provider-specific; common formats:
+    #   Brightdata / Oxylabs:  "{username}-sessid-{session_id}"
+    #   Smartproxy:            "{username}-session-{session_id}"
+    # Adjust the f-string below to match your provider.
+    proxy = None
+    proxy_server = os.environ.get("PROXY_SERVER")
+    if proxy_server:
+        username = os.environ.get("PROXY_USERNAME", "")
+        password = os.environ.get("PROXY_PASSWORD", "")
+        sticky = os.environ.get("PROXY_STICKY_SESSION", "")
+        if sticky:
+            username = f"{username}-sessid-{sticky}"  # ← adjust format here
+        proxy = {"server": proxy_server, "username": username, "password": password}
+
+    browser = await p.chromium.launch(headless=not headed, args=args, proxy=proxy)
     return browser
 
 
@@ -62,6 +97,7 @@ async def new_page(browser: Browser, lang: str = "fr-BE") -> Page:
     context = await browser.new_context(
         user_agent=_next_ua(),
         locale=lang,
+        timezone_id="Europe/Brussels",  # matches Belgian exit IP; mismatch = CF flag
         viewport={"width": 1920, "height": 1080},
         extra_http_headers={"Accept-Language": f"{lang},{lang[:2]};q=0.9,en;q=0.8"},
         java_script_enabled=True,

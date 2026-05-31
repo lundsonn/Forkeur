@@ -8,8 +8,18 @@ export async function getScraperStatus(): Promise<ScraperStatus[]> {
   return res.json()
 }
 
-export async function triggerRun(platform: string): Promise<{ run_id: string }> {
-  const res = await fetch(`${BASE}/scrapers/${platform}/run`, { method: 'POST' })
+export interface RunOptions {
+  test_mode?: boolean
+  scrape_menus?: boolean
+  max_menus?: number
+}
+
+export async function triggerRun(platform: string, options: RunOptions = {}): Promise<{ run_id: string }> {
+  const res = await fetch(`${BASE}/scrapers/${platform}/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(options),
+  })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }

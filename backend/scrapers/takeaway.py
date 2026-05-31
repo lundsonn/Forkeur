@@ -29,6 +29,8 @@ def _parse_dom_items(dom_output: dict) -> list[dict]:
 
     for section in sections:
         catalog_name = section.get("heading", "Menu")
+        if any(noise in catalog_name.lower() for noise in _HEADING_NOISE):
+            continue
         section_items = section.get("items", [])
 
         for item in section_items:
@@ -47,88 +49,116 @@ def _parse_dom_items(dom_output: dict) -> list[dict]:
     return items
 
 
+# Section headings that are not menu categories (cart, business info, restaurant name).
+_HEADING_NOISE = ("business details", "panier", "basket", "cart", "horaires", "informations")
+
+
 async def scrape_menu_page(page, listing_id: str, url: str) -> tuple[str, list[dict]]:
-    """Navigate restaurant menu page and scrape items via DOM eval.
+    """Navigate restaurant menu page (full goto + CF clear) and scrape items.
+
+    Takeaway gates every /menu/ path behind a fresh Cloudflare challenge. A full
+    document load (page.goto) lets CF's challenge script run top-level so the
+    mouse-simulation clear can solve it — a client-side SPA click does NOT clear.
+    So we always goto + wait_for_cf_clear here, same as the listing page.
+
+    Item DOM (data-qa): card-element wraps each item; item-name = title,
+    item-price = "€ 8,00"; heading = section category.
 
     Returns: (listing_id, items)
     """
     items = []
 
     try:
-        # Navigate to menu page
-        await page.goto(url, timeout=15000)
+        # CF gates each /menu/ path; rapid back-to-back challenges sometimes
+        # don't clear on the first try. Retry once after a short pause.
+        cleared = False
+        for attempt in range(2):
+            await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+            cleared = await wait_for_cf_clear(page, timeout_s=90)
+            if cleared:
+                break
+            await asyncio.sleep(3 + attempt * 2)
+        if not cleared:
+            raise CloudflareBlockedError("menu page CF not cleared")
 
-        # Scroll to load lazy-loaded items
-        await page.evaluate("window.scrollBy(0, document.body.scrollHeight)")
-        await page.wait_for_timeout(1500)
+        # Title flips when CF clears; wait for network to settle before DOM work.
+        try:
+            await page.wait_for_load_state("networkidle", timeout=15000)
+        except Exception:
+            pass  # timeout is fine — just proceed
 
-        # Eval DOM to extract sections and items
+        # SPA still needs to render the menu.
+        try:
+            await page.wait_for_selector('[data-qa="card-element"]', timeout=20000)
+        except Exception:
+            return (listing_id, items)  # no items rendered
+
+        # Count items visible right now (before scrolling).
+        _count_js = "document.querySelectorAll('[data-qa=\"card-element\"]').length"
+        count_before = await page.evaluate(_count_js)
+
+        # Phase 1: scroll by height until page stops growing.
+        prev_height = 0
+        for _ in range(25):
+            height = await page.evaluate("document.body.scrollHeight")
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await page.wait_for_timeout(600)
+            if height == prev_height:
+                break
+            prev_height = height
+
+        # Phase 2: item-count-based scroll — stops when count plateaus.
+        # Handles lazy categories that load after height stabilises.
+        prev_count = 0
+        for _ in range(15):
+            cur_count = await page.evaluate(_count_js)
+            if cur_count == prev_count:
+                break
+            prev_count = cur_count
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await page.wait_for_timeout(700)
+        await page.wait_for_timeout(500)
+
+        count_after = await page.evaluate(_count_js)
+        # log_fn not available here; caller logs the final item count instead
+
+        # Walk card-elements + headings in document order, tracking current section.
         dom_output = await page.evaluate("""
         () => {
             const sections = [];
-
-            // Find product cards
-            const productCards = Array.from(document.querySelectorAll(
-                '[data-qa*="product"], [data-testid*="product"], .product-card'
+            const nodes = Array.from(document.querySelectorAll(
+                '[data-qa="heading"], [data-qa="card-element"]'
             ));
-
-            // Group by preceding section heading
-            let currentSection = null;
-            let currentItems = [];
-
-            for (const card of productCards) {
-                // Check if there's a heading before this card
-                let heading = card.previousElementSibling;
-                while (heading && !['H2', 'H3'].includes(heading.tagName)) {
-                    heading = heading.previousElementSibling;
+            let heading = 'Menu';
+            let cur = null;
+            for (const node of nodes) {
+                const qa = node.getAttribute('data-qa');
+                if (qa === 'heading') {
+                    heading = (node.innerText || '').trim() || 'Menu';
+                    continue;
                 }
-
-                const headingText = heading ? heading.textContent.trim() : 'Menu';
-
-                // If section changed, save previous section
-                if (currentSection && currentSection.heading !== headingText) {
-                    if (currentItems.length > 0) {
-                        sections.push({
-                            heading: currentSection.heading,
-                            items: currentItems
-                        });
-                    }
-                    currentItems = [];
+                const nameEl = node.querySelector('[data-qa="item-name"]');
+                const priceEl = node.querySelector('[data-qa="item-price"]');
+                if (!nameEl || !priceEl) continue;
+                const title = (nameEl.innerText || '').trim();
+                const price = (priceEl.innerText || '').trim();
+                if (!title) continue;
+                if (!cur || cur.heading !== heading) {
+                    cur = { heading, items: [] };
+                    sections.push(cur);
                 }
-
-                // Extract price and title
-                const priceMatch = card.textContent.match(/€\\s*\\d+[,.]\\d+|\\d+[,.]\\d+\\s*€/);
-                if (priceMatch) {
-                    let titleText = card.textContent.replace(/€\\s*\\d+[,.]\\d+|\\d+[,.]\\d+\\s*€/g, '').trim();
-                    // Take first line as title
-                    titleText = titleText.split('\\n')[0];
-
-                    currentItems.push({
-                        title: titleText,
-                        price: priceMatch[0]
-                    });
-                }
-
-                currentSection = { heading: headingText };
+                cur.items.push({ title, price });
             }
-
-            // Save last section
-            if (currentSection && currentItems.length > 0) {
-                sections.push({
-                    heading: currentSection.heading,
-                    items: currentItems
-                });
-            }
-
             return { sections };
         }
         """)
 
-        # Parse DOM output
         items = _parse_dom_items(dom_output)
 
-    except Exception as e:
-        pass  # Silent fail for test compatibility
+    except CloudflareBlockedError:
+        raise
+    except Exception:
+        pass  # tolerate per-restaurant render failures; caller logs & continues
 
     return (listing_id, items)
 
@@ -150,12 +180,15 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
             check_cloudflare(await page.title())
         log_fn("CF cleared — waiting for restaurant cards to render...")
 
+        # SPA needs a moment after CF clears before the restaurant fetch starts.
+        await asyncio.sleep(3)
+
         # Title changes when CF passes, but the SPA still needs to fetch + render
         # the restaurant list. Wait for the first card before scrolling/eval.
         try:
-            await page.wait_for_selector('[data-qa="restaurant-card"]', timeout=30000)
+            await page.wait_for_selector('[data-qa="restaurant-card"]', timeout=60000)
         except Exception:
-            log_fn("No restaurant-card selector after 30s — page may not have loaded")
+            log_fn("No restaurant-card selector after 60s — page may not have loaded")
         log_fn("Page loaded")
 
         log_fn("Scrolling to load restaurants...")

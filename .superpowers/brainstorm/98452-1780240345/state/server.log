@@ -1,0 +1,5 @@
+{"type":"server-started","port":60287,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:60287","screen_dir":"/Users/gege/Documents/Claude/Projects/Vibe coder/food-price-compare/.superpowers/brainstorm/98452-1780240345/content","state_dir":"/Users/gege/Documents/Claude/Projects/Vibe coder/food-price-compare/.superpowers/brainstorm/98452-1780240345/state"}
+{"type":"screen-added","file":"/Users/gege/Documents/Claude/Projects/Vibe coder/food-price-compare/.superpowers/brainstorm/98452-1780240345/content/homepage-cards.html"}
+{"type":"screen-added","file":"/Users/gege/Documents/Claude/Projects/Vibe coder/food-price-compare/.superpowers/brainstorm/98452-1780240345/content/sticky-cta.html"}
+{"type":"screen-added","file":"/Users/gege/Documents/Claude/Projects/Vibe coder/food-price-compare/.superpowers/brainstorm/98452-1780240345/content/waiting.html"}
+{"type":"server-stopped","reason":"idle timeout"}
