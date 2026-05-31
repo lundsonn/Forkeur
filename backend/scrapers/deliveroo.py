@@ -2,9 +2,43 @@ from __future__ import annotations
 import asyncio
 import re
 from typing import Callable
+from urllib.parse import urlparse, parse_qs
 from models import ScraperConfig, ScraperResult
 from scrapers.base import new_browser, new_page, check_cloudflare, noop_log, CloudflareBlockedError, parse_menu_price
 import db
+
+_GH_BASE32 = "0123456789bcdefghjkmnpqrstuvwxyz"
+
+
+def _decode_geohash(gh: str) -> tuple[float, float] | None:
+    """Decode a geohash string to (lat, lng). Returns None on invalid input."""
+    try:
+        lat = [-90.0, 90.0]
+        lon = [-180.0, 180.0]
+        even = True
+        for c in gh.lower():
+            v = _GH_BASE32.index(c)
+            for bit in (16, 8, 4, 2, 1):
+                rng = lon if even else lat
+                mid = (rng[0] + rng[1]) / 2
+                if v & bit:
+                    rng[0] = mid
+                else:
+                    rng[1] = mid
+                even = not even
+        return (lat[0] + lat[1]) / 2, (lon[0] + lon[1]) / 2
+    except (ValueError, ZeroDivisionError):
+        return None
+
+
+def _coords_from_url(url: str) -> tuple[float, float] | None:
+    """Extract lat/lng from Deliveroo menu URL geohash query param."""
+    try:
+        qs = parse_qs(urlparse(url).query)
+        gh = qs.get("geohash", [None])[0]
+        return _decode_geohash(gh) if gh else None
+    except Exception:
+        return None
 
 
 def _parse_dom_items(dom_output: dict) -> list[dict]:
@@ -110,14 +144,14 @@ async def scrape_menu_page(page, listing_id: str, url: str) -> tuple[str, list[d
 
 async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -> ScraperResult:
     log_fn("Starting Deliveroo scraper")
-    browser = await new_browser(lang="en-GB")
+    browser = await new_browser(lang="fr-BE")
     records_saved = 0
 
     try:
-        page = await new_page(browser, lang="en-GB")
+        page = await new_page(browser, lang="fr-BE")
 
-        log_fn("Opening deliveroo.be/en...")
-        await page.goto("https://deliveroo.be/en", wait_until="domcontentloaded", timeout=60000)
+        log_fn("Opening deliveroo.be/fr...")
+        await page.goto("https://deliveroo.be/fr", wait_until="domcontentloaded", timeout=60000)
         check_cloudflare(await page.title())
         log_fn("Page loaded")
 
@@ -181,7 +215,8 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 // Match "4.2 Excellent", "4,2 Bien", "4.2 (1234)", or bare "4.2"
                 const ratingIdx = lines.findIndex(l => /^[1-5][,.]\\d(\\s|$|\\()/.test(l));
                 const ratingLine = ratingIdx >= 0 ? lines[ratingIdx] : null;
-                const name = ratingIdx > 0 ? lines[ratingIdx - 1] : (lines.find(l => !l.match(/^\\d+(-\\d+)?\\s*min$/) && !l.includes('€') && l.length > 3) || slug);
+                const _isEta = l => /^\\d+(-\\d+)?\\s*min$|around\\s+\\d+/i.test(l);
+                const name = ratingIdx > 0 ? lines[ratingIdx - 1] : (lines.find(l => !_isEta(l) && !l.includes('€') && l.length > 3) || slug);
                 const ratingMatch = (ratingLine || '').match(/^(\\d[,.]\\d)/);
                 const reviewMatch = (ratingLine || '').match(/\\((\\d[\\d.,]*\\+?)\\)/);
                 const eta = lines.find(l => /^\\d+(-\\d+)?\\s*min$/i.test(l)) || 'N/A';
@@ -210,7 +245,12 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
         # --- Phase 1: upsert restaurants + listings ---
         saved: list[tuple[dict, str, str]] = []  # (r, rid, lid)
         for r in (restaurants[:config.max_items] if config.max_items else restaurants):
-            rid = db.upsert_restaurant({"name": r["name"], "slug": r["slug"]})
+            coords = _coords_from_url(r.get("url", ""))
+            rid = db.upsert_restaurant({
+                "name": r["name"],
+                "slug": r["slug"],
+                **({} if coords is None else {"lat": coords[0], "lng": coords[1]}),
+            })
             lid = db.upsert_listing({
                 "restaurant_id": rid,
                 "platform": "deliveroo",
@@ -224,114 +264,166 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
             records_saved += 1
             saved.append((r, rid, lid))
 
-        # --- Phase 2: click-nav per restaurant (direct goto → Cloudflare block) ---
-        listing_url = page.url
+        # --- Phase 2: goto per restaurant menu page ---
+        # SPA click only renders a partial React tree → ~6 items.
+        # Full goto gives 100+ items because the full SSR + hydration runs.
+        # Deliveroo has no CF on menu pages so goto is safe.
         menu_items_saved = 0
         n = len(saved)
         for i, (r, rid, lid) in enumerate(saved):
             log_fn(f"Menu: {i + 1}/{n} — {r['name']}")
             try:
-                # Back to listing, then click the restaurant anchor
-                if listing_url not in page.url:
-                    await page.go_back(wait_until="domcontentloaded", timeout=15000)
-                    await asyncio.sleep(1)
-
-                slug = r.get("slug", "")
-                clicked = False
-                for _attempt in range(3):
-                    clicked = await page.evaluate(f"""
-                        (() => {{
-                            const a = document.querySelector('a[href*="/menu/{slug}"]');
-                            if (a) {{ a.click(); return true; }}
-                            return false;
-                        }})()
-                    """)
-                    if clicked:
-                        break
-                    await page.evaluate("window.scrollBy(0, 4000)")
-                    await asyncio.sleep(1)
-
-                if not clicked:
-                    log_fn(f"  Link not found for {r['name']}, skipping")
+                menu_url = r.get("url", "")
+                if not menu_url:
+                    log_fn(f"  No URL for {r['name']}, skipping")
                     continue
 
-                await page.wait_for_load_state("domcontentloaded", timeout=15000)
-                check_cloudflare(await page.title())
-
-                # Primary selector: Deliveroo carousel/slide items.
-                slide_items: list[dict] = []
                 try:
-                    await page.wait_for_selector('li[class*="Slide"]', timeout=8000)
-                    slide_items = await page.eval_on_selector_all(
-                        'li[class*="Slide"]',
-                        """lis => {
-                            const h2s = Array.from(document.querySelectorAll('h2'));
-                            return lis.map(li => {
-                                const lines = (li.innerText || '').split('\\n').map(l => l.trim()).filter(Boolean);
-                                const priceLine = lines.find(l => /€\\s*\\d/.test(l));
-                                const title = lines.find(l =>
-                                    l !== priceLine && l.length > 1 && !/^free/i.test(l) && !/fees apply/i.test(l)
-                                ) || '';
-                                const priceMatch = (priceLine || '').match(/€\\s*(\\d+)[,.]?(\\d{0,2})/);
-                                const price = priceMatch
-                                    ? parseFloat(priceMatch[1] + '.' + (priceMatch[2] || '00').padEnd(2, '0'))
-                                    : null;
-                                let catalogName = '';
-                                for (const h2 of h2s) {
-                                    if (h2.compareDocumentPosition(li) & Node.DOCUMENT_POSITION_FOLLOWING) {
-                                        catalogName = h2.innerText.trim();
-                                    }
-                                }
-                                return { title, price, catalog_name: catalogName };
-                            }).filter(i => i.title && i.price !== null && i.price > 0);
-                        }""",
-                    )
+                    await page.goto(menu_url, wait_until="domcontentloaded", timeout=60000)
+                except Exception:
+                    pass  # timeout is fine — content loads progressively
+                # Handle redirect /menu/ → /fr/menu/
+                try:
+                    await page.wait_for_url("**/menu/**", timeout=10000)
                 except Exception:
                     pass
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=20000)
+                except Exception:
+                    pass
+                # Extra settle — Deliveroo defers off-screen section rendering
+                await asyncio.sleep(2)
+                check_cloudflare(await page.title())
 
-                # Fallback: DOM walk using h2/h3 headings — catches non-carousel layouts.
-                items: list[dict] = slide_items
-                if not items:
-                    await page.wait_for_timeout(1500)
-                    dom_output = await page.evaluate("""
-                    () => {
-                        const sections = [];
-                        const headings = Array.from(document.querySelectorAll('h2, h3'));
-                        for (const heading of headings) {
-                            const sectionName = heading.textContent.trim();
-                            const secItems = [];
-                            let current = heading.nextElementSibling;
-                            while (current && !['H2', 'H3'].includes(current.tagName)) {
-                                const priceMatch = current.textContent.match(/€\\s*\\d+[,.]\\d+|\\d+[,.]\\d+\\s*€/);
-                                if (priceMatch) {
-                                    const titleText = current.textContent
-                                        .replace(/€\\s*\\d+[,.]\\d+|\\d+[,.]\\d+\\s*€/g, '')
-                                        .replace(/\\s+/g, ' ')
-                                        .trim();
-                                    if (titleText) secItems.push({ title: titleText, price: priceMatch[0] });
-                                }
-                                current = current.nextElementSibling;
-                            }
-                            if (secItems.length > 0) sections.push({ heading: sectionName, items: secItems });
+                # Wait for price-bearing element. notranslate is more stable than
+                # CSS-module hashed MenuItemCard class (changes every Deliveroo deploy).
+                for _sel in ('div.notranslate', '[class*="MenuItemCardV2"]', '[class*="MenuItemCard"]', '[data-testid="menu-item-image"]'):
+                    try:
+                        await page.wait_for_selector(_sel, timeout=8000)
+                        break
+                    except Exception:
+                        pass
+
+                # notranslate count is the reliable item proxy — class hashes change each deploy.
+                _card_js = "document.querySelectorAll('div.notranslate').length"
+                before_scroll = await page.evaluate(_card_js)
+                log_fn(f"  Before scroll: {before_scroll} notranslate divs, url={page.url[:80]}")
+
+                # Scroll to trigger lazy-loaded sections — height-stable then item-count-stable.
+                prev_h = 0
+                for _ in range(30):
+                    h = await page.evaluate("document.body.scrollHeight")
+                    await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                    await page.wait_for_timeout(800)
+                    if h == prev_h:
+                        # Extra wait: next batch sometimes loads 500ms after height settles
+                        await page.wait_for_timeout(600)
+                        h2 = await page.evaluate("document.body.scrollHeight")
+                        if h2 == h:
+                            break
+                    prev_h = h
+
+                after_scroll = await page.evaluate(_card_js)
+                log_fn(f"  After scroll: {after_scroll} notranslate divs")
+
+                # Item-count loop: keeps scrolling while new items appear.
+                prev_count = after_scroll
+                for _ in range(20):
+                    await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                    await page.wait_for_timeout(900)
+                    cur = await page.evaluate(_card_js)
+                    if cur == prev_count:
+                        break
+                    prev_count = cur
+                await page.evaluate("window.scrollTo(0, 0)")
+                await asyncio.sleep(0.5)
+
+                # Multi-strategy extraction — ordered by selector stability.
+                items: list[dict] = await page.evaluate("""() => {
+                    const seen = new Set();
+                    const out = [];
+                    const h2s = Array.from(document.querySelectorAll('h2'));
+
+                    function nearestHeading(el) {
+                        for (const h2 of [...h2s].reverse()) {
+                            if (h2.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING)
+                                return h2.innerText.trim();
                         }
-                        return { sections };
+                        return '';
                     }
-                    """)
-                    items = _parse_dom_items(dom_output)
 
-                # Deduplicate by title+price
-                seen_keys: set[str] = set()
-                unique_items: list[dict] = []
-                for item in items:
-                    key = f"{item['title']}|{item['price']}"
-                    if key not in seen_keys:
-                        seen_keys.add(key)
-                        unique_items.append(item)
+                    function parsePrice(raw) {
+                        const m = raw.match(/(\\d+)[,.]?(\\d{0,2})/);
+                        if (!m) return null;
+                        const p = parseFloat(m[1] + '.' + (m[2] || '00').padEnd(2, '0'));
+                        return (p > 0 && p <= 200) ? p : null;
+                    }
 
-                if unique_items:
-                    db.insert_menu_items(lid, unique_items)
-                    menu_items_saved += len(unique_items)
-                    log_fn(f"  Saved {len(unique_items)} items")
+                    function addItem(title, price, catalogName) {
+                        title = title.trim();
+                        if (!title || title.length < 2 || price === null) return;
+                        const key = title + '|' + price;
+                        if (seen.has(key)) return;
+                        seen.add(key);
+                        out.push({ title, price, catalog_name: catalogName });
+                    }
+
+                    // Strategy 1: div.notranslate — one per item card (Deliveroo wraps item
+                    // title in a notranslate div to prevent Google Translate from mangling it).
+                    // Walk up from the notranslate to the card container that has a price.
+                    document.querySelectorAll('div.notranslate').forEach(nt => {
+                        // Skip if nested inside another notranslate
+                        if (nt.parentElement?.closest('div.notranslate')) return;
+                        const titleEl = nt.querySelector('p, span, h2, h3, h4') || nt;
+                        const title = (titleEl.innerText || '').trim();
+                        if (!title || title.length < 2) return;
+                        // Walk up to find price
+                        let el = nt;
+                        let priceM = null;
+                        for (let i = 0; i < 6; i++) {
+                            if (!el.parentElement) break;
+                            el = el.parentElement;
+                            const text = (el.innerText || '').trim();
+                            priceM = text.match(/(\\d+)[,.]?(\\d{0,2})\\s*€/);
+                            if (priceM) break;
+                        }
+                        if (!priceM) return;
+                        addItem(title, parsePrice(priceM[1] + '.' + (priceM[2] || '00').padEnd(2, '0')), nearestHeading(nt));
+                    });
+                    if (out.length > 0) return out;
+
+                    // Strategy 2: data-testid attributes (stable across deploys)
+                    for (const sel of ['[data-testid*="menu-item"]', '[data-testid*="product"]', '[data-test*="item"]']) {
+                        document.querySelectorAll(sel).forEach(el => {
+                            const text = (el.innerText || '').trim();
+                            const priceM = text.match(/€\\s*(\\d+[,.]\\d{1,2})/);
+                            if (!priceM) return;
+                            const lines = text.split('\\n').map(l => l.trim()).filter(l => l.length > 1);
+                            const title = lines.find(l => !l.startsWith('€') && !/^\\d+[,.]?\\d*\\s*€/.test(l) && l.length > 2);
+                            if (title) addItem(title, parsePrice(priceM[1]), nearestHeading(el));
+                        });
+                        if (out.length > 0) return out;
+                    }
+
+                    // Strategy 3: li/article with price (covers other layouts)
+                    document.querySelectorAll('li, article').forEach(el => {
+                        const text = (el.innerText || '').trim();
+                        if (text.length > 500 || text.length < 4) return;
+                        const priceM = text.match(/(\\d+)[,.]?(\\d{0,2})\\s*€/);
+                        if (!priceM) return;
+                        const lines = text.split('\\n').map(l => l.trim()).filter(l => l.length > 1);
+                        const title = lines.find(l => !l.includes('€') && !/^\\d+[,.]?\\d*$/.test(l) && l.length > 2);
+                        if (title) addItem(title, parsePrice(priceM[1] + '.' + (priceM[2] || '00').padEnd(2, '0')), nearestHeading(el));
+                    });
+                    return out;
+                }""")
+
+                log_fn(f"  Extracted {len(items)} items via DOM")
+
+                if items:
+                    db.insert_menu_items(lid, items)
+                    menu_items_saved += len(items)
+                    log_fn(f"  Saved {len(items)} items")
                 else:
                     log_fn(f"  Warning: no menu items found for {r['name']}")
 

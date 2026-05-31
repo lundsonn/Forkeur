@@ -127,7 +127,7 @@ async def _move_mouse_human(page: Page, x: float, y: float) -> None:
 
 async def wait_for_cf_clear(page: Page, timeout_s: int = 90) -> bool:
     """Wait for CF challenge to pass, moving mouse naturally. Returns True if cleared."""
-    vw, vh = 1280, 800
+    vw, vh = 1920, 1080
     deadline = timeout_s * 2  # iterations of 0.5s each
 
     for tick in range(deadline):

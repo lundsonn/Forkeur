@@ -56,14 +56,51 @@ _HEADING_NOISE = ("business details", "panier", "basket", "cart", "horaires", "i
 async def _extract_menu_items(page, listing_id: str) -> tuple[str, list[dict]]:
     """Extract menu items from an already-loaded Takeaway menu page.
 
-    Expects `[data-qa="card-element"]` to be present. Scrolls to load lazy sections.
+    Tries data-qa selectors first, falls back to broad price-bearing li/article walk.
     Returns: (listing_id, items)
     """
     items: list[dict] = []
+
+    # Try the primary selector; if absent, fall back to broader extraction.
+    found_primary = False
     try:
-        await page.wait_for_selector('[data-qa="card-element"]', timeout=20000)
+        await page.wait_for_selector('[data-qa="card-element"]', timeout=15000)
+        found_primary = True
     except Exception:
-        return (listing_id, items)
+        pass
+
+    if not found_primary:
+        # Maybe the selector changed — try alternates before giving up.
+        for alt in ('[data-qa="product-card"]', '[data-qa="item-card"]', '[data-qa="menu-item"]'):
+            try:
+                await page.wait_for_selector(alt, timeout=5000)
+                found_primary = True
+                break
+            except Exception:
+                pass
+
+    if not found_primary:
+        # Last resort: any element with a price visible — extract what we can.
+        raw_items = await page.evaluate("""() => {
+            const seen = new Set();
+            const out = [];
+            document.querySelectorAll('li, article').forEach(el => {
+                const text = (el.innerText || '').trim();
+                if (text.length > 600 || text.length < 4) return;
+                const priceM = text.match(/€\\s*(\\d+)[,.](\\d{0,2})/);
+                if (!priceM) return;
+                const lines = text.split('\\n').map(l => l.trim()).filter(l => l.length > 1);
+                const title = lines.find(l => !l.startsWith('€') && !/^\\d+[,.]?\\d*$/.test(l) && l.length > 2);
+                if (!title) return;
+                const key = title + '|' + priceM[0];
+                if (seen.has(key)) return;
+                seen.add(key);
+                const price = parseFloat(priceM[1] + '.' + (priceM[2] || '00').padEnd(2, '0'));
+                out.push({ title, price, catalog_name: 'Menu' });
+            });
+            return out;
+        }""")
+        return (listing_id, raw_items or [])
 
     _count_js = "document.querySelectorAll('[data-qa=\"card-element\"]').length"
 
@@ -155,7 +192,7 @@ async def scrape_menu_page(page, listing_id: str, url: str) -> tuple[str, list[d
         await asyncio.sleep(1)
         title = await page.title()
         if "instant" in title.lower() or "moment" in title.lower():
-            cleared = await wait_for_cf_clear(page, timeout_s=45)
+            cleared = await wait_for_cf_clear(page, timeout_s=120)
             if not cleared:
                 raise CloudflareBlockedError("CF on menu page after SPA click")
     else:
@@ -278,9 +315,13 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
             log_fn(f"Menu: {i+1}/{n} — {r['name']}")
             try:
                 # Return to listing via go_back (SPA, no CF) if we navigated away.
-                if listing_url not in page.url:
+                if "/menu/" in page.url:
                     try:
                         await page.go_back(wait_until="domcontentloaded", timeout=15000)
+                        try:
+                            await page.wait_for_selector('[data-qa="restaurant-card"]', timeout=10000)
+                        except Exception:
+                            pass
                         await asyncio.sleep(0.5)
                     except Exception:
                         await page.goto(listing_url, wait_until="domcontentloaded", timeout=30000)
@@ -312,16 +353,38 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                     await page.wait_for_url("**/menu/**", timeout=10000)
                 except Exception:
                     pass
-                await asyncio.sleep(1)
+                log_fn(f"  URL after click: {page.url[:80]}")
 
-                # SPA nav rarely triggers CF, but check as safety net.
+                # URL change ≠ data loaded — wait for SPA to finish fetching menu.
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=12000)
+                except Exception:
+                    pass
+                await asyncio.sleep(2)
+
+                # Bail if SPA nav silently failed (URL unchanged = click did nothing)
+                if "/menu/" not in page.url:
+                    log_fn(f"  SPA nav failed (still at {page.url[:60]}), skipping")
+                    continue
+
+                # Menu pages always get a fresh CF check — wait unconditionally.
+                # SPA click navigates to a new CF zone; clearance from listing doesn't carry.
                 title = await page.title()
-                if "instant" in title.lower() or "moment" in title.lower():
-                    cleared = await wait_for_cf_clear(page, timeout_s=45)
+                log_fn(f"  Menu title: {title!r}")
+                if "instant" in title.lower() or "moment" in title.lower() or "un instant" in title.lower():
+                    log_fn(f"  CF on menu page — waiting up to 120s")
+                    cleared = await wait_for_cf_clear(page, timeout_s=120)
                     if not cleared:
-                        raise CloudflareBlockedError("CF on menu page")
+                        raise CloudflareBlockedError("CF on menu page not cleared")
 
-                _, menu_items = await _extract_menu_items(page, lid)
+                # Hard cap: _extract_menu_items scroll loops can stall on network issues
+                try:
+                    _, menu_items = await asyncio.wait_for(
+                        _extract_menu_items(page, lid), timeout=60
+                    )
+                except asyncio.TimeoutError:
+                    log_fn(f"  Extract timed out after 60s, skipping")
+                    continue
 
                 if menu_items:
                     db.insert_menu_items(lid, menu_items)
@@ -342,7 +405,6 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                             return t;
                         }
                     }
-                    // Fallback: any standalone "€ X,XX" line in the page header area
                     const all = Array.from(document.querySelectorAll('[data-qa]'));
                     for (const el of all) {
                         const t = (el.innerText || '').trim();

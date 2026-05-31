@@ -54,8 +54,8 @@ async def main():
         print(f"URL after click: {page.url}")
 
         # Try wait_for_cf_clear again on menu page
-        print("Running wait_for_cf_clear on menu page (up to 60s)...")
-        menu_cleared = await wait_for_cf_clear(page, timeout_s=60)
+        print("Running wait_for_cf_clear on menu page (up to 120s)...")
+        menu_cleared = await wait_for_cf_clear(page, timeout_s=120)
         print(f"Menu CF cleared: {menu_cleared}, title: {await page.title()}")
         await asyncio.sleep(3)
         title = await page.title()

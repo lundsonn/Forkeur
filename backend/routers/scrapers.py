@@ -51,6 +51,10 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
         except Exception as e:
             db.finish_run(run_id, "failed", error_msg=str(e))
             await ws_mod.send_error(run_id, str(e))
+        except BaseException as e:
+            # asyncio.CancelledError and other non-Exception BaseExceptions
+            db.finish_run(run_id, "failed", error_msg=f"Process killed: {type(e).__name__}")
+            raise
         finally:
             _running.discard(platform)
 

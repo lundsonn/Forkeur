@@ -36,12 +36,31 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
         # Address input is already visible on the homepage — no "Find food" click needed
         input_sel = "#location-typeahead-home-input"
         await page.wait_for_selector(input_sel, timeout=20000)
+        log_fn(f"Input found: {input_sel}")
         await page.click(input_sel)
         await page.type(input_sel, config.address, delay=60)
-        await asyncio.sleep(2.5)
+        log_fn(f"Typed address: {config.address}")
+        await asyncio.sleep(3)
+
+        # Wait for suggestions dropdown to appear
+        try:
+            await page.wait_for_selector('[role="option"], li[role="option"], .uber-cache, [data-testid*="suggestion"]', timeout=5000)
+            log_fn("Suggestions dropdown appeared")
+        except Exception:
+            log_fn("No suggestions dropdown, trying direct Enter")
+
         await page.keyboard.press("ArrowDown")
-        await asyncio.sleep(0.4)
+        await asyncio.sleep(0.5)
         await page.keyboard.press("Enter")
+        log_fn(f"Pressed ArrowDown+Enter, page URL: {page.url}")
+
+        # Wait for URL to change or navigation to complete
+        try:
+            await page.wait_for_url("**/restaurants**", timeout=10000)
+        except Exception:
+            log_fn("URL didn't change to /restaurants, may still work")
+
+        await asyncio.sleep(2)
 
         log_fn("Waiting for first feed API response...")
         deadline = asyncio.get_event_loop().time() + 15
@@ -177,7 +196,14 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 # Ensure we're on the listing page (go_back preserves scroll state)
                 if listing_url not in page.url:
                     await page.go_back(wait_until="domcontentloaded", timeout=15000)
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(2)
+
+                # Scroll listing to load all cards before clicking
+                for _ in range(5):
+                    await page.evaluate("window.scrollBy(0, 3000)")
+                    await asyncio.sleep(0.5)
+                await page.evaluate("window.scrollTo(0, 0)")  # scroll back to top
+                await asyncio.sleep(1)
 
                 # Click restaurant anchor; scroll-retry if not yet in DOM
                 clicked = False
