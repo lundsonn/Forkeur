@@ -178,7 +178,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                     if (card.tagName === 'LI' || card.tagName === 'ARTICLE') break;
                 }
                 const lines = (card.innerText || '').split('\\n').map(l => l.trim()).filter(Boolean);
-                const ratingIdx = lines.findIndex(l => /^\\d[,.]\\d\\s+(Excellent|Good|Okay)/i.test(l));
+                const ratingIdx = lines.findIndex(l => /^\\d[,.]\\d\\s+(Excellent|Good|Okay|Bien|Correct|Très\\s+bien|Neutre|Uitstekend|Goed|Matig)/i.test(l));
                 const ratingLine = ratingIdx >= 0 ? lines[ratingIdx] : null;
                 const name = ratingIdx > 0 ? lines[ratingIdx - 1] : (lines.find(l => !l.match(/^\\d+\\s*min$/) && !l.includes('€') && l.length > 3) || slug);
                 const ratingMatch = (ratingLine || '').match(/^(\\d[,.]\\d)/);
