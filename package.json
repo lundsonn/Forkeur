@@ -1,0 +1,21 @@
+{
+  "name": "food-price-compare",
+  "version": "1.0.0",
+  "description": "Compare food delivery prices across Uber Eats, Deliveroo, and Just Eat",
+  "scripts": {
+    "test:ubereats": "node test-uber-eats.js",
+    "test:deliveroo": "node test-deliveroo.js",
+    "test:justeat": "node test-just-eat.js",
+    "compare": "node compare.js",
+    "compare:brussels": "node compare-brussels.js"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.10.3",
+    "@supabase/supabase-js": "^2.106.2",
+    "apify-client": "^2.9.4",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "puppeteer": "^25.1.0"
+  }
+}

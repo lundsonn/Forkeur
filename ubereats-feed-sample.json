@@ -1,0 +1,20 @@
+{
+  "keys": [
+    "countdowns",
+    "diningModes",
+    "sortAndFilters",
+    "isFallbackFeed",
+    "favorites",
+    "feedItems",
+    "feedAffixes",
+    "storesMap",
+    "meta",
+    "currencyCode",
+    "isInServiceArea",
+    "title",
+    "feedHeader",
+    "timeWindowPicker",
+    "cityName",
+    "cacheKey"
+  ]
+}

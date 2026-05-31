@@ -1,0 +1,14 @@
+[
+  {
+    "url": "https://www.takeaway.com/consumer-web/app/12/_next/static/chunks/pages/restaurant-list-16da45294c0fb990.js",
+    "status": 200,
+    "bodyLen": 321725,
+    "preview": "(self.webpackChunk_N_E=self.webpackChunk_N_E||[]).push([[17743],{86260:function(e,t,r){(window.__NEXT_P=window.__NEXT_P||[]).push([\"/restaurant-list\",function(){return r(5164)}])},55855:function(e,t,r"
+  },
+  {
+    "url": "https://rest.api.eu-central-1.production.jet-external.com/retail-media/session",
+    "status": 200,
+    "bodyLen": 57,
+    "preview": "{\n  \"sessionId\": \"4f142d29-8997-45d4-b4c6-a295be6b1a4e\"\n}"
+  }
+]

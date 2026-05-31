@@ -1,0 +1,12 @@
+[
+  {
+    "url": "https://gateway-2.eu-central-1.production.jet-external.com/realtime-events/167842055006/tp",
+    "status": 200,
+    "body": "ok"
+  },
+  {
+    "url": "https://rest.api.eu-central-1.production.jet-external.com/retail-media/session",
+    "status": 200,
+    "body": "{\n  \"sessionId\": \"6be7236b-9d3a-42de-97c4-9db76aecfc0a\"\n}"
+  }
+]

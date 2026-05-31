@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Environment variables - NEVER commit secrets
+.env
+.env.local
+.env.*.local
+
+# Scraped data outputs (large, ephemeral)
+*.json
+!package.json
+!package-lock.json
+
+# Screenshots and HTML outputs
+*.png
+*.html
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+
+# Temp / internal
+.remember/

@@ -1,0 +1,331 @@
+{
+  "uberEats": {
+    "name": "McDonald's",
+    "deliveryFee": "Frais de livraison : 3.99 €",
+    "eta": "10 min",
+    "rating": "4.2",
+    "reviewCount": "",
+    "url": "https://www.ubereats.com/store/mcdonalds-ixelles/bAoMCYSAR72YGNHB_6DehQ",
+    "menuItems": [
+      {
+        "name": "6 Chicken McNuggets©",
+        "price": "€6.90",
+        "description": ""
+      },
+      {
+        "name": "Double Cheeseburger",
+        "price": "€6.20",
+        "description": ""
+      },
+      {
+        "name": "Filet-O-Fish®",
+        "price": "€6.60",
+        "description": "Poisson pané, fromage Cheddar, sauce tartare"
+      },
+      {
+        "name": "20 Chicken McNuggets©",
+        "price": "€15.00",
+        "description": ""
+      },
+      {
+        "name": "Chicken Sharing Box",
+        "price": "€16.20",
+        "description": "Mix de 6 Spicy Chicken McNuggets®, 3 Chicken Wings et 9 Chicken McNuggets®"
+      },
+      {
+        "name": "20 Spicy Chicken McNuggets©",
+        "price": "€14.60",
+        "description": ""
+      },
+      {
+        "name": "McFlurry® M&M’s",
+        "price": "€4.50",
+        "description": "Délicieuse glace aux M&M's croustillants"
+      },
+      {
+        "name": "Double Cheeseburger",
+        "price": "€6.20",
+        "description": ""
+      },
+      {
+        "name": "McCrispy®",
+        "price": "€8.00",
+        "description": "Filet de poulet pané croustillant, une tranche de cheddar, salade Iceberg, sauce poivre mayo"
+      },
+      {
+        "name": "McCrispy Sriracha®",
+        "price": "€9.00",
+        "description": "Filet de poulet pané croustillant,2 tranches de bacon, oignons rouges, cornichons, salade Batavia, sauce sriracha mayo"
+      },
+      {
+        "name": "Chicken McWrap",
+        "price": "€6.70",
+        "description": "Tortilla garnie de poulet croustillant, 1 tranche de bacon, salade Iceberg, une tranche de cheddar oignons rouges, sauce poivre mayo"
+      },
+      {
+        "name": "Chicken Sharing Box",
+        "price": "€16.20",
+        "description": "Mix de 6 Spicy Chicken McNuggets®, 3 Chicken Wings et 9 Chicken McNuggets®"
+      },
+      {
+        "name": "Sriracha McFlavor® Fries",
+        "price": "€4.40",
+        "description": "Frites nappées d'une sauce Sriracha avec des morceaux de bacon"
+      },
+      {
+        "name": "20 Spicy Chicken McNuggets©",
+        "price": "€14.60",
+        "description": ""
+      },
+      {
+        "name": "McFlurry® Popcorn sauce Caramel",
+        "price": "€4.80",
+        "description": "Délicieuse glace aux popcorn croustillants et sauce caramel"
+      },
+      {
+        "name": "Peppery Cheese",
+        "price": "€3.90",
+        "description": ""
+      },
+      {
+        "name": "Big Mac® McMenu®",
+        "price": "€12.60",
+        "description": ""
+      },
+      {
+        "name": "Maestro Double Generous Jack McMenu®",
+        "price": "€15.30",
+        "description": ""
+      },
+      {
+        "name": "Double Cheese McMenu®",
+        "price": "€11.60",
+        "description": ""
+      },
+      {
+        "name": "McChicken® McMenu®",
+        "price": "€12.00",
+        "description": "Poulet pané, salade croquante, sauce légèrement citronnée, boisson et frites"
+      },
+      {
+        "name": "Royal Crispy Bacon McMenu®",
+        "price": "€12.50",
+        "description": ""
+      },
+      {
+        "name": "Royal Cheese McMenu®",
+        "price": "€12.50",
+        "description": ""
+      },
+      {
+        "name": "6 Chicken McNuggets© McMenu®",
+        "price": "€12.00",
+        "description": "6 Chicken McNuggets©, boisson et frites"
+      },
+      {
+        "name": "Filet-O-Fish® McMenu®",
+        "price": "€12.20",
+        "description": "Poisson pané, fromage Cheddar, sauce tartare, boisson et frites"
+      },
+      {
+        "name": "Maestro Generous Jack (junior) McMenu®",
+        "price": "€14.30",
+        "description": ""
+      },
+      {
+        "name": "Veggie Deluxe McMenu®",
+        "price": "€12.40",
+        "description": "Filet veggie pané, salade Batavia, tomates, oignons rouges, sauce légèrement citronnée, boisson et frites"
+      },
+      {
+        "name": "McCrispy® McMenu®",
+        "price": "€13.40",
+        "description": "Filet de poulet pané croustillant, une tranche de cheddar, salade Iceberg, sauce poivre mayo, boisson et frites"
+      },
+      {
+        "name": "McCrispy® Sriracha McMenu®",
+        "price": "€14.40",
+        "description": "Filet de poulet pané croustillant,2 tranches de bacon, oignons rouges, cornichons, salade Batavia, sauce sriracha mayo, boisson et frites"
+      },
+      {
+        "name": "Chicken McWrap McMenu®",
+        "price": "€11.60",
+        "description": "Tortilla garnie de poulet croustillant, 1 tranche de bacon, salade Iceberg, une tranche de cheddar oignons rouges, sauce poivre mayo, boisson, frites"
+      },
+      {
+        "name": "9 Spicy Chicken McNuggets© McMenu®",
+        "price": "€14.00",
+        "description": "9 Spicy Chicken McNuggets®, boisson et frites"
+      }
+    ]
+  },
+  "deliveroo": {
+    "name": "McDonald's - Porte de Namur",
+    "deliveryFee": "Spend €20, Get €0 delivery fee",
+    "eta": "15 min",
+    "rating": "N/A",
+    "reviewCount": "",
+    "url": "https://deliveroo.be/menu/Brussels/ixelles-nord/mcdonalds-ixelles?day=today&geohash=u1515n8b77g2&time=ASAP",
+    "menuItems": [
+      {
+        "name": "Big Mac® McMenu®",
+        "price": "€12.60",
+        "description": ""
+      },
+      {
+        "name": "Unknown",
+        "price": "N/A",
+        "description": ""
+      },
+      {
+        "name": "Big Mac® McMenu®",
+        "price": "€12.60",
+        "description": ""
+      },
+      {
+        "name": "Big Mac® McMenu®",
+        "price": "€12.60",
+        "description": ""
+      },
+      {
+        "name": "Big Mac® McMenu®",
+        "price": "N/A",
+        "description": ""
+      },
+      {
+        "name": "€12.60",
+        "price": "€12.60",
+        "description": ""
+      },
+      {
+        "name": "€12.60",
+        "price": "€12.60",
+        "description": ""
+      },
+      {
+        "name": "€12.60",
+        "price": "€12.60",
+        "description": ""
+      },
+      {
+        "name": "Unknown",
+        "price": "N/A",
+        "description": ""
+      },
+      {
+        "name": "Unknown",
+        "price": "N/A",
+        "description": ""
+      },
+      {
+        "name": "Unknown",
+        "price": "N/A",
+        "description": ""
+      },
+      {
+        "name": "9 Chicken McNuggets©",
+        "price": "€8.70",
+        "description": ""
+      },
+      {
+        "name": "Unknown",
+        "price": "N/A",
+        "description": ""
+      },
+      {
+        "name": "9 Chicken McNuggets©",
+        "price": "€8.70",
+        "description": ""
+      },
+      {
+        "name": "9 Chicken McNuggets©",
+        "price": "€8.70",
+        "description": ""
+      },
+      {
+        "name": "9 Chicken McNuggets©",
+        "price": "N/A",
+        "description": ""
+      },
+      {
+        "name": "€8.70",
+        "price": "€8.70",
+        "description": ""
+      },
+      {
+        "name": "€8.70",
+        "price": "€8.70",
+        "description": ""
+      },
+      {
+        "name": "€8.70",
+        "price": "€8.70",
+        "description": ""
+      },
+      {
+        "name": "Unknown",
+        "price": "N/A",
+        "description": ""
+      },
+      {
+        "name": "Unknown",
+        "price": "N/A",
+        "description": ""
+      },
+      {
+        "name": "Unknown",
+        "price": "N/A",
+        "description": ""
+      },
+      {
+        "name": "McCrispy® Sriracha McMenu®",
+        "price": "€14.40",
+        "description": ""
+      },
+      {
+        "name": "Unknown",
+        "price": "N/A",
+        "description": ""
+      },
+      {
+        "name": "McCrispy® Sriracha McMenu®",
+        "price": "€14.40",
+        "description": ""
+      },
+      {
+        "name": "McCrispy® Sriracha McMenu®",
+        "price": "€14.40",
+        "description": ""
+      },
+      {
+        "name": "McCrispy® Sriracha McMenu®",
+        "price": "N/A",
+        "description": ""
+      },
+      {
+        "name": "€14.40",
+        "price": "€14.40",
+        "description": ""
+      },
+      {
+        "name": "€14.40",
+        "price": "€14.40",
+        "description": ""
+      },
+      {
+        "name": "€14.40",
+        "price": "€14.40",
+        "description": ""
+      }
+    ]
+  },
+  "takeaway": {
+    "name": "McDonald's Brussels - Bourse",
+    "deliveryFee": "€1,99 Livraison",
+    "eta": "N/A",
+    "rating": "3,3",
+    "reviewCount": "1.400+",
+    "url": "https://www.takeaway.com/be-fr/menu/mcdonalds-brussels-bourse",
+    "menuItems": []
+  }
+}

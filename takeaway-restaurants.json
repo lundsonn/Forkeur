@@ -1,0 +1,492 @@
+[
+  {
+    "name": "Intermarché Saint Gilles",
+    "url": "https://www.takeaway.com/be-fr/menu/intermarche-saint-gilles-bruxelles",
+    "slug": "intermarche-saint-gilles-bruxelles",
+    "rating": "3,1",
+    "reviewCount": "45",
+    "eta": "30-50 min",
+    "deliveryFee": "€3,99 Livraison",
+    "minOrder": ""
+  },
+  {
+    "name": "Hashtag Burgers & Brunch",
+    "url": "https://www.takeaway.com/be-fr/menu/hashtag-burgers-brunch-2",
+    "slug": "hashtag-burgers-brunch-2",
+    "rating": "N/A",
+    "reviewCount": "1",
+    "eta": "25-45 min",
+    "deliveryFee": "€1,99 Livraison",
+    "minOrder": ""
+  },
+  {
+    "name": "Mandarin",
+    "url": "https://www.takeaway.com/be-fr/menu/mandarin",
+    "slug": "mandarin",
+    "rating": "4,9",
+    "reviewCount": "9.999+",
+    "eta": "45-65 min",
+    "deliveryFee": "Livraison offerte",
+    "minOrder": ""
+  },
+  {
+    "name": "My Koffee Burger Pasta",
+    "url": "https://www.takeaway.com/be-fr/menu/my-koffee",
+    "slug": "my-koffee",
+    "rating": "4,5",
+    "reviewCount": "67",
+    "eta": "40-60 min",
+    "deliveryFee": "€3 Livraison",
+    "minOrder": ""
+  },
+  {
+    "name": "Panos Anderlecht",
+    "url": "https://www.takeaway.com/be-fr/menu/panos-anderlecht",
+    "slug": "panos-anderlecht",
+    "rating": "4,7",
+    "reviewCount": "270+",
+    "eta": "35-55 min",
+    "deliveryFee": "€5,59 Livraison",
+    "minOrder": ""
+  },
+  {
+    "name": "Nachtwinkel Ternat",
+    "url": "https://www.takeaway.com/be-fr/menu/nachtwinkel-ternat-ternat",
+    "slug": "nachtwinkel-ternat-ternat",
+    "rating": "N/A",
+    "reviewCount": "6",
+    "eta": "35-50 min",
+    "deliveryFee": "Livraison offerte disponible",
+    "minOrder": ""
+  },
+  {
+    "name": "Terter",
+    "url": "https://www.takeaway.com/be-fr/menu/terter-saint-gilles",
+    "slug": "terter-saint-gilles",
+    "rating": "N/A",
+    "reviewCount": "1",
+    "eta": "35-55 min",
+    "deliveryFee": "€4,99 Livraison",
+    "minOrder": ""
+  },
+  {
+    "name": "Fg enterprise",
+    "url": "https://www.takeaway.com/be-fr/menu/fg-enterprise",
+    "slug": "fg-enterprise",
+    "rating": "3,4",
+    "reviewCount": "10",
+    "eta": "25-45 min",
+    "deliveryFee": "€2,49 Livraison",
+    "minOrder": "Min. €12,00"
+  },
+  {
+    "name": "Sparket",
+    "url": "https://www.takeaway.com/be-fr/menu/sparket",
+    "slug": "sparket",
+    "rating": "1,7",
+    "reviewCount": "1",
+    "eta": "15-35 min",
+    "deliveryFee": "€2,49 Livraison",
+    "minOrder": "Min. €12,00"
+  },
+  {
+    "name": "Butt Ufs 2",
+    "url": "https://www.takeaway.com/be-fr/menu/butt-ufs-2-saint-gilles",
+    "slug": "butt-ufs-2-saint-gilles",
+    "rating": "4,5",
+    "reviewCount": "4",
+    "eta": "25-45 min",
+    "deliveryFee": "€2,49 Livraison",
+    "minOrder": "Min. €12,00"
+  },
+  {
+    "name": "Librairie Sparket",
+    "url": "https://www.takeaway.com/be-fr/menu/librairie-sparket",
+    "slug": "librairie-sparket",
+    "rating": "N/A",
+    "reviewCount": "1",
+    "eta": "15-35 min",
+    "deliveryFee": "€2,49 Livraison",
+    "minOrder": "Min. €12,00"
+  },
+  {
+    "name": "Le Palais des Délices",
+    "url": "https://www.takeaway.com/be-fr/menu/le-palais-des-delices-saint-josse-ten-noode",
+    "slug": "le-palais-des-delices-saint-josse-ten-noode",
+    "rating": "4,1",
+    "reviewCount": "8",
+    "eta": "25-45 min",
+    "deliveryFee": "€3,99 Livraison",
+    "minOrder": "Min. €18,00"
+  },
+  {
+    "name": "Croix100",
+    "url": "https://www.takeaway.com/be-fr/menu/croix100",
+    "slug": "croix100",
+    "rating": "N/A",
+    "reviewCount": "1",
+    "eta": "35-55 min",
+    "deliveryFee": "€3,99 Livraison",
+    "minOrder": "Min. €18,00"
+  },
+  {
+    "name": "Cureghem Shop",
+    "url": "https://www.takeaway.com/be-fr/menu/cureghem-shop",
+    "slug": "cureghem-shop",
+    "rating": "N/A",
+    "reviewCount": "1",
+    "eta": "30-50 min",
+    "deliveryFee": "€3,99 Livraison",
+    "minOrder": "Min. €18,00"
+  },
+  {
+    "name": "Proxy Delhaize Fonsny",
+    "url": "https://www.takeaway.com/be-fr/menu/proxy-delhaize-fonsny-saint-gilles",
+    "slug": "proxy-delhaize-fonsny-saint-gilles",
+    "rating": "N/A",
+    "reviewCount": "6",
+    "eta": "25-45 min",
+    "deliveryFee": "€2,49 Livraison",
+    "minOrder": "Min. €12,00"
+  },
+  {
+    "name": "Ornina Syrian Sweets",
+    "url": "https://www.takeaway.com/be-fr/menu/ornina-syrian-sweets",
+    "slug": "ornina-syrian-sweets",
+    "rating": "N/A",
+    "reviewCount": "",
+    "eta": "30-50 min",
+    "deliveryFee": "€3,99 Livraison",
+    "minOrder": "Min. €18,00"
+  },
+  {
+    "name": "New Asia",
+    "url": "https://www.takeaway.com/be-fr/menu/new-asia-schaerbeek",
+    "slug": "new-asia-schaerbeek",
+    "rating": "4,6",
+    "reviewCount": "1.300+",
+    "eta": "30-50 min",
+    "deliveryFee": "Livraison offerte",
+    "minOrder": "Min. €40,00"
+  },
+  {
+    "name": "Goldcafet",
+    "url": "https://www.takeaway.com/be-fr/menu/goldcafet",
+    "slug": "goldcafet",
+    "rating": "N/A",
+    "reviewCount": "1",
+    "eta": "35-55 min",
+    "deliveryFee": "€4,99 Livraison",
+    "minOrder": "Min. €20,00"
+  },
+  {
+    "name": "Pala Shop",
+    "url": "https://www.takeaway.com/be-fr/menu/pala-shop-schaerbeek",
+    "slug": "pala-shop-schaerbeek",
+    "rating": "4,2",
+    "reviewCount": "5",
+    "eta": "40-60 min",
+    "deliveryFee": "€4,99 Livraison",
+    "minOrder": "Min. €20,00"
+  },
+  {
+    "name": "FRESH FOWL & MEAT",
+    "url": "https://www.takeaway.com/be-fr/menu/fresh-fowl-meat",
+    "slug": "fresh-fowl-meat",
+    "rating": "N/A",
+    "reviewCount": "1",
+    "eta": "40-60 min",
+    "deliveryFee": "€3,99 Livraison",
+    "minOrder": "Min. €18,00"
+  },
+  {
+    "name": "Euro Bangla Food",
+    "url": "https://www.takeaway.com/be-fr/menu/euro-bangla-food",
+    "slug": "euro-bangla-food",
+    "rating": "N/A",
+    "reviewCount": "",
+    "eta": "15-35 min",
+    "deliveryFee": "€4,99 Livraison",
+    "minOrder": "Min. €20,00"
+  },
+  {
+    "name": "Librairie Bas",
+    "url": "https://www.takeaway.com/be-fr/menu/librairie-bas",
+    "slug": "librairie-bas",
+    "rating": "N/A",
+    "reviewCount": "",
+    "eta": "15-35 min",
+    "deliveryFee": "€4,99 Livraison",
+    "minOrder": "Min. €20,00"
+  },
+  {
+    "name": "Boucherie Wayez",
+    "url": "https://www.takeaway.com/be-fr/menu/boucherie-wayez",
+    "slug": "boucherie-wayez",
+    "rating": "4,3",
+    "reviewCount": "210+",
+    "eta": "35-55 min",
+    "deliveryFee": "€10 Livraison",
+    "minOrder": "Min. €100,00"
+  },
+  {
+    "name": "Librairie Colignion",
+    "url": "https://www.takeaway.com/be-fr/menu/infinity-project",
+    "slug": "infinity-project",
+    "rating": "2,8",
+    "reviewCount": "2",
+    "eta": "15-35 min",
+    "deliveryFee": "€4,99 Livraison",
+    "minOrder": "Min. €20,00"
+  },
+  {
+    "name": "Med.Art",
+    "url": "https://www.takeaway.com/be-fr/menu/medart",
+    "slug": "medart",
+    "rating": "N/A",
+    "reviewCount": "",
+    "eta": "15-35 min",
+    "deliveryFee": "€4,99 Livraison",
+    "minOrder": "Min. €20,00"
+  },
+  {
+    "name": "Abbas épicerie",
+    "url": "https://www.takeaway.com/be-fr/menu/abbas-epicerie-brussels",
+    "slug": "abbas-epicerie-brussels",
+    "rating": "N/A",
+    "reviewCount": "",
+    "eta": "15-35 min",
+    "deliveryFee": "€4,99 Livraison",
+    "minOrder": "Min. €20,00"
+  },
+  {
+    "name": "Librairie Bossaert",
+    "url": "https://www.takeaway.com/be-fr/menu/librairie-bossaert-koekelberg",
+    "slug": "librairie-bossaert-koekelberg",
+    "rating": "N/A",
+    "reviewCount": "",
+    "eta": "60-80 min",
+    "deliveryFee": "€5,59 Livraison",
+    "minOrder": "Min. €25,00"
+  },
+  {
+    "name": "Ussop Shop",
+    "url": "https://www.takeaway.com/be-fr/menu/ussop-shop-bruxelles",
+    "slug": "ussop-shop-bruxelles",
+    "rating": "N/A",
+    "reviewCount": "3",
+    "eta": "15-40 min",
+    "deliveryFee": "€5 Livraison",
+    "minOrder": "Min. €30,00"
+  },
+  {
+    "name": "Night-Shop Delivery",
+    "url": "https://www.takeaway.com/be-fr/menu/night-shop-delivery",
+    "slug": "night-shop-delivery",
+    "rating": "4,7",
+    "reviewCount": "6",
+    "eta": "20-30 min",
+    "deliveryFee": "€7,50 Livraison",
+    "minOrder": "Min. €69,00"
+  },
+  {
+    "name": "Sensei Sushi Bruxelles",
+    "url": "https://www.takeaway.com/be-fr/menu/sensei-sushi-bruxelles",
+    "slug": "sensei-sushi-bruxelles",
+    "rating": "4,6",
+    "reviewCount": "3.700+",
+    "eta": "N/A",
+    "deliveryFee": "Livraison offerte",
+    "minOrder": "Min. €20,00"
+  },
+  {
+    "name": "Panos Brussel (Grasmarkt)",
+    "url": "https://www.takeaway.com/be-fr/menu/panos-brussel-grasmarkt",
+    "slug": "panos-brussel-grasmarkt",
+    "rating": "3,8",
+    "reviewCount": "85",
+    "eta": "N/A",
+    "deliveryFee": "€1,49 Livraison",
+    "minOrder": "Min. €8,00"
+  },
+  {
+    "name": "Mr Pacha Kebab",
+    "url": "https://www.takeaway.com/be-fr/menu/mr-pacha-kebab-bruxelles",
+    "slug": "mr-pacha-kebab-bruxelles",
+    "rating": "N/A",
+    "reviewCount": "",
+    "eta": "N/A",
+    "deliveryFee": "€1,99 Livraison",
+    "minOrder": "Min. €10,00"
+  },
+  {
+    "name": "Chamas Tacos Debrouckère",
+    "url": "https://www.takeaway.com/be-fr/menu/chamas-tacos-bxl-1",
+    "slug": "chamas-tacos-bxl-1",
+    "rating": "3,7",
+    "reviewCount": "3.500+",
+    "eta": "N/A",
+    "deliveryFee": "€1,50 Livraison",
+    "minOrder": "Min. €15,00"
+  },
+  {
+    "name": "Chez Ragusana",
+    "url": "https://www.takeaway.com/be-fr/menu/chez-ragusana",
+    "slug": "chez-ragusana",
+    "rating": "N/A",
+    "reviewCount": "",
+    "eta": "N/A",
+    "deliveryFee": "€1,99 Livraison",
+    "minOrder": "Min. €10,00"
+  },
+  {
+    "name": "Plaka",
+    "url": "https://www.takeaway.com/be-fr/menu/plaka",
+    "slug": "plaka",
+    "rating": "4,7",
+    "reviewCount": "470+",
+    "eta": "N/A",
+    "deliveryFee": "€1,49 Livraison",
+    "minOrder": "Min. €8,00"
+  },
+  {
+    "name": "Fritiko Rue Neuve",
+    "url": "https://www.takeaway.com/be-fr/menu/fritiko-rue-neuve",
+    "slug": "fritiko-rue-neuve",
+    "rating": "4,6",
+    "reviewCount": "6.100+",
+    "eta": "N/A",
+    "deliveryFee": "Livraison offerte",
+    "minOrder": "Min. €10,00"
+  },
+  {
+    "name": "Nano Pizza",
+    "url": "https://www.takeaway.com/be-fr/menu/nano-pizza-3",
+    "slug": "nano-pizza-3",
+    "rating": "N/A",
+    "reviewCount": "",
+    "eta": "N/A",
+    "deliveryFee": "€1,99 Livraison",
+    "minOrder": "Min. €10,00"
+  },
+  {
+    "name": "Kitsune Burgers",
+    "url": "https://www.takeaway.com/be-fr/menu/kitsune-burgers",
+    "slug": "kitsune-burgers",
+    "rating": "4,6",
+    "reviewCount": "15",
+    "eta": "N/A",
+    "deliveryFee": "€1,99 Livraison",
+    "minOrder": "Min. €10,00"
+  },
+  {
+    "name": "Carrefour City Anspach",
+    "url": "https://www.takeaway.com/be-fr/menu/carrefour-city-anspach-bruxelles",
+    "slug": "carrefour-city-anspach-bruxelles",
+    "rating": "2,7",
+    "reviewCount": "530+",
+    "eta": "N/A",
+    "deliveryFee": "€1,99 Livraison",
+    "minOrder": "Min. €10,00"
+  },
+  {
+    "name": "House of Pokē Brussel",
+    "url": "https://www.takeaway.com/be-fr/menu/house-of-poke-brussel-bruxelles",
+    "slug": "house-of-poke-brussel-bruxelles",
+    "rating": "4,7",
+    "reviewCount": "9",
+    "eta": "N/A",
+    "deliveryFee": "€1,99 Livraison",
+    "minOrder": "Min. €10,00"
+  },
+  {
+    "name": "McDonald's Brussels - Bourse",
+    "url": "https://www.takeaway.com/be-fr/menu/mcdonalds-brussels-bourse",
+    "slug": "mcdonalds-brussels-bourse",
+    "rating": "3,3",
+    "reviewCount": "1.400+",
+    "eta": "N/A",
+    "deliveryFee": "€1,99 Livraison",
+    "minOrder": "Min. €10,00"
+  },
+  {
+    "name": "Tonton Chami Centre",
+    "url": "https://www.takeaway.com/be-fr/menu/tonton-chami-centre",
+    "slug": "tonton-chami-centre",
+    "rating": "4,5",
+    "reviewCount": "950+",
+    "eta": "N/A",
+    "deliveryFee": "€1,99 Livraison",
+    "minOrder": "Min. €10,00"
+  },
+  {
+    "name": "Lyh's Brussels",
+    "url": "https://www.takeaway.com/be-fr/menu/lyhs-brussels",
+    "slug": "lyhs-brussels",
+    "rating": "N/A",
+    "reviewCount": "",
+    "eta": "N/A",
+    "deliveryFee": "€1,99 Livraison",
+    "minOrder": "Min. €10,00"
+  },
+  {
+    "name": "Chicken Way",
+    "url": "https://www.takeaway.com/be-fr/menu/chicken-way",
+    "slug": "chicken-way",
+    "rating": "4,2",
+    "reviewCount": "100+",
+    "eta": "N/A",
+    "deliveryFee": "€1,49 Livraison",
+    "minOrder": "Min. €8,00"
+  },
+  {
+    "name": "Gatsu Gatsu",
+    "url": "https://www.takeaway.com/be-fr/menu/gatsu-gatsu",
+    "slug": "gatsu-gatsu",
+    "rating": "4,4",
+    "reviewCount": "1.000+",
+    "eta": "N/A",
+    "deliveryFee": "€1,99 Livraison",
+    "minOrder": "Min. €10,00"
+  },
+  {
+    "name": "Late Night Smash Burgers",
+    "url": "https://www.takeaway.com/be-fr/menu/late-night-smash-burgers-bruxelles",
+    "slug": "late-night-smash-burgers-bruxelles",
+    "rating": "N/A",
+    "reviewCount": "180+",
+    "eta": "N/A",
+    "deliveryFee": "Livraison offerte",
+    "minOrder": "Min. €17,00"
+  },
+  {
+    "name": "Casa Pizza",
+    "url": "https://www.takeaway.com/be-fr/menu/casa-pizza-bruxelles",
+    "slug": "casa-pizza-bruxelles",
+    "rating": "4,9",
+    "reviewCount": "4",
+    "eta": "N/A",
+    "deliveryFee": "€4,99 Livraison",
+    "minOrder": "Min. €20,00"
+  },
+  {
+    "name": "Hellas",
+    "url": "https://www.takeaway.com/be-fr/menu/snack-hellas",
+    "slug": "snack-hellas",
+    "rating": "4,6",
+    "reviewCount": "79",
+    "eta": "N/A",
+    "deliveryFee": "€1,49 Livraison",
+    "minOrder": "Min. €8,00"
+  },
+  {
+    "name": "Foody's",
+    "url": "https://www.takeaway.com/be-fr/menu/foodys-new-1",
+    "slug": "foodys-new-1",
+    "rating": "N/A",
+    "reviewCount": "",
+    "eta": "N/A",
+    "deliveryFee": "€6,49 Livraison",
+    "minOrder": "Min. €20,00"
+  }
+]

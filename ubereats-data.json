@@ -1,0 +1,715 @@
+{
+  "restaurants": [
+    {
+      "name": "McDonald's",
+      "url": "https://www.ubereats.com/store/mcdonalds-ixelles/bAoMCYSAR72YGNHB_6DehQ",
+      "storeUuid": "6c0a0c09-8480-47bd-9818-d1c1ffa0de85",
+      "rating": "4.2",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 3.99 €",
+      "eta": "10 min"
+    },
+    {
+      "name": "Carrefour Express",
+      "url": "https://www.ubereats.com/store/carrefour-express-rue-haute/0p1h_4AHX_iBH6PL55thHg",
+      "storeUuid": "d29d61ff-8007-5ff8-811f-a3cbe79b611e",
+      "rating": "4.5",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 3.49 €",
+      "eta": "10:52AM"
+    },
+    {
+      "name": "Burger King",
+      "url": "https://www.ubereats.com/store/burger-king-ixelles/QUVPoxe9RtGIqyItmGwopw",
+      "storeUuid": "41454fa3-17bd-46d1-88ab-222d986c28a7",
+      "rating": "4.1",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 3.99 €",
+      "eta": "10 min"
+    },
+    {
+      "name": "Le Pain Quotidien",
+      "url": "https://www.ubereats.com/store/le-pain-quotidien-sablon/iCoP9taFQOy4h4hBo6kfdQ",
+      "storeUuid": "882a0ff6-d685-40ec-b887-8841a3a91f75",
+      "rating": "4.5",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 3.99 €",
+      "eta": "10 min"
+    },
+    {
+      "name": "Delhaize",
+      "url": "https://www.ubereats.com/store/delhaize-mozart/34DQ2GgQUPu0UrMkGjfsYA",
+      "storeUuid": "df80d0d8-6810-50fb-b452-b3241a37ec60",
+      "rating": "4.2",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 5.99 €",
+      "eta": "11:08AM"
+    },
+    {
+      "name": "Quick",
+      "url": "https://www.ubereats.com/store/quick-louise/FRPrbTAIQwuW7FKvvHT7zg",
+      "storeUuid": "1513eb6d-3008-430b-96ec-52afbc74fbce",
+      "rating": "4.1",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 3.49 €",
+      "eta": "10 min"
+    },
+    {
+      "name": "Joe & The Juice",
+      "url": "https://www.ubereats.com/store/joe-%26-the-juice-brussels/33GMmastUK20k34fC2Ae_g",
+      "storeUuid": "df718c99-ab2d-50ad-b493-7e1f0b601efe",
+      "rating": "4.1",
+      "reviewCount": "",
+      "deliveryFee": "Free",
+      "eta": "6 min"
+    },
+    {
+      "name": "Boulangerie Sirre",
+      "url": "https://www.ubereats.com/store/boulangerie-sirre-basilique/Y1TRSYCSTF-MeNOqc6pv4Q",
+      "storeUuid": "6354d149-8092-4c5f-8c78-d3aa73aa6fe1",
+      "rating": "4.7",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 6.99 €",
+      "eta": "12 min"
+    },
+    {
+      "name": "Delitraiteur",
+      "url": "https://www.ubereats.com/store/delitraiteur-stephanie/_pFdYbFwXyCq5DBy7RLquQ",
+      "storeUuid": "fe915d61-b170-5f20-aae4-3072ed12eab9",
+      "rating": "4.3",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 3.99 €",
+      "eta": "10 min"
+    },
+    {
+      "name": "Proxy Delhaize",
+      "url": "https://www.ubereats.com/store/proxy-delhaize-couronne/OUUB-YafX2-7msrtIE7INA",
+      "storeUuid": "394501f9-869f-5f6f-bb9a-caed204ec834",
+      "rating": "4.2",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 5.99 €",
+      "eta": "11:15AM"
+    },
+    {
+      "name": "Black & White Burger",
+      "url": "https://www.ubereats.com/store/black-%26-white-burger-bruxelles/Ki3o6qvBR-Oa6z64pbLgng",
+      "storeUuid": "2a2de8ea-abc1-47e3-9aeb-3eb8a5b2e09e",
+      "rating": "4.2",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 4.99 €",
+      "eta": "10 min"
+    },
+    {
+      "name": "Café de la Presse – Cambre",
+      "url": "https://www.ubereats.com/store/cafe-de-la-presse-%E2%80%93-cambre/iuHC0sbWQTeOi1ddJqC6ag",
+      "storeUuid": "8ae1c2d2-c6d6-4137-8e8b-575d26a0ba6a",
+      "rating": "4.7",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 5.99 €",
+      "eta": "18 min"
+    },
+    {
+      "name": "Picard",
+      "url": "https://www.ubereats.com/store/picard-fernand-coq/iODmrzozVeuLiRrYZgBNUw",
+      "storeUuid": "88e0e6af-3a33-55eb-8b89-1ad866004d53",
+      "rating": "4.7",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 4.49 €",
+      "eta": "10:50AM"
+    },
+    {
+      "name": "Art's & Bagels",
+      "url": "https://www.ubereats.com/store/arts-%26-bagels-etterbeek/spb0w2shTjqcZDgSyxcT0A",
+      "storeUuid": "b296f4c3-6b21-4e3a-9c64-3812cb1713d0",
+      "rating": "4.7",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 5.49 €",
+      "eta": "10 min"
+    },
+    {
+      "name": "YouWok",
+      "url": "https://www.ubereats.com/store/youwok-de-brouckere/SdIlQt42RZyK2LF7iRsLOw",
+      "storeUuid": "49d22542-de36-459c-8ad8-b17b891b0b3b",
+      "rating": "4.1",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 4.99 €",
+      "eta": "12 min"
+    },
+    {
+      "name": "O Liban",
+      "url": "https://www.ubereats.com/store/o-liban/nvm6-b7dRQWbVlS1bVGZuw",
+      "storeUuid": "9ef9baf9-bedd-4505-9b56-54b56d5199bb",
+      "rating": "4.5",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 5.49 €",
+      "eta": "10 min"
+    },
+    {
+      "name": "Mondday",
+      "url": "https://www.ubereats.com/store/mondday/jVqH3cGXXuC3ounqBsU7mA",
+      "storeUuid": "8d5a87dd-c197-5ee0-b7a2-e9ea06c53b98",
+      "rating": "N/A",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 4.99 €",
+      "eta": "21 min"
+    },
+    {
+      "name": "Subway",
+      "url": "https://www.ubereats.com/store/subway-rue-neuve/RI5URLL1VYSdRi6iRdQ2Jw",
+      "storeUuid": "448e5444-b2f5-5584-9d46-2ea245d43627",
+      "rating": "4.3",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 5.49 €",
+      "eta": "18 min"
+    },
+    {
+      "name": "Tekince Kebap",
+      "url": "https://www.ubereats.com/store/tekince-kebap/9dBl5hziTSy4h2H04m4Aeg",
+      "storeUuid": "f5d065e6-1ce2-4d2c-b887-61f4e26e007a",
+      "rating": "4.4",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 6.49 €",
+      "eta": "22 min"
+    },
+    {
+      "name": "Woodpecker 20",
+      "url": "https://www.ubereats.com/store/woodpecker-20/SpEFWTFpSkykJo5DH4Wa1Q",
+      "storeUuid": "4a910559-3169-4a4c-a426-8e431f859ad5",
+      "rating": "4.5",
+      "reviewCount": "",
+      "deliveryFee": "Free",
+      "eta": "9 min"
+    },
+    {
+      "name": "Intermarché",
+      "url": "https://www.ubereats.com/store/intermarche-saint-gilles/TnV7DSSTU5iiwl35rR2PUw",
+      "storeUuid": "4e757b0d-2493-5398-a2c2-5df9ad1d8f53",
+      "rating": "4.2",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 3.99 €",
+      "eta": "11:00AM"
+    },
+    {
+      "name": "Boulangerie Balkan",
+      "url": "https://www.ubereats.com/store/boulangerie-balkan/TVSCcBpNWsSTUJzQonbA3g",
+      "storeUuid": "4d548270-1a4d-5ac4-9350-9cd0a276c0de",
+      "rating": "4.8",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 4.99 €",
+      "eta": "19 min"
+    },
+    {
+      "name": "Cappuccino Brussel",
+      "url": "https://www.ubereats.com/store/cappuccino-brussel-centre/wSxRrit5RRelRfNTfsn-7Q",
+      "storeUuid": "c12c51ae-2b79-4517-a545-f3537ec9feed",
+      "rating": "4.0",
+      "reviewCount": "",
+      "deliveryFee": "Free",
+      "eta": "7 min"
+    },
+    {
+      "name": "Panos + Delhaize Shop & Go by Q8 Vorst",
+      "url": "https://www.ubereats.com/store/panos-%2B-delhaize-shop-%26-go-by-q8-vorst/mnWm4CcYUeekNmb1dU3cxQ",
+      "storeUuid": "9a75a6e0-2718-51e7-a436-66f5754ddcc5",
+      "rating": "3.6",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 5.99 €",
+      "eta": "13 min"
+    },
+    {
+      "name": "Botanica",
+      "url": "https://www.ubereats.com/store/botanica/pYLa9miwXku8H1ogZTMENQ",
+      "storeUuid": "a582daf6-68b0-5e4b-bc1f-5a2065330435",
+      "rating": "4.3",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 6.49 €",
+      "eta": "21 min"
+    },
+    {
+      "name": "My Koffee Burger Pasta",
+      "url": "https://www.ubereats.com/store/my-koffee-burger-pasta/DtiI30-EWCmvHCUSKypEPA",
+      "storeUuid": "0ed888df-4f84-5829-af1c-25122b2a443c",
+      "rating": "4.4",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 5.49 €",
+      "eta": "29 min"
+    },
+    {
+      "name": "Greek Sharing Experience by IDEA",
+      "url": "https://www.ubereats.com/store/greek-sharing-experience-by-idea/V5Ctk_ywRHaJ08FEYzT0og",
+      "storeUuid": "5790ad93-fcb0-4476-89d3-c1446334f4a2",
+      "rating": "4.6",
+      "reviewCount": "",
+      "deliveryFee": "Free",
+      "eta": "6 min"
+    },
+    {
+      "name": "ZOUZOU CENTRALE",
+      "url": "https://www.ubereats.com/store/zouzou-centrale/HS1CE4DMQ_SuqmaS1eY08A",
+      "storeUuid": "1d2d4213-80cc-43f4-aeaa-6692d5e634f0",
+      "rating": "4.3",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 4.49 €",
+      "eta": "10 min"
+    },
+    {
+      "name": "Atlas Café ",
+      "url": "https://www.ubereats.com/store/atlas-cafe/tyPctBf-Q6q534Wj5ik__Q",
+      "storeUuid": "b723dcb4-17fe-43aa-b9df-85a3e6293ffd",
+      "rating": "N/A",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 4.99 €",
+      "eta": "33 min"
+    },
+    {
+      "name": "My Healthy Brunch",
+      "url": "https://www.ubereats.com/store/my-healthy-brunch/P4pHDofJXOa6YCrPuyRhlg",
+      "storeUuid": "3f8a470e-87c9-5ce6-ba60-2acfbb246196",
+      "rating": "3.9",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 4.99 €",
+      "eta": "12 min"
+    },
+    {
+      "name": "Cliff",
+      "url": "https://www.ubereats.com/store/cliff/4YHoPvDeWyycVUBP4q0EUQ",
+      "storeUuid": "e181e83e-f0de-5b2c-9c55-404fe2ad0451",
+      "rating": "4.5",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 4.49 €",
+      "eta": "14 min"
+    },
+    {
+      "name": "CHARLY’S DINER",
+      "url": "https://www.ubereats.com/store/charlys-diner/bFDWUepdSfeyOwlw13T9Aw",
+      "storeUuid": "6c50d651-ea5d-49f7-b23b-0970d774fd03",
+      "rating": "N/A",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 4.49 €",
+      "eta": "10 min"
+    },
+    {
+      "name": "Café de la Presse – Central",
+      "url": "https://www.ubereats.com/store/cafe-de-la-presse-%E2%80%93-central/i9SpIPaxROqBwRit7Xz09g",
+      "storeUuid": "8bd4a920-f6b1-44ea-81c1-18aded7cf4f6",
+      "rating": "4.5",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 4.49 €",
+      "eta": "11 min"
+    },
+    {
+      "name": "BFC",
+      "url": "https://www.ubereats.com/store/bfc-bruxelles/nKwZ6BB3SROK0fUOtjTecQ",
+      "storeUuid": "9cac19e8-1077-4913-8ad1-f50eb634de71",
+      "rating": "4.5",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 4.49 €",
+      "eta": "12 min"
+    },
+    {
+      "name": "Great Market Epicerie",
+      "url": "https://www.ubereats.com/store/great-market-epicerie/oAFsIT2pWgaH5EWlcNfW_g",
+      "storeUuid": "a0016c21-3da9-5a06-87e4-45a570d7d6fe",
+      "rating": "4.2",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 6.99 €",
+      "eta": "11:18AM"
+    },
+    {
+      "name": "Eggpoint",
+      "url": "https://www.ubereats.com/store/eggpoint/eGVHXf0ASUa_Mo8FC6XjAw",
+      "storeUuid": "7865475d-fd00-4946-bf32-8f050ba5e303",
+      "rating": "3.9",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 4.49 €",
+      "eta": "21 min"
+    },
+    {
+      "name": "Boulangerie Tafoughalt",
+      "url": "https://www.ubereats.com/store/boulangerie-tafoughalt/gzPs-wmoWymF20yZdEvICw",
+      "storeUuid": "8333ecfb-09a8-5b29-85db-4c99744bc80b",
+      "rating": "4.4",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 5.99 €",
+      "eta": "15 min"
+    },
+    {
+      "name": "Superbowl",
+      "url": "https://www.ubereats.com/store/superbowl-midi/Ngkqo1hbTX6mnfNQjtCq2g",
+      "storeUuid": "36092aa3-585b-4d7e-a69d-f3508ed0aada",
+      "rating": "4.5",
+      "reviewCount": "",
+      "deliveryFee": "Free",
+      "eta": "5 min"
+    },
+    {
+      "name": "Breakpoint",
+      "url": "https://www.ubereats.com/store/breakpoint-evere/MFwK9hP1VIyg2DJVepBGjA",
+      "storeUuid": "305c0af6-13f5-548c-a0d8-32557a90468c",
+      "rating": "N/A",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 8.49 €",
+      "eta": "35 min"
+    },
+    {
+      "name": "BON",
+      "url": "https://www.ubereats.com/store/bon-gare-centrale/HveleOE7UDiAPnM9rWuq_Q",
+      "storeUuid": "1ef7a578-e13b-5038-803e-733dad6baafd",
+      "rating": "N/A",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 4.49 €",
+      "eta": "16 min"
+    },
+    {
+      "name": "Al Andalous",
+      "url": "https://www.ubereats.com/store/al-andalous/IOEw0U6pQgKQrJulb6AguA",
+      "storeUuid": "20e130d1-4ea9-4202-90ac-9ba56fa020b8",
+      "rating": "4.4",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 5.49 €",
+      "eta": "27 min"
+    },
+    {
+      "name": "ONO Brunch & Coffee",
+      "url": "https://www.ubereats.com/store/ono-brunch-%26-coffee/Wym2vEkcRbuS7Fq78LJ0xA",
+      "storeUuid": "5b29b6bc-491c-45bb-92ec-5abbf0b274c4",
+      "rating": "4.2",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 6.49 €",
+      "eta": "18 min"
+    },
+    {
+      "name": "Beurfin",
+      "url": "https://www.ubereats.com/store/beurfin/wWo8WR1wV3arxj4b8iBPmQ",
+      "storeUuid": "c16a3c59-1d70-5776-abc6-3e1bf2204f99",
+      "rating": "4.6",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 6.49 €",
+      "eta": "15 min"
+    },
+    {
+      "name": "Dunkin' Donuts",
+      "url": "https://www.ubereats.com/store/dunkin-donuts-rue-neuve/AFmNh-RNQBSPEcHx7VIl5A",
+      "storeUuid": "00598d87-e44d-4014-8f11-c1f1ed5225e4",
+      "rating": "4.4",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 4.99 €",
+      "eta": "10 min"
+    },
+    {
+      "name": "Cafe Recup",
+      "url": "https://www.ubereats.com/store/cafe-recup-jourdan/hf3LUBX2V3arPxLh-XPvjQ",
+      "storeUuid": "85fdcb50-15f6-5776-ab3f-12e1f973ef8d",
+      "rating": "4.5",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 5.49 €",
+      "eta": "20 min"
+    },
+    {
+      "name": "Rascal's Café",
+      "url": "https://www.ubereats.com/store/rascals-cafe/p8uCm0KGTOSMCz9xXp4fIA",
+      "storeUuid": "a7cb829b-4286-4ce4-8c0b-3f715e9e1f20",
+      "rating": "4.6",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 4.49 €",
+      "eta": "10 min"
+    },
+    {
+      "name": "Cafétaria Tetouan",
+      "url": "https://www.ubereats.com/store/cafetaria-tetouan/BfYQQc06XKWn9FO1pM8_rQ",
+      "storeUuid": "05f61041-cd3a-5ca5-a7f4-53b5a4cf3fad",
+      "rating": "4.3",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 3.99 €",
+      "eta": "12 min"
+    },
+    {
+      "name": "Panos",
+      "url": "https://www.ubereats.com/store/panos-city-brussel-porte-de-namur/a7Br6Mb-X5az1qZoe1_doQ",
+      "storeUuid": "6bb06be8-c6fe-5f96-b3d6-a6687b5fdda1",
+      "rating": "4.5",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 3.99 €",
+      "eta": "10 min"
+    },
+    {
+      "name": "BANH MI",
+      "url": "https://www.ubereats.com/store/banh-mi-boondael/mHILfH5KWWiorjYe1UxkAw",
+      "storeUuid": "98720b7c-7e4a-5968-a8ae-361ed54c6403",
+      "rating": "4.2",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 5.99 €",
+      "eta": "12 min"
+    },
+    {
+      "name": "Boulangerie Gavilan-Tartines et Saveurs",
+      "url": "https://www.ubereats.com/store/boulangerie-gavilan-tartines-et-saveurs/IztKpIs-SNicpwE211VZbw",
+      "storeUuid": "233b4aa4-8b3e-48d8-9ca7-0136d755596f",
+      "rating": "4.5",
+      "reviewCount": "",
+      "deliveryFee": "Frais de livraison : 7.99 €",
+      "eta": "24 min"
+    }
+  ],
+  "target": {
+    "name": "McDonald's",
+    "url": "https://www.ubereats.com/store/mcdonalds-ixelles/bAoMCYSAR72YGNHB_6DehQ",
+    "storeUuid": "6c0a0c09-8480-47bd-9818-d1c1ffa0de85",
+    "rating": "4.2",
+    "reviewCount": "",
+    "deliveryFee": "Frais de livraison : 3.99 €",
+    "eta": "10 min",
+    "menuItems": [
+      {
+        "name": "6 Chicken McNuggets©",
+        "price": "€6.90",
+        "description": ""
+      },
+      {
+        "name": "Double Cheeseburger",
+        "price": "€6.20",
+        "description": ""
+      },
+      {
+        "name": "Filet-O-Fish®",
+        "price": "€6.60",
+        "description": "Poisson pané, fromage Cheddar, sauce tartare"
+      },
+      {
+        "name": "20 Chicken McNuggets©",
+        "price": "€15.00",
+        "description": ""
+      },
+      {
+        "name": "Chicken Sharing Box",
+        "price": "€16.20",
+        "description": "Mix de 6 Spicy Chicken McNuggets®, 3 Chicken Wings et 9 Chicken McNuggets®"
+      },
+      {
+        "name": "20 Spicy Chicken McNuggets©",
+        "price": "€14.60",
+        "description": ""
+      },
+      {
+        "name": "McFlurry® M&M’s",
+        "price": "€4.50",
+        "description": "Délicieuse glace aux M&M's croustillants"
+      },
+      {
+        "name": "Double Cheeseburger",
+        "price": "€6.20",
+        "description": ""
+      },
+      {
+        "name": "McCrispy®",
+        "price": "€8.00",
+        "description": "Filet de poulet pané croustillant, une tranche de cheddar, salade Iceberg, sauce poivre mayo"
+      },
+      {
+        "name": "McCrispy Sriracha®",
+        "price": "€9.00",
+        "description": "Filet de poulet pané croustillant,2 tranches de bacon, oignons rouges, cornichons, salade Batavia, sauce sriracha mayo"
+      },
+      {
+        "name": "Chicken McWrap",
+        "price": "€6.70",
+        "description": "Tortilla garnie de poulet croustillant, 1 tranche de bacon, salade Iceberg, une tranche de cheddar oignons rouges, sauce poivre mayo"
+      },
+      {
+        "name": "Chicken Sharing Box",
+        "price": "€16.20",
+        "description": "Mix de 6 Spicy Chicken McNuggets®, 3 Chicken Wings et 9 Chicken McNuggets®"
+      },
+      {
+        "name": "Sriracha McFlavor® Fries",
+        "price": "€4.40",
+        "description": "Frites nappées d'une sauce Sriracha avec des morceaux de bacon"
+      },
+      {
+        "name": "20 Spicy Chicken McNuggets©",
+        "price": "€14.60",
+        "description": ""
+      },
+      {
+        "name": "McFlurry® Popcorn sauce Caramel",
+        "price": "€4.80",
+        "description": "Délicieuse glace aux popcorn croustillants et sauce caramel"
+      },
+      {
+        "name": "Peppery Cheese",
+        "price": "€3.90",
+        "description": ""
+      },
+      {
+        "name": "Big Mac® McMenu®",
+        "price": "€12.60",
+        "description": ""
+      },
+      {
+        "name": "Maestro Double Generous Jack McMenu®",
+        "price": "€15.30",
+        "description": ""
+      },
+      {
+        "name": "Double Cheese McMenu®",
+        "price": "€11.60",
+        "description": ""
+      },
+      {
+        "name": "McChicken® McMenu®",
+        "price": "€12.00",
+        "description": "Poulet pané, salade croquante, sauce légèrement citronnée, boisson et frites"
+      },
+      {
+        "name": "Royal Crispy Bacon McMenu®",
+        "price": "€12.50",
+        "description": ""
+      },
+      {
+        "name": "Royal Cheese McMenu®",
+        "price": "€12.50",
+        "description": ""
+      },
+      {
+        "name": "6 Chicken McNuggets© McMenu®",
+        "price": "€12.00",
+        "description": "6 Chicken McNuggets©, boisson et frites"
+      },
+      {
+        "name": "Filet-O-Fish® McMenu®",
+        "price": "€12.20",
+        "description": "Poisson pané, fromage Cheddar, sauce tartare, boisson et frites"
+      },
+      {
+        "name": "Maestro Generous Jack (junior) McMenu®",
+        "price": "€14.30",
+        "description": ""
+      },
+      {
+        "name": "Veggie Deluxe McMenu®",
+        "price": "€12.40",
+        "description": "Filet veggie pané, salade Batavia, tomates, oignons rouges, sauce légèrement citronnée, boisson et frites"
+      },
+      {
+        "name": "McCrispy® McMenu®",
+        "price": "€13.40",
+        "description": "Filet de poulet pané croustillant, une tranche de cheddar, salade Iceberg, sauce poivre mayo, boisson et frites"
+      },
+      {
+        "name": "McCrispy® Sriracha McMenu®",
+        "price": "€14.40",
+        "description": "Filet de poulet pané croustillant,2 tranches de bacon, oignons rouges, cornichons, salade Batavia, sauce sriracha mayo, boisson et frites"
+      },
+      {
+        "name": "Chicken McWrap McMenu®",
+        "price": "€11.60",
+        "description": "Tortilla garnie de poulet croustillant, 1 tranche de bacon, salade Iceberg, une tranche de cheddar oignons rouges, sauce poivre mayo, boisson, frites"
+      },
+      {
+        "name": "9 Spicy Chicken McNuggets© McMenu®",
+        "price": "€14.00",
+        "description": "9 Spicy Chicken McNuggets®, boisson et frites"
+      },
+      {
+        "name": "6 Spicy Chicken McNuggets© McMenu®",
+        "price": "€12.30",
+        "description": "6 Spicy Chicken McNuggets®, boisson et frites"
+      },
+      {
+        "name": "Filet-O-Fish® Deluxe McMenu®",
+        "price": "€12.60",
+        "description": "Poisson pané, fromage Cheddar, tomate, salade Iceberg, sauce tartare, boisson et frites"
+      },
+      {
+        "name": "Double Royal Crispy Bacon McMenu®",
+        "price": "€14.85",
+        "description": "Deux burgers de bœuf bien juteux, du lard super croustillant, du cheddar fondu et une sauce bacon spéciale, boisson et frites. Tu as dit royal ?"
+      },
+      {
+        "name": "9 Chicken Wings McMenu®",
+        "price": "€14.60",
+        "description": "9 Chicken Wings, boisson et frites"
+      },
+      {
+        "name": "9 Chicken McNuggets© McMenu®",
+        "price": "€13.80",
+        "description": "9 Chicken McNuggets©, boisson et frites"
+      },
+      {
+        "name": "6 Chicken McNuggets©",
+        "price": "€6.90",
+        "description": ""
+      },
+      {
+        "name": "9 Chicken McNuggets©",
+        "price": "€8.70",
+        "description": ""
+      },
+      {
+        "name": "4 Chicken McNuggets©",
+        "price": "€4.25",
+        "description": ""
+      },
+      {
+        "name": "20 Chicken McNuggets©",
+        "price": "€15.00",
+        "description": ""
+      },
+      {
+        "name": "9 Chicken Wings",
+        "price": "€9.10",
+        "description": ""
+      },
+      {
+        "name": "3 Chicken Wings",
+        "price": "€4.25",
+        "description": ""
+      },
+      {
+        "name": "Chicken Sharing Box",
+        "price": "€16.20",
+        "description": "Mix de 6 Spicy Chicken McNuggets®, 3 Chicken Wings et 9 Chicken McNuggets®"
+      },
+      {
+        "name": "20 Spicy Chicken McNuggets©",
+        "price": "€14.60",
+        "description": ""
+      },
+      {
+        "name": "9 Spicy Chicken McNuggets©",
+        "price": "€9.20",
+        "description": ""
+      },
+      {
+        "name": "6 Spicy Chicken McNuggets©",
+        "price": "€7.20",
+        "description": ""
+      },
+      {
+        "name": "Happy Meal Cheeseburger",
+        "price": "€6.80",
+        "description": "Burger, boisson, frites, tomates cerises, dessert et jouet ou livre"
+      },
+      {
+        "name": "Happy Meal 4 Chicken McNuggets",
+        "price": "€6.80",
+        "description": "4 Chicken McNuggets, boisson, frites, tomates cerises, dessert et jouet ou livre"
+      },
+      {
+        "name": "Happy Meal Hamburger",
+        "price": "€6.80",
+        "description": "Burger, boisson, frites, tomates cerises, dessert et jouet ou livre"
+      },
+      {
+        "name": "Happy Meal McFish",
+        "price": "€6.80",
+        "description": "Burger, boisson, frites, tomates cerises, dessert et jouet ou livre"
+      },
+      {
+        "name": "Grande portion de frites",
+        "price": "€3.80",
+        "description": ""
+      }
+    ]
+  }
+}
