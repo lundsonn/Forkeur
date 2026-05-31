@@ -3,6 +3,7 @@ import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { RestaurantSummary } from '@/lib/queries'
 import RestaurantCard from './RestaurantCard'
+import MapView from './MapView'
 
 export default function HomepageClient({
   restaurants,
@@ -13,6 +14,7 @@ export default function HomepageClient({
 }) {
   const [search, setSearch] = useState('')
   const [selectedCuisine, setSelectedCuisine] = useState<string | null>(null)
+  const [view, setView] = useState<'list' | 'map'>('list')
 
   const filtered = useMemo(
     () =>
@@ -36,7 +38,28 @@ export default function HomepageClient({
             fork<span className="text-orange-500">eur</span>
           </span>
         </div>
-        <span className="text-sm text-stone-500">Brussels ↓</span>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setView('list')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+              view === 'list'
+                ? 'bg-stone-900 text-white'
+                : 'text-stone-500 hover:text-stone-700'
+            }`}
+          >
+            List
+          </button>
+          <button
+            onClick={() => setView('map')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+              view === 'map'
+                ? 'bg-stone-900 text-white'
+                : 'text-stone-500 hover:text-stone-700'
+            }`}
+          >
+            Map
+          </button>
+        </div>
       </div>
 
       {/* Hero */}
@@ -77,22 +100,31 @@ export default function HomepageClient({
         ))}
       </div>
 
-      {/* List label */}
-      <p className="text-[10px] font-semibold tracking-widest text-stone-400 uppercase mb-3">
-        {search || selectedCuisine ? `${filtered.length} result${filtered.length !== 1 ? 's' : ''}` : 'Restaurants'}
-      </p>
+      {view === 'map' ? (
+        <MapView
+          restaurants={filtered}
+          height="calc(100vh - 240px)"
+        />
+      ) : (
+        <>
+          {/* List label */}
+          <p className="text-[10px] font-semibold tracking-widest text-stone-400 uppercase mb-3">
+            {search || selectedCuisine ? `${filtered.length} result${filtered.length !== 1 ? 's' : ''}` : 'Restaurants'}
+          </p>
 
-      {/* Restaurant list */}
-      <div>
-        {filtered.map((r, i) => (
-          <Link key={r.id} href={`/restaurant/${r.id}`}>
-            <RestaurantCard restaurant={r} isLast={i === filtered.length - 1} />
-          </Link>
-        ))}
-        {filtered.length === 0 && (
-          <p className="text-center text-stone-400 text-sm py-16">No restaurants found</p>
-        )}
-      </div>
+          {/* Restaurant list */}
+          <div>
+            {filtered.map((r, i) => (
+              <Link key={r.id} href={`/restaurant/${r.id}`}>
+                <RestaurantCard restaurant={r} isLast={i === filtered.length - 1} />
+              </Link>
+            ))}
+            {filtered.length === 0 && (
+              <p className="text-center text-stone-400 text-sm py-16">No restaurants found</p>
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }

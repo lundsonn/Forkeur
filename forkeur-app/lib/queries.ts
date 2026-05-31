@@ -6,6 +6,8 @@ export type RestaurantSummary = {
   id: string
   name: string
   cuisine: string[]
+  lat: number | null
+  lng: number | null
   listings: { platform: Platform; delivery_fee_cents: number | null }[]
   cheapest: {
     platform: Platform
@@ -69,7 +71,7 @@ export async function getRestaurants(): Promise<{
   const { data, error } = await supabase
     .from('restaurants')
     .select(`
-      id, name, cuisine,
+      id, name, cuisine, lat, lng,
       platform_listings ( platform, delivery_fee )
     `)
 
@@ -89,11 +91,16 @@ export async function getRestaurants(): Promise<{
 
       const available = listings.filter((l) => l.delivery_fee_cents !== null)
 
+      const lat = r.lat != null ? Number(r.lat) : null
+      const lng = r.lng != null ? Number(r.lng) : null
+
       if (available.length === 0) {
         return {
           id: r.id,
           name: r.name,
           cuisine: r.cuisine ? [r.cuisine] : [],
+          lat,
+          lng,
           listings,
           cheapest: null,
         }
@@ -109,6 +116,8 @@ export async function getRestaurants(): Promise<{
         id: r.id,
         name: r.name,
         cuisine: r.cuisine ? [r.cuisine] : [],
+        lat,
+        lng,
         listings,
         cheapest: {
           platform: cheapest.platform,
