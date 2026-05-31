@@ -36,12 +36,13 @@ export default function StickyOrderBar({ platform, total, platformUrl }: Props) 
             href={platformUrl}
             target="_blank"
             rel="noopener noreferrer"
+            aria-label={`Order on ${PLATFORM_LABELS[platform]} (opens in new tab)`}
             className="block hover:opacity-90 transition-opacity"
           >
             {inner}
           </a>
         ) : (
-          <div className="opacity-60 cursor-not-allowed">{inner}</div>
+          <div aria-disabled="true" className="opacity-60 cursor-not-allowed">{inner}</div>
         )}
       </div>
     </div>
