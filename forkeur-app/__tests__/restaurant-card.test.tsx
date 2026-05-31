@@ -26,6 +26,18 @@ const nullFees: RestaurantSummary = {
   cheapest: { platform: 'deliveroo', fee_label: '€2.99', savings_cents: 0 },
 }
 
+const freeListing: RestaurantSummary = {
+  id: '4',
+  name: 'Burger King',
+  cuisine: ['Fast food'],
+  listings: [
+    { platform: 'uber_eats', delivery_fee_cents: 0 },
+    { platform: 'deliveroo', delivery_fee_cents: 99 },
+    { platform: 'takeaway', delivery_fee_cents: 149 },
+  ],
+  cheapest: { platform: 'uber_eats', fee_label: 'Free', savings_cents: 149 },
+}
+
 describe('RestaurantCard', () => {
   it('shows all 3 platform fees when 3 listings exist', () => {
     render(<RestaurantCard restaurant={threeListings} />)
@@ -34,10 +46,16 @@ describe('RestaurantCard', () => {
     expect(screen.getByText('€1.99')).toBeInTheDocument()
   })
 
-  it('shows cheapest fee in bold (font-semibold class)', () => {
+  it('marks cheapest tile with data-cheapest attribute', () => {
     render(<RestaurantCard restaurant={threeListings} />)
-    const cheapestEl = screen.getByText('€0.49')
-    expect(cheapestEl).toHaveClass('font-semibold')
+    const tile = screen.getByTestId('fee-tile-uber_eats')
+    expect(tile).toHaveAttribute('data-cheapest', 'true')
+  })
+
+  it('non-cheapest tiles do not have data-cheapest=true', () => {
+    render(<RestaurantCard restaurant={threeListings} />)
+    expect(screen.getByTestId('fee-tile-deliveroo')).not.toHaveAttribute('data-cheapest', 'true')
+    expect(screen.getByTestId('fee-tile-takeaway')).not.toHaveAttribute('data-cheapest', 'true')
   })
 
   it('shows restaurant name', () => {
@@ -48,6 +66,11 @@ describe('RestaurantCard', () => {
   it('skips platforms with null delivery fee', () => {
     render(<RestaurantCard restaurant={nullFees} />)
     expect(screen.getByText('€2.99')).toBeInTheDocument()
-    expect(screen.queryByText('—')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('fee-tile-uber_eats')).toBeNull()
+  })
+
+  it('shows Free for zero-cent delivery fee', () => {
+    render(<RestaurantCard restaurant={freeListing} />)
+    expect(screen.getByText('Free')).toBeInTheDocument()
   })
 })
