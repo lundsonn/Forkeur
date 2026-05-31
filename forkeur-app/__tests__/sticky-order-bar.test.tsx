@@ -40,4 +40,37 @@ describe('StickyOrderBar', () => {
     expect(screen.queryByRole('link')).toBeNull()
     expect(screen.getByText('Order on Takeaway')).toBeInTheDocument()
   })
+
+  it('applies bg-stone-900 class to inner bar', () => {
+    render(
+      <StickyOrderBar platform="uber_eats" total={648} platformUrl="https://example.com" />
+    )
+    const bar = screen.getByTestId('order-bar-inner')
+    expect(bar).toHaveClass('bg-stone-900')
+  })
+
+  it('applies platform left-border class to inner bar for uber_eats', () => {
+    render(
+      <StickyOrderBar platform="uber_eats" total={648} platformUrl="https://example.com" />
+    )
+    const bar = screen.getByTestId('order-bar-inner')
+    expect(bar).toHaveClass('border-l-4')
+    expect(bar).toHaveClass('border-green-500')
+  })
+
+  it('applies platform left-border class for deliveroo', () => {
+    render(
+      <StickyOrderBar platform="deliveroo" total={200} platformUrl={null} />
+    )
+    const bar = screen.getByTestId('order-bar-inner')
+    expect(bar).toHaveClass('border-cyan-500')
+  })
+
+  it('applies platform left-border class for takeaway', () => {
+    render(
+      <StickyOrderBar platform="takeaway" total={200} platformUrl={null} />
+    )
+    const bar = screen.getByTestId('order-bar-inner')
+    expect(bar).toHaveClass('border-orange-500')
+  })
 })

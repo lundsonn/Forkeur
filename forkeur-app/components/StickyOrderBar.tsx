@@ -14,7 +14,8 @@ export default function StickyOrderBar({ platform, total, platformUrl }: Props) 
 
   const inner = (
     <div
-      className="flex items-center justify-between px-5 py-4 bg-blue-600"
+      data-testid="order-bar-inner"
+      className={`flex items-center justify-between px-5 py-4 bg-stone-900 border-l-4 ${colors.ring}`}
       style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
     >
       <div className="flex items-center gap-2">
@@ -23,7 +24,7 @@ export default function StickyOrderBar({ platform, total, platformUrl }: Props) 
           Order on {PLATFORM_LABELS[platform]}
         </span>
       </div>
-      <span className="text-sm font-semibold text-white">{centsToEuro(total)}</span>
+      <span className={`text-sm font-semibold ${colors.label}`}>{centsToEuro(total)}</span>
     </div>
   )
 
