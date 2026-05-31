@@ -178,9 +178,10 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                     if (card.tagName === 'LI' || card.tagName === 'ARTICLE') break;
                 }
                 const lines = (card.innerText || '').split('\\n').map(l => l.trim()).filter(Boolean);
-                const ratingIdx = lines.findIndex(l => /^\\d[,.]\\d\\s+(Excellent|Good|Okay|Bien|Correct|Très\\s+bien|Neutre|Uitstekend|Goed|Matig)/i.test(l));
+                // Match "4.2 Excellent", "4,2 Bien", "4.2 (1234)", or bare "4.2"
+                const ratingIdx = lines.findIndex(l => /^[1-5][,.]\\d(\\s|$|\\()/.test(l));
                 const ratingLine = ratingIdx >= 0 ? lines[ratingIdx] : null;
-                const name = ratingIdx > 0 ? lines[ratingIdx - 1] : (lines.find(l => !l.match(/^\\d+\\s*min$/) && !l.includes('€') && l.length > 3) || slug);
+                const name = ratingIdx > 0 ? lines[ratingIdx - 1] : (lines.find(l => !l.match(/^\\d+(-\\d+)?\\s*min$/) && !l.includes('€') && l.length > 3) || slug);
                 const ratingMatch = (ratingLine || '').match(/^(\\d[,.]\\d)/);
                 const reviewMatch = (ratingLine || '').match(/\\((\\d[\\d.,]*\\+?)\\)/);
                 const eta = lines.find(l => /^\\d+(-\\d+)?\\s*min$/i.test(l)) || 'N/A';
@@ -257,38 +258,66 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 await page.wait_for_load_state("domcontentloaded", timeout=15000)
                 check_cloudflare(await page.title())
 
+                # Primary selector: Deliveroo carousel/slide items.
+                slide_items: list[dict] = []
                 try:
-                    # Items are in li[class*="Slide"] (Deliveroo carousel structure)
-                    await page.wait_for_selector('li[class*="Slide"]', timeout=12000)
-                except Exception:
-                    log_fn(f"  Warning: menu selector timed out for {r['name']}, skipping items")
-
-                # Extract items; use preceding h2 as catalog_name
-                items: list[dict] = await page.eval_on_selector_all(
-                    'li[class*="Slide"]',
-                    """lis => {
-                        const h2s = Array.from(document.querySelectorAll('h2'));
-                        return lis.map(li => {
-                            const lines = (li.innerText || '').split('\\n').map(l => l.trim()).filter(Boolean);
-                            const priceLine = lines.find(l => /€\\s*\\d/.test(l));
-                            const title = lines.find(l =>
-                                l !== priceLine && l.length > 1 && !/^free/i.test(l) && !/fees apply/i.test(l)
-                            ) || '';
-                            const priceMatch = (priceLine || '').match(/€\\s*(\\d+)[,.]?(\\d{0,2})/);
-                            const price = priceMatch
-                                ? parseFloat(priceMatch[1] + '.' + (priceMatch[2] || '00').padEnd(2, '0'))
-                                : null;
-                            // Nearest preceding h2 = section name
-                            let catalogName = '';
-                            for (const h2 of h2s) {
-                                if (h2.compareDocumentPosition(li) & Node.DOCUMENT_POSITION_FOLLOWING) {
-                                    catalogName = h2.innerText.trim();
+                    await page.wait_for_selector('li[class*="Slide"]', timeout=8000)
+                    slide_items = await page.eval_on_selector_all(
+                        'li[class*="Slide"]',
+                        """lis => {
+                            const h2s = Array.from(document.querySelectorAll('h2'));
+                            return lis.map(li => {
+                                const lines = (li.innerText || '').split('\\n').map(l => l.trim()).filter(Boolean);
+                                const priceLine = lines.find(l => /€\\s*\\d/.test(l));
+                                const title = lines.find(l =>
+                                    l !== priceLine && l.length > 1 && !/^free/i.test(l) && !/fees apply/i.test(l)
+                                ) || '';
+                                const priceMatch = (priceLine || '').match(/€\\s*(\\d+)[,.]?(\\d{0,2})/);
+                                const price = priceMatch
+                                    ? parseFloat(priceMatch[1] + '.' + (priceMatch[2] || '00').padEnd(2, '0'))
+                                    : null;
+                                let catalogName = '';
+                                for (const h2 of h2s) {
+                                    if (h2.compareDocumentPosition(li) & Node.DOCUMENT_POSITION_FOLLOWING) {
+                                        catalogName = h2.innerText.trim();
+                                    }
                                 }
+                                return { title, price, catalog_name: catalogName };
+                            }).filter(i => i.title && i.price !== null && i.price > 0);
+                        }""",
+                    )
+                except Exception:
+                    pass
+
+                # Fallback: DOM walk using h2/h3 headings — catches non-carousel layouts.
+                items: list[dict] = slide_items
+                if not items:
+                    await page.wait_for_timeout(1500)
+                    dom_output = await page.evaluate("""
+                    () => {
+                        const sections = [];
+                        const headings = Array.from(document.querySelectorAll('h2, h3'));
+                        for (const heading of headings) {
+                            const sectionName = heading.textContent.trim();
+                            const secItems = [];
+                            let current = heading.nextElementSibling;
+                            while (current && !['H2', 'H3'].includes(current.tagName)) {
+                                const priceMatch = current.textContent.match(/€\\s*\\d+[,.]\\d+|\\d+[,.]\\d+\\s*€/);
+                                if (priceMatch) {
+                                    const titleText = current.textContent
+                                        .replace(/€\\s*\\d+[,.]\\d+|\\d+[,.]\\d+\\s*€/g, '')
+                                        .replace(/\\s+/g, ' ')
+                                        .trim();
+                                    if (titleText) secItems.push({ title: titleText, price: priceMatch[0] });
+                                }
+                                current = current.nextElementSibling;
                             }
-                            return { title, price, catalog_name: catalogName };
-                        }).filter(i => i.title && i.price !== null && i.price > 0);
-                    }""",
-                )
+                            if (secItems.length > 0) sections.push({ heading: sectionName, items: secItems });
+                        }
+                        return { sections };
+                    }
+                    """)
+                    items = _parse_dom_items(dom_output)
 
                 # Deduplicate by title+price
                 seen_keys: set[str] = set()
@@ -306,38 +335,45 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 else:
                     log_fn(f"  Warning: no menu items found for {r['name']}")
 
-                # Extract delivery fee from the restaurant header
+                # Extract delivery fee from restaurant page.
+                # CSS class selectors are hashed (CSS modules) and change; use
+                # data-test* attributes first, then a broad text-node walk.
                 fee_text: str | None = await page.evaluate(
                     """() => {
-                        const candidates = [
-                            ...document.querySelectorAll('[class*="DeliveryInfo"], [data-test-id*="delivery"], [class*="delivery-fee"], [class*="DeliveryFee"]')
-                        ];
-                        for (const el of candidates) {
-                            const t = el.innerText || '';
-                            if (/€|free|gratuit|gratis/i.test(t)) return t;
+                        // 1. Semantic test attributes (stable across deploys)
+                        for (const sel of [
+                            '[data-test*="delivery"]',
+                            '[data-testid*="delivery"]',
+                            '[data-test*="fee"]',
+                        ]) {
+                            for (const el of document.querySelectorAll(sel)) {
+                                const t = (el.innerText || '').trim();
+                                if (/€|free|gratuit|gratis/i.test(t) && t.length < 80) return t;
+                            }
                         }
-                        // Broader fallback: any small text node containing delivery fee pattern
+                        // 2. Text-node walk: short strings mentioning delivery + price
                         const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
                         let node;
                         while ((node = walker.nextNode())) {
                             const t = node.textContent.trim();
-                            if (/delivery[:\s]+[€£$\d]|free delivery|gratuit/i.test(t) && t.length < 80) return t;
+                            if (t.length > 0 && t.length < 80 &&
+                                /delivery|livraison|bezorgkosten/i.test(t) &&
+                                /€\s*\d|\d[,.]\d\s*€|free|gratuit|gratis/i.test(t)) {
+                                return t;
+                            }
+                        }
+                        // 3. Any short line starting with € (e.g. "€ 1.99")
+                        const walker2 = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+                        while ((node = walker2.nextNode())) {
+                            const t = node.textContent.trim();
+                            if (/^€\s*\d+[,.]\d+$/.test(t)) return t;
                         }
                         return null;
                     }"""
                 )
                 fee = _parse_fee(fee_text)
                 if fee is not None:
-                    db.upsert_listing({
-                        "restaurant_id": rid,
-                        "platform": "deliveroo",
-                        "url": r.get("url"),
-                        "rating": _parse_float(r.get("rating")),
-                        "eta_min": _parse_eta_min(r.get("eta")),
-                        "eta_max": _parse_eta_max(r.get("eta")),
-                        "discount_label": r.get("discount"),
-                        "delivery_fee": fee,
-                    })
+                    db.patch_listing(lid, {"delivery_fee": fee})
                     log_fn(f"  Delivery fee: {fee}")
 
             except CloudflareBlockedError:

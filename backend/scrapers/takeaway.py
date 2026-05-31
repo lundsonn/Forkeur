@@ -53,24 +53,113 @@ def _parse_dom_items(dom_output: dict) -> list[dict]:
 _HEADING_NOISE = ("business details", "panier", "basket", "cart", "horaires", "informations")
 
 
+async def _extract_menu_items(page, listing_id: str) -> tuple[str, list[dict]]:
+    """Extract menu items from an already-loaded Takeaway menu page.
+
+    Expects `[data-qa="card-element"]` to be present. Scrolls to load lazy sections.
+    Returns: (listing_id, items)
+    """
+    items: list[dict] = []
+    try:
+        await page.wait_for_selector('[data-qa="card-element"]', timeout=20000)
+    except Exception:
+        return (listing_id, items)
+
+    _count_js = "document.querySelectorAll('[data-qa=\"card-element\"]').length"
+
+    # Scroll by height until stable.
+    prev_height = 0
+    for _ in range(25):
+        height = await page.evaluate("document.body.scrollHeight")
+        await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        await page.wait_for_timeout(600)
+        if height == prev_height:
+            break
+        prev_height = height
+
+    # Item-count-based scroll handles lazy categories that load after height stabilises.
+    prev_count = 0
+    for _ in range(15):
+        cur_count = await page.evaluate(_count_js)
+        if cur_count == prev_count:
+            break
+        prev_count = cur_count
+        await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        await page.wait_for_timeout(700)
+    await page.wait_for_timeout(500)
+
+    dom_output = await page.evaluate("""
+    () => {
+        const sections = [];
+        const nodes = Array.from(document.querySelectorAll(
+            '[data-qa="heading"], [data-qa="card-element"]'
+        ));
+        let heading = 'Menu';
+        let cur = null;
+        for (const node of nodes) {
+            const qa = node.getAttribute('data-qa');
+            if (qa === 'heading') {
+                heading = (node.innerText || '').trim() || 'Menu';
+                continue;
+            }
+            const nameEl = node.querySelector('[data-qa="item-name"]');
+            const priceEl = node.querySelector('[data-qa="item-price"]');
+            if (!nameEl || !priceEl) continue;
+            const title = (nameEl.innerText || '').trim();
+            const price = (priceEl.innerText || '').trim();
+            if (!title) continue;
+            if (!cur || cur.heading !== heading) {
+                cur = { heading, items: [] };
+                sections.push(cur);
+            }
+            cur.items.push({ title, price });
+        }
+        return { sections };
+    }
+    """)
+
+    items = _parse_dom_items(dom_output)
+    return (listing_id, items)
+
+
 async def scrape_menu_page(page, listing_id: str, url: str) -> tuple[str, list[dict]]:
-    """Navigate restaurant menu page (full goto + CF clear) and scrape items.
+    """Navigate to a Takeaway menu page via goto and extract items.
 
-    Takeaway gates every /menu/ path behind a fresh Cloudflare challenge. A full
-    document load (page.goto) lets CF's challenge script run top-level so the
-    mouse-simulation clear can solve it — a client-side SPA click does NOT clear.
-    So we always goto + wait_for_cf_clear here, same as the listing page.
-
-    Item DOM (data-qa): card-element wraps each item; item-name = title,
-    item-price = "€ 8,00"; heading = section category.
+    Uses SPA click navigation from the current page if possible (avoids CF retrigger).
+    Falls back to page.goto when no matching anchor is visible.
 
     Returns: (listing_id, items)
     """
-    items = []
+    slug = url.split("/menu/")[-1].split("?")[0].rstrip("/")
 
-    try:
-        # CF gates each /menu/ path; rapid back-to-back challenges sometimes
-        # don't clear on the first try. Retry once after a short pause.
+    # Try SPA click first — client-side routing doesn't retrigger CF.
+    clicked = False
+    for _attempt in range(3):
+        clicked = await page.evaluate(f"""
+            (() => {{
+                const a = document.querySelector('a[href*="/menu/{slug}"]');
+                if (a) {{ a.scrollIntoView({{block:'center'}}); a.click(); return true; }}
+                return false;
+            }})()
+        """)
+        if clicked:
+            break
+        await page.evaluate("window.scrollBy(0, 3000)")
+        await asyncio.sleep(0.8)
+
+    if clicked:
+        try:
+            await page.wait_for_url("**/menu/**", timeout=10000)
+        except Exception:
+            pass
+        await asyncio.sleep(1)
+        title = await page.title()
+        if "instant" in title.lower() or "moment" in title.lower():
+            cleared = await wait_for_cf_clear(page, timeout_s=45)
+            if not cleared:
+                raise CloudflareBlockedError("CF on menu page after SPA click")
+    else:
+        # Fallback: full goto. CF may retrigger; attempt to clear.
         cleared = False
         for attempt in range(2):
             await page.goto(url, wait_until="domcontentloaded", timeout=60000)
@@ -79,88 +168,14 @@ async def scrape_menu_page(page, listing_id: str, url: str) -> tuple[str, list[d
                 break
             await asyncio.sleep(3 + attempt * 2)
         if not cleared:
-            raise CloudflareBlockedError("menu page CF not cleared")
+            raise CloudflareBlockedError("menu page CF not cleared after goto")
 
-        # Title flips when CF clears; wait for network to settle before DOM work.
         try:
             await page.wait_for_load_state("networkidle", timeout=15000)
         except Exception:
-            pass  # timeout is fine — just proceed
+            pass
 
-        # SPA still needs to render the menu.
-        try:
-            await page.wait_for_selector('[data-qa="card-element"]', timeout=20000)
-        except Exception:
-            return (listing_id, items)  # no items rendered
-
-        # Count items visible right now (before scrolling).
-        _count_js = "document.querySelectorAll('[data-qa=\"card-element\"]').length"
-        count_before = await page.evaluate(_count_js)
-
-        # Phase 1: scroll by height until page stops growing.
-        prev_height = 0
-        for _ in range(25):
-            height = await page.evaluate("document.body.scrollHeight")
-            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            await page.wait_for_timeout(600)
-            if height == prev_height:
-                break
-            prev_height = height
-
-        # Phase 2: item-count-based scroll — stops when count plateaus.
-        # Handles lazy categories that load after height stabilises.
-        prev_count = 0
-        for _ in range(15):
-            cur_count = await page.evaluate(_count_js)
-            if cur_count == prev_count:
-                break
-            prev_count = cur_count
-            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            await page.wait_for_timeout(700)
-        await page.wait_for_timeout(500)
-
-        count_after = await page.evaluate(_count_js)
-        # log_fn not available here; caller logs the final item count instead
-
-        # Walk card-elements + headings in document order, tracking current section.
-        dom_output = await page.evaluate("""
-        () => {
-            const sections = [];
-            const nodes = Array.from(document.querySelectorAll(
-                '[data-qa="heading"], [data-qa="card-element"]'
-            ));
-            let heading = 'Menu';
-            let cur = null;
-            for (const node of nodes) {
-                const qa = node.getAttribute('data-qa');
-                if (qa === 'heading') {
-                    heading = (node.innerText || '').trim() || 'Menu';
-                    continue;
-                }
-                const nameEl = node.querySelector('[data-qa="item-name"]');
-                const priceEl = node.querySelector('[data-qa="item-price"]');
-                if (!nameEl || !priceEl) continue;
-                const title = (nameEl.innerText || '').trim();
-                const price = (priceEl.innerText || '').trim();
-                if (!title) continue;
-                if (!cur || cur.heading !== heading) {
-                    cur = { heading, items: [] };
-                    sections.push(cur);
-                }
-                cur.items.push({ title, price });
-            }
-            return { sections };
-        }
-        """)
-
-        items = _parse_dom_items(dom_output)
-
-    except CloudflareBlockedError:
-        raise
-    except Exception:
-        pass  # tolerate per-restaurant render failures; caller logs & continues
-
-    return (listing_id, items)
+    return await _extract_menu_items(page, listing_id)
 
 
 async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -> ScraperResult:
@@ -248,31 +263,102 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
 
         log_fn(f"Phase 1 done — {records_saved} listings saved")
 
-        # Phase 2: scrape menu items for each restaurant
+        # Phase 2: SPA click to each restaurant menu — client-side routing avoids CF retrigger.
+        listing_url = page.url
+        await page.evaluate("window.scrollTo(0, 0)")
+        await asyncio.sleep(0.5)
         menu_items_saved = 0
         n = len(phase1)
         for i, (r, lid) in enumerate(phase1):
-            menu_url = r.get("url")
-            if not menu_url:
-                log_fn(f"Menu: {i+1}/{n} — {r['name']} (no URL, skipping)")
+            slug = r.get("slug", "")
+            if not slug:
+                log_fn(f"Menu: {i+1}/{n} — {r['name']} (no slug, skipping)")
                 continue
 
+            log_fn(f"Menu: {i+1}/{n} — {r['name']}")
             try:
-                _, menu_items = await scrape_menu_page(page, lid, menu_url)
+                # Return to listing via go_back (SPA, no CF) if we navigated away.
+                if listing_url not in page.url:
+                    try:
+                        await page.go_back(wait_until="domcontentloaded", timeout=15000)
+                        await asyncio.sleep(0.5)
+                    except Exception:
+                        await page.goto(listing_url, wait_until="domcontentloaded", timeout=30000)
+                        cleared = await wait_for_cf_clear(page, timeout_s=45)
+                        if not cleared:
+                            raise CloudflareBlockedError("CF on listing reload")
+                        await page.wait_for_selector('[data-qa="restaurant-card"]', timeout=30000)
+
+                # SPA click — find the restaurant anchor, scroll into view, click.
+                clicked = False
+                for _attempt in range(4):
+                    clicked = await page.evaluate(f"""
+                        (() => {{
+                            const a = document.querySelector('a[href*="/menu/{slug}"]');
+                            if (a) {{ a.scrollIntoView({{block:'center'}}); a.click(); return true; }}
+                            return false;
+                        }})()
+                    """)
+                    if clicked:
+                        break
+                    await page.evaluate("window.scrollBy(0, 3000)")
+                    await asyncio.sleep(0.8)
+
+                if not clicked:
+                    log_fn(f"  Link not found for {r['name']}, skipping")
+                    continue
+
+                try:
+                    await page.wait_for_url("**/menu/**", timeout=10000)
+                except Exception:
+                    pass
+                await asyncio.sleep(1)
+
+                # SPA nav rarely triggers CF, but check as safety net.
+                title = await page.title()
+                if "instant" in title.lower() or "moment" in title.lower():
+                    cleared = await wait_for_cf_clear(page, timeout_s=45)
+                    if not cleared:
+                        raise CloudflareBlockedError("CF on menu page")
+
+                _, menu_items = await _extract_menu_items(page, lid)
 
                 if menu_items:
                     db.insert_menu_items(lid, menu_items)
                     menu_items_saved += len(menu_items)
-                    log_fn(f"Menu: {i+1}/{n} — {r['name']} ({len(menu_items)} items)")
+                    log_fn(f"  {len(menu_items)} items")
                 else:
-                    log_fn(f"Menu: {i+1}/{n} — {r['name']} (no items found)")
+                    log_fn(f"  No items found")
+
+                # Extract delivery fee from restaurant page (not shown on listing cards).
+                fee_text: str | None = await page.evaluate("""() => {
+                    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+                    let node;
+                    while ((node = walker.nextNode())) {
+                        const t = node.textContent.trim();
+                        if (t.length > 0 && t.length < 80 &&
+                            /livraison|bezorg|delivery/i.test(t) &&
+                            /€\s*\d|\d[,.]\d\s*€|gratuit|gratis|free/i.test(t)) {
+                            return t;
+                        }
+                    }
+                    // Fallback: any standalone "€ X,XX" line in the page header area
+                    const all = Array.from(document.querySelectorAll('[data-qa]'));
+                    for (const el of all) {
+                        const t = (el.innerText || '').trim();
+                        if (/^€\s*\d+[,.]\d+$/.test(t) || /gratuit|gratis|free delivery/i.test(t)) return t;
+                    }
+                    return null;
+                }""")
+                fee = _parse_fee(fee_text)
+                if fee is not None and r.get("delivery_fee") is None:
+                    db.patch_listing(lid, {"delivery_fee": fee})
+                    log_fn(f"  Delivery fee: {fee}")
 
             except CloudflareBlockedError:
                 log_fn(f"Menu: {i+1}/{n} — {r['name']} (Cloudflare blocked, skipping)")
-                continue
             except Exception as exc:
                 log_fn(f"Menu: {i+1}/{n} — {r['name']} (error: {exc}, skipping)")
-                continue
 
         log_fn(f"Done — {records_saved} listings, {menu_items_saved} menu items saved")
         return ScraperResult(records_saved=records_saved, restaurants=unique, menu_items_saved=menu_items_saved)

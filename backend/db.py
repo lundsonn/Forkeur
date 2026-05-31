@@ -122,6 +122,11 @@ def upsert_listing(data: dict) -> str:
     return res.data[0]["id"]
 
 
+def patch_listing(listing_id: str, data: dict) -> None:
+    """Patch specific fields on a platform_listing row by id."""
+    get_client().table("platform_listings").update(data).eq("id", listing_id).execute()
+
+
 def insert_menu_items(listing_id: str, items: list[dict]) -> int:
     """Delete existing items for listing, insert new ones. Returns count."""
     client = get_client()
