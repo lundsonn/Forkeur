@@ -198,7 +198,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
 
         # Phase 1: save listings, collect (restaurant, listing_id) pairs for phase 2
         phase1: list[tuple[dict, str]] = []
-        for r in unique[:config.max_items]:
+        for r in (unique[:config.max_items] if config.max_items else unique):
             rid = db.upsert_restaurant({"name": r["name"], "slug": r["slug"]})
             lid = db.upsert_listing({
                 "restaurant_id": rid,

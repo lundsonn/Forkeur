@@ -10,7 +10,7 @@ from pydantic import BaseModel
 class ScraperConfig:
     address: str = "Pl. Poelaert 1, 1000 Bruxelles"
     target: str | None = None
-    max_items: int = 50
+    max_items: int | None = None  # None = no cap (full run); set to 10 for test mode
     scrape_menus: bool = False
     max_menus: int = 3
 
@@ -27,6 +27,7 @@ class ScraperResult:
 class RunTriggerIn(BaseModel):
     scrape_menus: bool = False
     max_menus: int = 3
+    test_mode: bool = False  # True caps at 10 items; False = full run
 
 
 # ── API response models ────────────────────────────────────────────────────────

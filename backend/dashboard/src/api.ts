@@ -14,6 +14,11 @@ export async function triggerRun(platform: string): Promise<{ run_id: string }> 
   return res.json()
 }
 
+export async function stopRun(platform: string): Promise<void> {
+  const res = await fetch(`${BASE}/scrapers/${platform}/stop`, { method: 'POST' })
+  if (!res.ok) throw new Error(await res.text())
+}
+
 export async function getRuns(limit = 50, offset = 0): Promise<ScraperRun[]> {
   const res = await fetch(`${BASE}/runs?limit=${limit}&offset=${offset}`)
   if (!res.ok) throw new Error(await res.text())

@@ -17,6 +17,7 @@ SCRAPERS = {
 
 # Track currently running platforms
 _running: set[str] = set()
+_tasks: dict[str, asyncio.Task] = {}
 
 
 @router.post("/{platform}/run", response_model=RunTriggerOut)
@@ -38,7 +39,8 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
         try:
             config = ScraperConfig(
                 scrape_menus=body.scrape_menus,
-                max_menus=body.max_menus
+                max_menus=body.max_menus,
+                max_items=10 if body.test_mode else None,
             )
             result = await SCRAPERS[platform](config, log_fn)
             db.finish_run(run_id, "success", records_saved=result.records_saved)
@@ -52,7 +54,8 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
         finally:
             _running.discard(platform)
 
-    asyncio.create_task(_run())
+    task = asyncio.create_task(_run())
+    _tasks[platform] = task
     return RunTriggerOut(run_id=run_id)
 
 
@@ -69,3 +72,24 @@ async def get_status():
             last_run=last,
         ))
     return result
+
+
+@router.post("/{platform}/stop")
+async def stop_scraper(platform: str):
+    if platform not in SCRAPERS:
+        raise HTTPException(404, f"Unknown platform: {platform}")
+    if platform not in _running:
+        raise HTTPException(400, f"{platform} scraper not running")
+
+    # Cancel the task
+    if platform in _tasks:
+        task = _tasks[platform]
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        del _tasks[platform]
+
+    _running.discard(platform)
+    return {"status": "stopped", "platform": platform}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ScraperStatus } from '../types'
-import { getScraperStatus, triggerRun } from '../api'
+import { getScraperStatus, triggerRun, stopRun } from '../api'
 import ScraperCard from '../components/ScraperCard'
 import LogDrawer from '../components/LogDrawer'
 
@@ -12,6 +12,13 @@ export default function Scrapers() {
   const load = async () => {
     const data = await getScraperStatus()
     setStatuses(data)
+    // Update running platform from status (handles page refresh)
+    const running = data.find(s => s.status === 'running')
+    if (running && !activeRunId) {
+      setRunningPlatform(running.platform)
+    } else if (!running) {
+      setRunningPlatform(null)
+    }
   }
 
   useEffect(() => {
@@ -31,6 +38,16 @@ export default function Scrapers() {
     }
   }
 
+  const handleStop = async (platform: string) => {
+    try {
+      await stopRun(platform)
+      setRunningPlatform(null)
+      await load()
+    } catch (e) {
+      alert(String(e))
+    }
+  }
+
   const handleClose = () => {
     setActiveRunId(null)
     setRunningPlatform(null)
@@ -46,7 +63,8 @@ export default function Scrapers() {
             key={s.platform}
             status={s}
             onRun={() => handleRun(s.platform)}
-            isRunning={runningPlatform === s.platform}
+            onStop={() => handleStop(s.platform)}
+            isRunning={s.status === 'running'}
           />
         ))}
       </div>

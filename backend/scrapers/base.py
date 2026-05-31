@@ -95,21 +95,27 @@ async def wait_for_cf_clear(page: Page, timeout_s: int = 90) -> bool:
     deadline = timeout_s * 2  # iterations of 0.5s each
 
     for tick in range(deadline):
-        title = await page.title()
-        if "instant" not in title.lower() and "moment" not in title.lower():
-            return True
+        # CF reloads/navigates the page mid-challenge; any of these calls can
+        # race with that navigation and throw "Execution context was destroyed".
+        # Swallow and retry next tick instead of crashing the whole scrape.
+        try:
+            title = await page.title()
+            if "instant" not in title.lower() and "moment" not in title.lower():
+                return True
 
-        # Every ~2s do a random mouse move; occasionally scroll a tiny bit
-        if tick % 4 == 0:
-            tx = random.uniform(vw * 0.1, vw * 0.85)
-            ty = random.uniform(vh * 0.1, vh * 0.75)
-            await _move_mouse_human(page, tx, ty)
+            # Every ~2s do a random mouse move; occasionally scroll a tiny bit
+            if tick % 4 == 0:
+                tx = random.uniform(vw * 0.1, vw * 0.85)
+                ty = random.uniform(vh * 0.1, vh * 0.75)
+                await _move_mouse_human(page, tx, ty)
 
-        if tick % 12 == 6:
-            scroll = random.randint(30, 120)
-            await page.evaluate(f"window.scrollBy(0, {scroll})")
-            await asyncio.sleep(random.uniform(0.1, 0.3))
-            await page.evaluate(f"window.scrollBy(0, -{scroll})")
+            if tick % 12 == 6:
+                scroll = random.randint(30, 120)
+                await page.evaluate(f"window.scrollBy(0, {scroll})")
+                await asyncio.sleep(random.uniform(0.1, 0.3))
+                await page.evaluate(f"window.scrollBy(0, -{scroll})")
+        except Exception:
+            pass
 
         await asyncio.sleep(random.uniform(0.4, 0.6))
 

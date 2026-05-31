@@ -18,10 +18,11 @@ const STATUS_DOT: Record<string, string> = {
 interface Props {
   status: ScraperStatus
   onRun: () => void
+  onStop: () => void
   isRunning: boolean
 }
 
-export default function ScraperCard({ status, onRun, isRunning }: Props) {
+export default function ScraperCard({ status, onRun, onStop, isRunning }: Props) {
   const dotColor = STATUS_DOT[status.status] ?? '#d1d5db'
   const platformColor = PLATFORM_COLORS[status.platform] ?? '#d1d5db'
   const last = status.last_run
@@ -58,19 +59,25 @@ export default function ScraperCard({ status, onRun, isRunning }: Props) {
         )}
       </div>
 
-      <button
-        onClick={onRun}
-        disabled={isRunning}
-        className={`w-full rounded-xl py-2.5 text-sm font-medium transition-colors ${
-          isRunning
-            ? 'bg-stone-100 text-stone-400 cursor-not-allowed'
-            : isBad
-            ? 'bg-red-500 hover:bg-red-600 text-white'
-            : 'bg-stone-900 hover:bg-stone-800 text-white'
-        }`}
-      >
-        {isRunning ? 'Running…' : isBad ? '↺ Retry' : '▶ Run now'}
-      </button>
+      {isRunning ? (
+        <button
+          onClick={onStop}
+          className="w-full rounded-xl py-2.5 text-sm font-medium bg-red-500 hover:bg-red-600 text-white transition-colors"
+        >
+          ⏹ Stop
+        </button>
+      ) : (
+        <button
+          onClick={onRun}
+          className={`w-full rounded-xl py-2.5 text-sm font-medium transition-colors ${
+            isBad
+              ? 'bg-red-500 hover:bg-red-600 text-white'
+              : 'bg-stone-900 hover:bg-stone-800 text-white'
+          }`}
+        >
+          {isBad ? '↺ Retry' : '▶ Run now'}
+        </button>
+      )}
     </div>
   )
 }

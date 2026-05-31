@@ -15,13 +15,13 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
     try:
         page = await new_page(browser, lang="fr-BE")
 
-        feed_raw: list[str] = []
+        feed_pages: list[str] = []
 
         async def on_response(response):
-            if "getFeedV1" in response.url and not feed_raw:
+            if "getFeedV1" in response.url:
                 try:
                     text = await response.text()
-                    feed_raw.append(text)
+                    feed_pages.append(text)
                 except Exception:
                     pass
 
@@ -43,18 +43,51 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
         await asyncio.sleep(0.4)
         await page.keyboard.press("Enter")
 
-        log_fn("Waiting for feed API response...")
+        log_fn("Waiting for first feed API response...")
         deadline = asyncio.get_event_loop().time() + 15
-        while not feed_raw and asyncio.get_event_loop().time() < deadline:
+        while not feed_pages and asyncio.get_event_loop().time() < deadline:
             await asyncio.sleep(0.5)
 
-        if not feed_raw:
+        if not feed_pages:
             raise TimeoutError("Feed API not captured")
 
-        feed = json.loads(feed_raw[0])
-        feed_items = feed.get("data", {}).get("feedItems", [])
-        stores = [i for i in feed_items if i.get("type") == "REGULAR_STORE"]
-        log_fn(f"Feed: {len(stores)} restaurants")
+        # Scroll to load all pages — UberEats uses infinite scroll with getFeedV1 per batch
+        log_fn("Scrolling to load all restaurants...")
+        prev_count = 0
+        stale_ticks = 0
+        max_stale = 4  # stop after 4 scroll cycles with no new responses
+        while stale_ticks < max_stale:
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await asyncio.sleep(2.5)
+            cur_count = len(feed_pages)
+            if cur_count == prev_count:
+                stale_ticks += 1
+            else:
+                log_fn(f"Scroll: {cur_count} feed responses so far")
+                stale_ticks = 0
+            prev_count = cur_count
+
+        page.remove_listener("response", on_response)
+
+        # Aggregate all stores across all pages, dedup by storeUuid
+        seen_uuids: set[str] = set()
+        stores = []
+        for raw in feed_pages:
+            try:
+                feed = json.loads(raw)
+            except Exception:
+                continue
+            feed_items = feed.get("data", {}).get("feedItems", [])
+            for item in feed_items:
+                if item.get("type") != "REGULAR_STORE":
+                    continue
+                uuid = (item.get("store") or {}).get("storeUuid") or item.get("uuid") or ""
+                if uuid and uuid in seen_uuids:
+                    continue
+                seen_uuids.add(uuid)
+                stores.append(item)
+
+        log_fn(f"Feed: {len(stores)} unique restaurants across {len(feed_pages)} pages")
 
         restaurants = []
         for item in stores:
@@ -84,7 +117,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
 
         log_fn(f"Saving {len(restaurants)} restaurants...")
         saved_listings: list[tuple[dict, str]] = []  # (restaurant_dict, listing_id)
-        for r in restaurants[:config.max_items]:
+        for r in (restaurants[:config.max_items] if config.max_items else restaurants):
             slug = (r.get("url") or "").split("/store/")[-1].strip("/") or r["name"].lower().replace(" ", "-")
             rid = db.upsert_restaurant({
                 "name": r["name"],
