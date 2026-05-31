@@ -24,7 +24,7 @@ export default function RestaurantCard({ restaurant, isLast }: Props) {
           <p className="text-sm font-semibold text-stone-900">{name}</p>
           <p className="text-xs text-stone-400 mt-0.5">{cuisine.join(' · ')}</p>
         </div>
-        <span className="text-stone-300 text-xs ml-4 shrink-0 mt-0.5">›</span>
+        <span aria-hidden="true" className="text-stone-300 text-xs ml-4 shrink-0 mt-0.5">›</span>
       </div>
 
       {tiles.length > 0 && (
@@ -37,8 +37,8 @@ export default function RestaurantCard({ restaurant, isLast }: Props) {
                 key={l.platform}
                 data-testid={`fee-tile-${l.platform}`}
                 data-cheapest={isCheapest ? 'true' : undefined}
-                className={`rounded-lg px-2 py-2 text-center transition-opacity ${
-                  isCheapest ? 'bg-stone-50' : 'bg-stone-50 opacity-40'
+                className={`rounded-lg px-2 py-2 text-center transition-opacity bg-stone-50 ${
+                  isCheapest ? '' : 'opacity-40'
                 }`}
               >
                 <p className={`text-[10px] font-semibold uppercase tracking-wide mb-0.5 ${colors.label}`}>
