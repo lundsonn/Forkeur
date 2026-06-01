@@ -234,11 +234,16 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                     await asyncio.sleep(1.2)
 
                 if not clicked:
-                    log_fn(f"Menu: {i+1}/{n} — {name} — link not found, skipping")
-                    page.remove_listener("response", on_store_response)
-                    continue
-
-                await page.wait_for_load_state("domcontentloaded", timeout=15000)
+                    # Fallback: navigate directly if click failed (go_back() depleted cards)
+                    if url:
+                        log_fn(f"Menu: {i+1}/{n} — {name} — click failed, trying direct nav")
+                        await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+                    else:
+                        log_fn(f"Menu: {i+1}/{n} — {name} — no URL, skipping")
+                        page.remove_listener("response", on_store_response)
+                        continue
+                else:
+                    await page.wait_for_load_state("domcontentloaded", timeout=15000)
             except Exception as exc:
                 log_fn(f"Menu: {i+1}/{n} — {name} — click/nav failed: {exc}")
                 page.remove_listener("response", on_store_response)
