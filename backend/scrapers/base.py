@@ -137,7 +137,11 @@ async def wait_for_cf_clear(page: Page, timeout_s: int = 90) -> bool:
         try:
             title = await page.title()
             if "instant" not in title.lower() and "moment" not in title.lower():
-                return True
+                # Brief pause to confirm CF didn't re-fire immediately after clearing
+                await asyncio.sleep(1.5)
+                title2 = await page.title()
+                if "instant" not in title2.lower() and "moment" not in title2.lower():
+                    return True
 
             # Every ~2s do a random mouse move; occasionally scroll a tiny bit
             if tick % 4 == 0:
