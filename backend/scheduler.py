@@ -8,6 +8,10 @@ import db
 _scheduler = AsyncIOScheduler()
 _schedules: dict[str, ScheduleConfigIn] = {}
 
+# Fee refresh: runs daily at 07:15 UTC
+_FEE_JOB_ID = "fee_refresh"
+_FEE_CRON = "15 7 * * *"
+
 
 def _noop(line: str) -> None:
     pass
@@ -65,9 +69,29 @@ def list_schedules() -> list[ScheduleConfigOut]:
     return result
 
 
+async def _run_fee_refresh() -> None:
+    from scrapers import fees
+    try:
+        counts = await fees.run(_noop)
+        _noop(f"Fee refresh done: {counts}")
+    except Exception as e:
+        _noop(f"Fee refresh failed: {e}")
+
+
 def start() -> None:
+    _scheduler.add_job(
+        _run_fee_refresh,
+        CronTrigger.from_crontab(_FEE_CRON),
+        id=_FEE_JOB_ID,
+        replace_existing=True,
+    )
     _scheduler.start()
 
 
 def shutdown() -> None:
     _scheduler.shutdown(wait=False)
+
+
+def get_fee_next_run():
+    job = _scheduler.get_job(_FEE_JOB_ID)
+    return job.next_run_time if job else None

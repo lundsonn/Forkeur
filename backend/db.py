@@ -222,3 +222,16 @@ def get_menu_items(listing_id: str) -> list[dict]:
         .execute()
         .data
     )
+
+
+def get_listings_with_urls(platform: str) -> list[dict]:
+    """Return all platform_listings for a platform that have a URL."""
+    client = get_client()
+    return (
+        client.table("platform_listings")
+        .select("id, restaurant_id, url, delivery_fee, min_order")
+        .eq("platform", platform)
+        .not_.is_("url", "null")
+        .execute()
+        .data
+    )
