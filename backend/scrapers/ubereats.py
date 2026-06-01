@@ -198,19 +198,32 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                     await page.go_back(wait_until="domcontentloaded", timeout=15000)
                     await asyncio.sleep(2)
 
-                # Scroll listing to load all cards before clicking
-                for _ in range(5):
-                    await page.evaluate("window.scrollBy(0, 3000)")
-                    await asyncio.sleep(0.5)
-                await page.evaluate("window.scrollTo(0, 0)")  # scroll back to top
-                await asyncio.sleep(1)
+                # Scroll until page height stabilises — ensures all infinite-scroll
+                # cards are in the DOM before we try to click one.
+                prev_h = 0
+                for _ in range(40):
+                    h = await page.evaluate("document.body.scrollHeight")
+                    await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                    await asyncio.sleep(1.2)
+                    if h == prev_h:
+                        break
+                    prev_h = h
+                await page.evaluate("window.scrollTo(0, 0)")
+                await asyncio.sleep(0.5)
 
-                # Click restaurant anchor; scroll-retry if not yet in DOM
+                # Click restaurant anchor; scroll-retry if not yet in DOM.
+                # Also try locale-agnostic href match (strip leading /be/ prefix).
+                slug_only = store_path.split("/")[0] if "/" in store_path else store_path
                 clicked = False
-                for _attempt in range(3):
+                for _attempt in range(5):
                     clicked = await page.evaluate(f"""
                         (() => {{
-                            const a = document.querySelector('a[href*="/store/{store_path}"]');
+                            // Exact match first
+                            let a = document.querySelector('a[href*="/store/{store_path}"]');
+                            if (!a) {{
+                                // Fallback: match by slug only (ignores locale prefix differences)
+                                a = document.querySelector('a[href*="/store/{slug_only}"]');
+                            }}
                             if (a) {{ a.click(); return true; }}
                             return false;
                         }})()
@@ -218,7 +231,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                     if clicked:
                         break
                     await page.evaluate("window.scrollBy(0, 4000)")
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(1.2)
 
                 if not clicked:
                     log_fn(f"Menu: {i+1}/{n} — {name} — link not found, skipping")
