@@ -1,169 +1,256 @@
 from __future__ import annotations
 import asyncio
-import os
 import re
 from typing import Callable
-import httpx
 from models import ScraperConfig, ScraperResult
-from scrapers.base import noop_log, parse_menu_price
+from scrapers.base import (
+    new_browser, new_page, wait_for_cf_clear,
+    noop_log, parse_menu_price, CloudflareBlockedError,
+)
 import db
 
-_APIFY_BASE = "https://api.apify.com/v2"
-_LISTING_ACTOR = "scrapepilot~just-eat-scraper----restaurant-data-delivery-intelligence"
-_MENU_ACTOR = "easyapi~just-eat-restaurant-menu-scraper"
-_BRUSSELS_URL = "https://www.just-eat.be/restaurants?postCode=1000"
+LISTING_URL = "https://www.takeaway.com/be-fr/livraison/repas/bruxelles-1000"
+
+_CARD_JS = "document.querySelectorAll('[data-qa=\"card-element\"]').length"
+
+_MENU_EVAL = """
+() => {
+    const sections = [];
+    const nodes = Array.from(document.querySelectorAll(
+        '[data-qa="heading"], [data-qa="card-element"]'
+    ));
+    let heading = 'Menu';
+    let cur = null;
+    for (const node of nodes) {
+        const qa = node.getAttribute('data-qa');
+        if (qa === 'heading') {
+            heading = (node.innerText || '').trim() || 'Menu';
+            continue;
+        }
+        const nameEl = node.querySelector('[data-qa="item-name"]');
+        const priceEl = node.querySelector('[data-qa="item-price"]');
+        if (!nameEl || !priceEl) continue;
+        const title = (nameEl.innerText || '').trim();
+        const price = (priceEl.innerText || '').trim();
+        if (!title) continue;
+        if (!cur || cur.heading !== heading) {
+            cur = { heading, items: [] };
+            sections.push(cur);
+        }
+        cur.items.push({ title, price });
+    }
+    return { sections };
+}
+"""
+
+_LISTING_EVAL = """
+() => {
+    const cards = Array.from(document.querySelectorAll('[data-qa="restaurant-card"]'));
+    const seen = new Set();
+    return cards.flatMap(card => {
+        const a = card.querySelector('a[href*="/menu/"]');
+        if (!a) return [];
+        const href = a.getAttribute('href') || '';
+        const slug = (href.match(/\\/menu\\/([^?#]+)/) || [])[1] || '';
+        if (!slug || seen.has(slug)) return [];
+        seen.add(slug);
+
+        const text = (card.innerText || '').split('\\n').map(s => s.trim()).filter(Boolean);
+        // Skip sponsored labels, promo/discount text, short noise
+        const nameCandidates = text.filter(l =>
+            l.length > 2 &&
+            !/^Sponsorisé|^Gesponsord|^Sponsored|^Ad$/i.test(l) &&
+            !/^\\d+(\\.\\d+)?$/.test(l) &&
+            !/%/.test(l) &&
+            !/^[€£$]/.test(l) &&
+            !/à partir de|starting from|vanaf/i.test(l) &&
+            !/gratuit|free delivery|gratis/i.test(l)
+        );
+        const name = nameCandidates[0] || slug;
+
+        const ratingM = text.find(l => /^[1-5][,.]\\d/.test(l));
+        const rating = ratingM ? ratingM.replace(',', '.') : null;
+
+        const eta = text.find(l => /\\d+\\s*-\\s*\\d+\\s*min|\\d+\\s*min/i.test(l)) || null;
+
+        const feeEl = card.querySelector('[data-qa="delivery-fee"], [data-qa="restaurant-delivery-fee"]');
+        const feeText = feeEl ? (feeEl.innerText || '').trim() : null;
+
+        return [{ name, slug, href, rating, eta, feeText }];
+    });
+}
+"""
 
 
-def _token() -> str:
-    t = os.environ.get("APIFY_TOKEN", "")
-    if not t:
-        raise RuntimeError("APIFY_TOKEN not set in environment")
-    return t
+async def scrape_menu_page(page, listing_id: str, url: str) -> tuple[str, list[dict]]:
+    """Navigate to menu page, scroll fully, extract items. Returns (listing_id, items)."""
+    try:
+        try:
+            await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        except Exception:
+            pass
 
+        title = await page.title()
+        if "just a moment" in title.lower():
+            cleared = await wait_for_cf_clear(page, timeout_s=60)
+            if not cleared:
+                raise CloudflareBlockedError("CF not cleared on menu page")
 
-async def _run_actor(client: httpx.AsyncClient, actor: str, payload: dict, timeout_s: int = 300) -> list[dict]:
-    """Run Apify actor synchronously, return dataset items."""
-    token = _token()
-    url = f"{_APIFY_BASE}/acts/{actor}/run-sync-get-dataset-items"
-    resp = await client.post(
-        url,
-        params={"token": token, "timeout": timeout_s},
-        json=payload,
-        timeout=timeout_s + 30,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    if isinstance(data, dict) and "error" in data:
-        raise RuntimeError(f"Apify error: {data['error']}")
-    return data if isinstance(data, list) else []
+        try:
+            await page.wait_for_selector('[data-qa="card-element"]', timeout=20000)
+        except Exception:
+            return (listing_id, [])
 
+        # Height-stable scroll
+        prev_h = 0
+        for _ in range(20):
+            h = await page.evaluate("document.body.scrollHeight")
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await page.wait_for_timeout(600)
+            if h == prev_h:
+                break
+            prev_h = h
 
-def _parse_listing_items(items: list[dict]) -> list[dict]:
-    """Normalise scrapepilot actor output to internal restaurant dicts."""
-    restaurants = []
-    for r in items:
-        name = r.get("name") or r.get("restaurantName") or ""
-        if not name:
-            continue
-        addr = r.get("address") or {}
-        url = r.get("url") or r.get("menuUrl") or r.get("restaurantUrl") or ""
-        unique_name = r.get("uniqueName") or r.get("slug") or ""
-        rating_obj = r.get("rating") or {}
-        rating = rating_obj.get("average") or rating_obj.get("starRating") or r.get("rating")
-        if isinstance(rating, dict):
-            rating = None
-        eta = r.get("deliveryEtaMinutes") or r.get("etaMinutes") or ""
-        eta_str = f"{eta}" if eta else None
-        fee_raw = r.get("deliveryCost") or r.get("deliveryFee") or r.get("deliveryCostLabel")
-        restaurants.append({
-            "name": name,
-            "unique_name": unique_name,
-            "url": url,
-            "lat": addr.get("latitude") or addr.get("lat"),
-            "lng": addr.get("longitude") or addr.get("lng"),
-            "rating": float(rating) if rating else None,
-            "eta": eta_str,
-            "delivery_fee_raw": str(fee_raw) if fee_raw else None,
-        })
-    return restaurants
+        # Item-count-stable scroll
+        prev_cnt = 0
+        for _ in range(15):
+            cur_cnt = await page.evaluate(_CARD_JS)
+            if cur_cnt == prev_cnt:
+                break
+            prev_cnt = cur_cnt
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await page.wait_for_timeout(700)
+        await page.wait_for_timeout(500)
 
+        dom = await page.evaluate(_MENU_EVAL)
+        items = []
+        for section in dom.get("sections", []):
+            catalog = section.get("heading", "Menu")
+            for item in section.get("items", []):
+                title = item.get("title", "").strip()
+                price = parse_menu_price(item.get("price", ""))
+                if title:
+                    items.append({"title": title, "price": price, "catalog_name": catalog})
+        return (listing_id, items)
 
-def _parse_menu_items(items: list[dict]) -> list[dict]:
-    """Normalise easyapi menu actor output to internal menu_items dicts."""
-    result = []
-    for item in items:
-        name = item.get("name") or item.get("title") or ""
-        if not name:
-            continue
-        # Price: may be in variations[0].basePrice (cents) or price field
-        price = None
-        variations = item.get("variations") or []
-        if variations and isinstance(variations[0], dict):
-            bp = variations[0].get("basePrice")
-            if bp is not None:
-                price = parse_menu_price(bp, is_cents=True)
-        if price is None:
-            raw = item.get("price") or item.get("basePrice")
-            price = parse_menu_price(raw, is_cents=isinstance(raw, int))
-        category = item.get("category") or item.get("sectionName") or "Menu"
-        result.append({"title": name, "price": price, "catalog_name": category})
-    return result
+    except CloudflareBlockedError:
+        raise
+    except Exception:
+        return (listing_id, [])
 
 
 async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -> ScraperResult:
-    log_fn("Starting Takeaway scraper (Apify just-eat.be)")
-
+    log_fn("Starting Takeaway scraper (Playwright DOM)")
+    # headed=True required — CF passes on datacenter IP only with headed Chromium
+    browser = await new_browser(lang="fr-BE", headed=True)
     records_saved = 0
     menu_items_saved = 0
 
-    async with httpx.AsyncClient() as client:
-        # Phase 1: restaurant listing
-        log_fn(f"Fetching restaurants from just-eat.be (Brussels 1000)...")
+    try:
+        page = await new_page(browser, lang="fr-BE")
+
+        log_fn(f"Loading listing: {LISTING_URL}")
+        await page.goto(LISTING_URL, wait_until="domcontentloaded", timeout=60000)
+
+        title = await page.title()
+        if "just a moment" in title.lower():
+            log_fn("CF challenge detected — waiting up to 90s...")
+            cleared = await wait_for_cf_clear(page, timeout_s=90)
+            if not cleared:
+                log_fn("CF not cleared — aborting")
+                return ScraperResult(records_saved=0, restaurants=[], menu_items_saved=0)
+            log_fn("CF cleared")
+
         try:
-            raw_items = await _run_actor(client, _LISTING_ACTOR, {
-                "searchUrl": _BRUSSELS_URL,
-                "maxItems": config.max_items or 100,
-            }, timeout_s=180)
-        except Exception as exc:
-            log_fn(f"Listing actor failed: {exc}")
+            await page.wait_for_selector('[data-qa="restaurant-card"]', timeout=30000)
+        except Exception:
+            log_fn("No restaurant cards found — aborting")
             return ScraperResult(records_saved=0, restaurants=[], menu_items_saved=0)
 
-        restaurants = _parse_listing_items(raw_items)
+        # Scroll to load all cards
+        prev_h = 0
+        for _ in range(20):
+            h = await page.evaluate("document.body.scrollHeight")
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await asyncio.sleep(0.8)
+            if h == prev_h:
+                break
+            prev_h = h
+
+        restaurants = await page.evaluate(_LISTING_EVAL)
         log_fn(f"Found {len(restaurants)} restaurants")
 
         if config.target:
-            restaurants = [r for r in restaurants if config.target.lower() in r["name"].lower()]
+            restaurants = [r for r in restaurants
+                           if config.target.lower() in r["name"].lower()
+                           or config.target.lower() in r["slug"].lower()]
 
-        saved_listings: list[tuple[dict, str]] = []
+        if config.max_items:
+            restaurants = restaurants[:config.max_items]
+
+        # Phase 1: upsert listings
+        saved: list[tuple[dict, str]] = []
         for r in restaurants:
-            slug = r["unique_name"] or r["name"].lower().replace(" ", "-")
-            rid = db.upsert_restaurant({
-                "name": r["name"],
-                "slug": slug,
-                "lat": r.get("lat"),
-                "lng": r.get("lng"),
-            })
+            rid = db.upsert_restaurant({"name": r["name"], "slug": r["slug"]})
+            url = f"https://www.takeaway.com{r['href']}"
             lid = db.upsert_listing({
                 "restaurant_id": rid,
                 "platform": "takeaway",
-                "url": r.get("url"),
-                "rating": r.get("rating"),
+                "url": url,
+                "rating": _parse_float(r.get("rating")),
                 "eta_min": _parse_eta_min(r.get("eta")),
                 "eta_max": _parse_eta_max(r.get("eta")),
-                "delivery_fee": parse_menu_price(r.get("delivery_fee_raw")),
+                "delivery_fee": parse_menu_price(r.get("feeText")),
                 "discount_label": None,
             })
             records_saved += 1
-            saved_listings.append((r, lid))
+            saved.append((r, lid))
 
         log_fn(f"Phase 1 done — {records_saved} listings saved")
+        await page.close()
 
         # Phase 2: menu per restaurant
-        n = len(saved_listings)
-        for i, (r, lid) in enumerate(saved_listings):
-            url = r.get("url")
-            if not url:
-                log_fn(f"Menu: {i+1}/{n} — {r['name']} — no URL, skipping")
-                continue
-            log_fn(f"Menu: {i+1}/{n} — {r['name']}")
+        # Fresh page per restaurant — CF re-challenges after first navigation
+        # on a shared page; a new context resets the challenge cleanly.
+        await page.close()
+
+        n = len(saved)
+        for i, (r, lid) in enumerate(saved):
+            url = f"https://www.takeaway.com{r['href']}"
+            log_fn(f"Menu: {i + 1}/{n} — {r['name']}")
+            menu_page = await new_page(browser, lang="fr-BE")
             try:
-                menu_raw = await _run_actor(client, _MENU_ACTOR, {
-                    "restaurantUrl": url,
-                    "maxItems": 500,
-                }, timeout_s=120)
-                items = _parse_menu_items(menu_raw)
+                _, items = await scrape_menu_page(menu_page, lid, url)
                 if items:
                     count = db.insert_menu_items(lid, items)
                     menu_items_saved += count
                     log_fn(f"  {count} items saved")
                 else:
                     log_fn(f"  No items found")
+            except CloudflareBlockedError:
+                log_fn(f"  CF blocked — skipping {r['name']}")
             except Exception as exc:
                 log_fn(f"  Error: {exc}")
+            finally:
+                await menu_page.close()
             await asyncio.sleep(1)
 
-    log_fn(f"Done — {records_saved} listings, {menu_items_saved} menu items saved")
-    return ScraperResult(records_saved=records_saved, restaurants=restaurants, menu_items_saved=menu_items_saved)
+        log_fn(f"Done — {records_saved} listings, {menu_items_saved} menu items saved")
+        return ScraperResult(
+            records_saved=records_saved,
+            restaurants=restaurants,
+            menu_items_saved=menu_items_saved,
+        )
+
+    finally:
+        await browser.close()
+
+
+def _parse_float(val: str | None) -> float | None:
+    if not val:
+        return None
+    m = re.search(r"[\d.]+", str(val).replace(",", "."))
+    return float(m.group()) if m else None
 
 
 def _parse_eta_min(eta: str | None) -> int | None:
@@ -176,5 +263,5 @@ def _parse_eta_min(eta: str | None) -> int | None:
 def _parse_eta_max(eta: str | None) -> int | None:
     if not eta:
         return None
-    m = re.search(r"-(\d+)", eta.strip())
+    m = re.search(r"-\s*(\d+)", eta.strip())
     return int(m.group(1)) if m else None
