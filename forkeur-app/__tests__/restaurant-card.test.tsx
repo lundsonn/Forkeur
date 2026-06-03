@@ -58,37 +58,37 @@ const freeListing: RestaurantSummary = {
 
 describe('RestaurantCard', () => {
   it('shows all 3 platform fees when 3 listings exist', () => {
-    render(<RestaurantCard restaurant={threeListings} />)
+    render(<RestaurantCard restaurant={threeListings} directBadge="Commander directement · sans frais" />)
     expect(screen.getByText('€0.49')).toBeInTheDocument()
     expect(screen.getByText('€1.49')).toBeInTheDocument()
     expect(screen.getByText('€1.99')).toBeInTheDocument()
   })
 
   it('marks cheapest tile with data-cheapest attribute', () => {
-    render(<RestaurantCard restaurant={threeListings} />)
+    render(<RestaurantCard restaurant={threeListings} directBadge="Commander directement · sans frais" />)
     const tile = screen.getByTestId('fee-tile-uber_eats')
     expect(tile).toHaveAttribute('data-cheapest', 'true')
   })
 
   it('non-cheapest tiles do not have data-cheapest=true', () => {
-    render(<RestaurantCard restaurant={threeListings} />)
+    render(<RestaurantCard restaurant={threeListings} directBadge="Commander directement · sans frais" />)
     expect(screen.getByTestId('fee-tile-deliveroo')).not.toHaveAttribute('data-cheapest', 'true')
     expect(screen.getByTestId('fee-tile-takeaway')).not.toHaveAttribute('data-cheapest', 'true')
   })
 
   it('shows restaurant name', () => {
-    render(<RestaurantCard restaurant={threeListings} />)
+    render(<RestaurantCard restaurant={threeListings} directBadge="Commander directement · sans frais" />)
     expect(screen.getByText("McDonald's")).toBeInTheDocument()
   })
 
   it('skips platforms with null delivery fee', () => {
-    render(<RestaurantCard restaurant={nullFees} />)
+    render(<RestaurantCard restaurant={nullFees} directBadge="Commander directement · sans frais" />)
     expect(screen.getByText('€2.99')).toBeInTheDocument()
     expect(screen.queryByTestId('fee-tile-uber_eats')).toBeNull()
   })
 
   it('shows Free for zero-cent delivery fee', () => {
-    render(<RestaurantCard restaurant={freeListing} />)
+    render(<RestaurantCard restaurant={freeListing} directBadge="Commander directement · sans frais" />)
     expect(screen.getByText('Free')).toBeInTheDocument()
   })
 })
