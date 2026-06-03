@@ -10,9 +10,26 @@ from scrapers.base import (
 import db
 from scrapers.promos import parse_promo_texts
 
-LISTING_BASE_URLS = [
-    "https://www.takeaway.com/be-fr/livraison/repas/bruxelles-1000",
-    "https://www.takeaway.com/be-fr/livraison/repas/bruxelles-1050",  # Ixelles
+_LISTING_BASE = "https://www.takeaway.com/be-fr/livraison/repas/"
+
+# Brussels zones by postal code — each loaded in a fresh browser context to avoid CF re-challenge
+LISTING_ZONES = [
+    "bruxelles-1000",   # City center / Pentagone
+    "bruxelles-1020",   # Laeken
+    "bruxelles-1030",   # Schaerbeek
+    "bruxelles-1040",   # Etterbeek
+    "bruxelles-1050",   # Ixelles / Elsene
+    "bruxelles-1060",   # Saint-Gilles / Sint-Gillis
+    "bruxelles-1070",   # Anderlecht
+    "bruxelles-1080",   # Molenbeek
+    "bruxelles-1090",   # Jette
+    "bruxelles-1140",   # Evere
+    "bruxelles-1150",   # Woluwe-Saint-Pierre
+    "bruxelles-1160",   # Auderghem
+    "bruxelles-1180",   # Uccle
+    "bruxelles-1190",   # Forest / Vorst
+    "bruxelles-1200",   # Woluwe-Saint-Lambert
+    "bruxelles-1210",   # Saint-Josse-ten-Noode
 ]
 
 _CARD_JS = "document.querySelectorAll('[data-qa=\"card-element\"]').length"
@@ -197,58 +214,50 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
     menu_items_saved = 0
 
     try:
-        page = await new_page(browser, lang="fr-BE")
-
-        # Paginate each base URL until no cards are returned
+        # Phase 0: collect listings — one fresh browser context per zone to avoid CF re-challenge.
+        # All restaurant cards are rendered server-side on the first page load (no infinite scroll /
+        # lazy pagination), so a single load + extract is sufficient per zone.
         all_by_slug: dict[str, dict] = {}
-        for base_url in LISTING_BASE_URLS:
-            page_num = 1
-            while True:
-                url = f"{base_url}?page={page_num}"
-                log_fn(f"Loading {base_url.split('/')[-1]} page {page_num}")
-                await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        for zone in LISTING_ZONES:
+            url = _LISTING_BASE + zone
+            log_fn(f"Loading zone {zone}")
+            zone_page = await new_page(browser, lang="fr-BE")
+            try:
+                await zone_page.goto(url, wait_until="domcontentloaded", timeout=60000)
 
-                title = await page.title()
+                title = await zone_page.title()
                 if "just a moment" in title.lower():
-                    log_fn("CF challenge detected — waiting up to 90s...")
-                    cleared = await wait_for_cf_clear(page, timeout_s=90)
+                    log_fn(f"  CF challenge — waiting up to 90s")
+                    cleared = await wait_for_cf_clear(zone_page, timeout_s=90)
                     if not cleared:
-                        log_fn("CF not cleared — stopping pagination")
-                        break
+                        log_fn(f"  CF not cleared — skipping {zone}")
+                        continue
 
                 try:
-                    await page.wait_for_selector('[data-qa="restaurant-card"]', timeout=20000)
+                    await zone_page.wait_for_selector('[data-qa="restaurant-card"]', timeout=20000)
                 except Exception:
-                    log_fn(f"No cards on page {page_num} — stopping")
-                    break
+                    log_fn(f"  No cards — skipping {zone}")
+                    continue
 
-                # Scroll to ensure all cards on this page are rendered
-                prev_h = 0
-                for _ in range(10):
-                    h = await page.evaluate("document.body.scrollHeight")
-                    await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                    await asyncio.sleep(0.8)
-                    if h == prev_h:
-                        break
-                    prev_h = h
+                # Brief pause for JS hydration to complete
+                await zone_page.wait_for_timeout(1000)
 
-                page_restaurants = await page.evaluate(_LISTING_EVAL)
-                if not page_restaurants:
-                    log_fn(f"No restaurants on page {page_num} — stopping")
-                    break
-
+                page_restaurants = await zone_page.evaluate(_LISTING_EVAL)
                 new_count = 0
                 for r in page_restaurants:
                     if r["slug"] not in all_by_slug:
                         all_by_slug[r["slug"]] = r
                         new_count += 1
 
-                log_fn(f"  Page {page_num}: {len(page_restaurants)} cards, {new_count} new")
-                page_num += 1
-                await asyncio.sleep(1)
+                log_fn(f"  {len(page_restaurants)} cards, {new_count} new (total {len(all_by_slug)})")
+                await asyncio.sleep(2)
+            except Exception as exc:
+                log_fn(f"  Error: {exc}")
+            finally:
+                await zone_page.close()
 
         restaurants = list(all_by_slug.values())
-        log_fn(f"Found {len(restaurants)} unique restaurants across all pages")
+        log_fn(f"Found {len(restaurants)} unique restaurants across all zones")
 
         if config.target:
             restaurants = [r for r in restaurants
@@ -281,7 +290,6 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
             saved.append((r, lid))
 
         log_fn(f"Phase 1 done — {records_saved} listings saved")
-        await page.close()
 
         # Phase 2: menu per restaurant — fresh page per restaurant to avoid CF re-challenge
 
