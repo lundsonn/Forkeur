@@ -192,9 +192,20 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
         log_fn(f"Listing page: {listing_url}")
         await page.wait_for_selector('a[href*="/menu/"]', timeout=10000)
 
-        for _ in range(10):
-            await page.evaluate("window.scrollBy(0, 3000)")
-            await asyncio.sleep(0.6)
+        # Height-stable + link-count-stable scroll to load all restaurants
+        prev_h, prev_count, stale = 0, 0, 0
+        for _ in range(60):
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await asyncio.sleep(0.8)
+            h = await page.evaluate("document.body.scrollHeight")
+            count = await page.evaluate("document.querySelectorAll('a[href*=\"/menu/\"]').length")
+            if h == prev_h and count == prev_count:
+                stale += 1
+                if stale >= 3:
+                    break
+            else:
+                stale = 0
+            prev_h, prev_count = h, count
         await asyncio.sleep(1)
 
         restaurants = await page.eval_on_selector_all('a[href*="/menu/"]', """anchors => {
