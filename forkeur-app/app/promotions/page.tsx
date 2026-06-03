@@ -1,11 +1,5 @@
-import { getPromotions } from '@/lib/queries'
-import PromotionsClient from '@/components/PromotionsClient'
+import { redirect } from 'next/navigation'
 
-export default async function PromotionsPage() {
-  const promos = await getPromotions()
-  return (
-    <div className="min-h-screen bg-white">
-      <PromotionsClient promos={promos} />
-    </div>
-  )
+export default function PromotionsPage() {
+  redirect('/deals')
 }

@@ -94,7 +94,8 @@ _LISTING_EVAL = """
             !/%/.test(l) &&
             !/^[€£$]/.test(l) &&
             !/à partir de|starting from|vanaf/i.test(l) &&
-            !/gratuit|free delivery|gratis/i.test(l)
+            !/gratuit|free delivery|gratis/i.test(l) &&
+            !/carte de fidélité|loyalty|spaarpunten/i.test(l)
         );
         const name = nameCandidates[0] || slug;
 

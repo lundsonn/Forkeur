@@ -40,7 +40,7 @@ export default function HomepageClient({
         </div>
         <div className="flex items-center gap-1">
           <Link
-            href="/promotions"
+            href="/deals"
             className="px-2.5 py-1 rounded-lg text-xs font-medium text-orange-500 hover:text-orange-600 transition-colors"
           >
             Deals 🏷️

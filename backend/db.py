@@ -306,3 +306,19 @@ def get_listings_with_urls(platform: str) -> list[dict]:
         .execute()
         .data
     )
+
+
+def patch_restaurant_website(restaurant_id: str, website: str | None, order_url: str | None) -> None:
+    from datetime import datetime, timezone
+    get_client().table("restaurants").update({
+        "website": website,
+        "order_url": order_url,
+        "website_searched_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", restaurant_id).execute()
+
+
+def mark_restaurant_searched(restaurant_id: str) -> None:
+    from datetime import datetime, timezone
+    get_client().table("restaurants").update({
+        "website_searched_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", restaurant_id).execute()

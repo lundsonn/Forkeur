@@ -35,6 +35,16 @@ export default async function Page({
           {data.cuisine.join(' · ')} · {data.city}
           {bestRating !== null && ` · ★ ${bestRating.toFixed(1)}`}
         </p>
+        {data.order_url && (
+          <a
+            href={data.order_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-semibold text-sm transition-colors"
+          >
+            Commander directement · sans frais de plateforme
+          </a>
+        )}
       </div>
 
       <BasketSimulator menuItems={data.menuItems} listings={data.listings} phone={data.phone} />

@@ -13,7 +13,7 @@ from starlette.requests import Request
 import auth
 import scheduler as sched
 import ws as ws_mod
-from routers import scrapers, runs, schedule, data
+from routers import scrapers, runs, schedule, data, websites
 from routers.auth_router import router as auth_router
 
 _PUBLIC_PATHS = {"/api/auth/login"}
@@ -60,6 +60,7 @@ app.include_router(scrapers.router, prefix="/api")
 app.include_router(runs.router, prefix="/api")
 app.include_router(schedule.router, prefix="/api")
 app.include_router(data.router, prefix="/api")
+app.include_router(websites.router, prefix="/api")
 
 
 @app.websocket("/ws/{run_id}")

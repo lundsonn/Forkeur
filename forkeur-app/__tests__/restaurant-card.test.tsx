@@ -9,6 +9,7 @@ const threeListings: RestaurantSummary = {
   cuisine: ['Burgers'],
   lat: null,
   lng: null,
+  order_url: null,
   listings: [
     { platform: 'uber_eats', delivery_fee_cents: 49 },
     { platform: 'deliveroo', delivery_fee_cents: 149 },
@@ -23,6 +24,7 @@ const nullFees: RestaurantSummary = {
   cuisine: ['Asian'],
   lat: null,
   lng: null,
+  order_url: null,
   listings: [
     { platform: 'uber_eats', delivery_fee_cents: null },
     { platform: 'deliveroo', delivery_fee_cents: 299 },
@@ -36,6 +38,7 @@ const freeListing: RestaurantSummary = {
   cuisine: ['Fast food'],
   lat: null,
   lng: null,
+  order_url: null,
   listings: [
     { platform: 'uber_eats', delivery_fee_cents: 0 },
     { platform: 'deliveroo', delivery_fee_cents: 99 },

@@ -14,7 +14,7 @@ type Props = {
 }
 
 export default function RestaurantCard({ restaurant, isLast }: Props) {
-  const { name, cuisine, listings, cheapest } = restaurant
+  const { name, cuisine, listings, cheapest, order_url } = restaurant
 
   const tiles = listings.filter((l) => l.delivery_fee_cents !== null)
 
@@ -27,6 +27,18 @@ export default function RestaurantCard({ restaurant, isLast }: Props) {
         </div>
         <span aria-hidden="true" className="text-stone-300 text-xs ml-4 shrink-0 mt-0.5">›</span>
       </div>
+
+      {order_url && (
+        <a
+          href={order_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-1 mb-2.5 px-2.5 py-1 rounded-full bg-orange-50 border border-orange-200 text-orange-600 text-[11px] font-semibold hover:bg-orange-100 transition-colors"
+        >
+          Commander directement · sans frais
+        </a>
+      )}
 
       {tiles.length > 0 && (
         <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${tiles.length}, 1fr)` }}>

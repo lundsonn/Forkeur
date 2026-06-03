@@ -10,7 +10,8 @@ Consumer-facing price comparison app. Server Components by default; `'use client
 forkeur-app/
 ├── app/
 │   ├── page.tsx              ← Homepage: restaurant list with cuisine filter + map
-│   ├── promotions/page.tsx   ← Live promotions across all platforms
+│   ├── deals/page.tsx        ← Best deals: ranked promos across all platforms
+│   ├── promotions/page.tsx   ← Redirect → /deals
 │   └── restaurant/[id]/
 │       └── page.tsx          ← Restaurant detail: platform comparison + menu prices
 ├── components/
@@ -18,11 +19,12 @@ forkeur-app/
 │   ├── RestaurantCard.tsx    ← Single restaurant card (cheapest platform badge)
 │   ├── CompareSheet.tsx      ← Bottom sheet comparing all platforms for a restaurant
 │   ├── BasketSimulator.tsx   ← Client: build a basket, compare total per platform
-│   ├── PromotionsClient.tsx  ← Client: promotions list with type filter
+│   ├── DealsClient.tsx       ← Client: best deals list with filter pills + sort logic
 │   ├── MapView.tsx           ← Leaflet map of restaurants
 │   └── PlatformPriceRow.tsx  ← One row in the platform comparison table
 ├── lib/
-│   ├── queries.ts            ← All Supabase queries (server-side); exports RestaurantSummary, RestaurantDetail, PromoItem types
+│   ├── queries.ts            ← All Supabase queries (server-side); exports RestaurantSummary, RestaurantDetail, DealItem types
+│   ├── deals.ts              ← Pure helpers: DealItem type, filter/sort/band/badge logic
 │   └── basket.ts             ← Basket state + Platform type
 └── utils/supabase/
     ├── server.ts             ← createClient() for Server Components (cookie-based)
@@ -35,10 +37,11 @@ forkeur-app/
 - `Platform` = `'uber_eats' | 'deliveroo' | 'takeaway' | 'direct'`
 - `RestaurantSummary` — homepage card data (listings, cheapest platform, lat/lng)
 - `RestaurantDetail` — full detail page (listings with fees + ETAs, menu items with cross-platform prices)
-- `PromoItem` — promotions page (promo_type, label, value, min_order per listing)
+- `DealItem` — deals page (promo_type, label, value, min_order, rating, review_count, cuisine, area per listing)
 
 ## Routes
 
 - `/` — restaurant list (server-rendered, client-filtered)
-- `/promotions` — live promos (server-fetched, client-filtered by type)
+- `/deals` — best deals ranked by type + quality score (server-fetched, client-filtered)
+- `/promotions` — redirects to `/deals`
 - `/restaurant/[id]` — detail page with basket simulator

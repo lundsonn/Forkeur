@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers'
 import { createClient } from '@/utils/supabase/server'
 import type { Platform } from '@/lib/basket'
+import type { DealItem } from '@/lib/deals'
 
 export type RestaurantSummary = {
   id: string
@@ -8,6 +9,7 @@ export type RestaurantSummary = {
   cuisine: string[]
   lat: number | null
   lng: number | null
+  order_url: string | null
   listings: { platform: Platform; delivery_fee_cents: number | null }[]
   cheapest: {
     platform: Platform
@@ -42,6 +44,7 @@ export type RestaurantDetail = {
   city: string
   cuisine: string[]
   phone: string | null
+  order_url: string | null
   listings: PlatformListing[]
   menuItems: MenuItemWithPrices[]
 }
@@ -74,7 +77,7 @@ export async function getRestaurants(): Promise<{
   const { data, error } = await supabase
     .from('restaurants')
     .select(`
-      id, name, cuisine, lat, lng,
+      id, name, cuisine, lat, lng, order_url,
       platform_listings ( platform, delivery_fee )
     `)
 
@@ -96,6 +99,7 @@ export async function getRestaurants(): Promise<{
 
       const lat = r.lat != null ? Number(r.lat) : null
       const lng = r.lng != null ? Number(r.lng) : null
+      const order_url: string | null = (r as any).order_url ?? null
 
       if (available.length === 0) {
         return {
@@ -104,6 +108,7 @@ export async function getRestaurants(): Promise<{
           cuisine: r.cuisine ? [r.cuisine] : [],
           lat,
           lng,
+          order_url,
           listings,
           cheapest: null,
         }
@@ -121,6 +126,7 @@ export async function getRestaurants(): Promise<{
         cuisine: r.cuisine ? [r.cuisine] : [],
         lat,
         lng,
+        order_url,
         listings,
         cheapest: {
           platform: cheapest.platform,
@@ -142,19 +148,7 @@ export async function getRestaurants(): Promise<{
   return { restaurants, cuisines }
 }
 
-export type PromoItem = {
-  id: string
-  restaurant_id: string
-  restaurant_name: string
-  platform: Platform
-  platform_url: string | null
-  promo_type: 'free_delivery' | 'bogo' | 'pct_discount' | 'abs_discount' | 'free_item' | 'spend_save' | 'other'
-  label: string
-  value: number | null
-  min_order: number | null
-}
-
-export async function getPromotions(): Promise<PromoItem[]> {
+export async function getDeals(): Promise<DealItem[]> {
   const supabase = await getSupabase()
 
   const { data, error } = await supabase
@@ -162,17 +156,17 @@ export async function getPromotions(): Promise<PromoItem[]> {
     .select(`
       id, promo_type, label, value, min_order,
       platform_listings (
-        platform, url,
-        restaurants ( id, name )
+        platform, rating, review_count,
+        restaurants ( id, name, cuisine, neighborhood )
       )
     `)
     .neq('promo_type', 'other')
+    .neq('promo_type', 'spend_save')
     .in('platform_listings.platform', ['uber_eats', 'deliveroo', 'takeaway'])
-    .order('scraped_at', { ascending: false })
 
-  if (error) throw new Error(`getPromotions: ${error.message}`)
+  if (error) throw new Error(`getDeals: ${error.message}`)
 
-  return (data ?? []).flatMap((p: any) => {
+  return (data ?? []).flatMap((p: any): DealItem[] => {
     const listing = p.platform_listings
     const restaurant = listing?.restaurants
     if (!listing || !restaurant) return []
@@ -181,7 +175,10 @@ export async function getPromotions(): Promise<PromoItem[]> {
       restaurant_id: restaurant.id,
       restaurant_name: restaurant.name,
       platform: listing.platform as Platform,
-      platform_url: listing.url ?? null,
+      cuisine: restaurant.cuisine ? [restaurant.cuisine] : [],
+      area: restaurant.neighborhood ?? null,
+      rating: listing.rating != null ? Number(listing.rating) : null,
+      review_count: listing.review_count != null ? Number(listing.review_count) : null,
       promo_type: p.promo_type,
       label: p.label,
       value: p.value != null ? Number(p.value) : null,
@@ -198,7 +195,7 @@ export async function getRestaurantWithListings(
   const { data, error } = await supabase
     .from('restaurants')
     .select(`
-      id, name, neighborhood, cuisine, phone,
+      id, name, neighborhood, cuisine, phone, order_url,
       platform_listings (
         id, platform, url,
         delivery_fee, min_order, eta_min, eta_max, rating,
@@ -247,6 +244,7 @@ export async function getRestaurantWithListings(
     city: data.neighborhood ?? 'Brussels',
     cuisine: data.cuisine ? [data.cuisine] : [],
     phone: (data as any).phone ?? null,
+    order_url: (data as any).order_url ?? null,
     listings,
     menuItems: Array.from(itemMap.values()),
   }
