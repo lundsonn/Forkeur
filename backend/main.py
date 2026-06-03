@@ -16,17 +16,24 @@ import ws as ws_mod
 from routers import scrapers, runs, schedule, data
 from routers.auth_router import router as auth_router
 
-# Paths that don't require a token
 _PUBLIC_PATHS = {"/api/auth/login"}
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        if request.url.path.startswith("/api/") and request.url.path not in _PUBLIC_PATHS:
+        path = request.url.path
+        if path in _PUBLIC_PATHS:
+            return await call_next(request)
+
+        # WebSocket: token comes as ?token= query param (browsers can't send headers)
+        if path.startswith("/ws/"):
+            token = request.query_params.get("token", "")
+        else:
             header = request.headers.get("Authorization", "")
             token = header.removeprefix("Bearer ").strip()
-            if not auth.verify_token(token):
-                return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+
+        if not auth.verify_token(token):
+            return JSONResponse({"detail": "Unauthorized"}, status_code=401)
         return await call_next(request)
 
 
@@ -37,7 +44,7 @@ async def lifespan(app: FastAPI):
     sched.shutdown()
 
 
-app = FastAPI(title="Forkeur Backend", lifespan=lifespan)
+app = FastAPI(title="Forkeur Backend", lifespan=lifespan, docs_url=None, redoc_url=None)
 
 app.add_middleware(
     CORSMiddleware,

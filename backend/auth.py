@@ -3,7 +3,7 @@ import os
 from datetime import datetime, timedelta, timezone
 import jwt
 
-_SECRET = os.environ.get("JWT_SECRET", "forkeur-dev-secret-change-in-prod")
+_SECRET = os.environ["JWT_SECRET"]
 _ALGO = "HS256"
 _EXPIRE_DAYS = 30
 

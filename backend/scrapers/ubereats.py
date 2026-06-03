@@ -320,11 +320,15 @@ def _parse_menu_items(store_data: dict) -> list[dict]:
                 price_cents = ci.get("price")
                 price_eur = price_cents / 100 if isinstance(price_cents, (int, float)) else None
                 title = ci.get("title", "")
+                image_url = ci.get("imageUrl") or None
+                description = ci.get("itemDescription") or ci.get("description") or None
                 if title:
                     items.append({
                         "title": title,
                         "price": price_eur,
                         "catalog_name": catalog_name,
+                        "image_url": image_url,
+                        "description": description,
                     })
     return items
 

@@ -1,5 +1,6 @@
 'use client'
 import React, { useState, useMemo } from 'react'
+import Image from 'next/image'
 import {
   BasketItem,
   PlatformFees,
@@ -202,12 +203,26 @@ export default function BasketSimulator({ menuItems, listings, phone }: Props) {
                     return (
                       <tr key={item.name} className="border-b border-stone-100 last:border-0">
                         <td className="py-3 pr-2 max-w-[160px]">
-                          <p className={`text-sm text-stone-900 truncate ${qty > 0 ? 'font-bold' : 'font-medium'}`}>
-                            {item.name}
-                          </p>
-                          {item.description && (
-                            <p className="text-xs text-stone-400 truncate">{item.description}</p>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {item.image_url && (
+                              <Image
+                                src={item.image_url}
+                                alt=""
+                                width={32}
+                                height={32}
+                                className="rounded shrink-0 object-cover"
+                                unoptimized
+                              />
+                            )}
+                            <div className="min-w-0">
+                              <p className={`text-sm text-stone-900 truncate ${qty > 0 ? 'font-bold' : 'font-medium'}`}>
+                                {item.name}
+                              </p>
+                              {item.description && (
+                                <p className="text-xs text-stone-400 truncate">{item.description}</p>
+                              )}
+                            </div>
+                          </div>
                         </td>
                         {PLATFORMS.map((platform) => {
                           const price = item.prices[platform]

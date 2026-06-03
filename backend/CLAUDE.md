@@ -23,7 +23,8 @@ uv run playwright install chromium # first-time browser install
 
 ```
 backend/
-├── main.py           ← FastAPI app, lifespan, routes wired
+├── main.py           ← FastAPI app, lifespan, AuthMiddleware, routes wired
+├── auth.py           ← JWT token create/verify (HS256, 30-day expiry)
 ├── scheduler.py      ← APScheduler setup
 ├── ws.py             ← WebSocket log streaming
 ├── db.py             ← Supabase client + DB helpers
@@ -32,8 +33,12 @@ backend/
 │   ├── base.py       ← BaseScraper (stealth, browser lifecycle)
 │   ├── ubereats.py
 │   ├── deliveroo.py
-│   └── takeaway.py
+│   ├── takeaway.py
+│   ├── fees.py       ← refresh delivery_fee + min_order for existing listings
+│   ├── promos.py     ← shared promotion-parsing utilities (classify/dedup)
+│   └── direct.py     ← direct ordering: enrich websites + Google Maps discovery
 ├── routers/
+│   ├── auth_router.py ← POST /api/auth/login
 │   ├── scrapers.py   ← GET/POST /api/scrapers
 │   ├── runs.py       ← GET /api/runs
 │   ├── schedule.py   ← cron schedule endpoints
@@ -48,4 +53,4 @@ Each scraper extends `BaseScraper`. Override `scrape(address, coords)` → retur
 
 ## Env vars
 
-See `.env.example`. Required: `SUPABASE_URL`, `SUPABASE_KEY`.
+See `.env.example`. Required: `SUPABASE_URL`, `SUPABASE_KEY`, `JWT_SECRET`, `ADMIN_PASSWORD`.

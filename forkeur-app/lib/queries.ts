@@ -202,7 +202,7 @@ export async function getRestaurantWithListings(
       platform_listings (
         id, platform, url,
         delivery_fee, min_order, eta_min, eta_max, rating,
-        menu_items ( title, price, catalog_name )
+        menu_items ( title, price, catalog_name, image_url, description )
       )
     `)
     .eq('id', id)
@@ -231,9 +231,9 @@ export async function getRestaurantWithListings(
       if (!itemMap.has(key)) {
         itemMap.set(key, {
           name: item.title,
-          description: null,
+          description: item.description ?? null,
           category: item.catalog_name ?? null,
-          image_url: null,
+          image_url: item.image_url ?? null,
           prices: { uber_eats: null, deliveroo: null, takeaway: null, direct: null },
         })
       }

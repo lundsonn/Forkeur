@@ -371,13 +371,13 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                         return (p > 0 && p <= 200) ? p : null;
                     }
 
-                    function addItem(title, price, catalogName) {
+                    function addItem(title, price, catalogName, imageUrl, description) {
                         title = title.trim();
                         if (!title || title.length < 2 || price === null) return;
                         const key = title + '|' + price;
                         if (seen.has(key)) return;
                         seen.add(key);
-                        out.push({ title, price, catalog_name: catalogName });
+                        out.push({ title, price, catalog_name: catalogName, image_url: imageUrl || null, description: description || null });
                     }
 
                     // Strategy 1: div.notranslate — one per item card (Deliveroo wraps item
@@ -389,18 +389,33 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                         const titleEl = nt.querySelector('p, span, h2, h3, h4') || nt;
                         const title = (titleEl.innerText || '').trim();
                         if (!title || title.length < 2) return;
-                        // Walk up to find price
+                        // Walk up to find price, image, and description
                         let el = nt;
                         let priceM = null;
+                        let imageUrl = null;
                         for (let i = 0; i < 6; i++) {
                             if (!el.parentElement) break;
                             el = el.parentElement;
                             const text = (el.innerText || '').trim();
-                            priceM = text.match(/(\\d+)[,.]?(\\d{0,2})\\s*€/);
-                            if (priceM) break;
+                            if (!priceM) priceM = text.match(/(\\d+)[,.]?(\\d{0,2})\\s*€/);
+                            if (!imageUrl) {
+                                const img = el.querySelector('img[src]');
+                                if (img) imageUrl = img.src;
+                            }
+                            if (priceM && imageUrl) break;
                         }
                         if (!priceM) return;
-                        addItem(title, parsePrice(priceM[1] + '.' + (priceM[2] || '00').padEnd(2, '0')), nearestHeading(nt));
+                        // Description: first non-title, non-price paragraph outside the notranslate div
+                        let description = null;
+                        for (const p of el.querySelectorAll('p, span')) {
+                            if (p.closest('div.notranslate')) continue;
+                            const t = (p.innerText || '').trim();
+                            if (t && t !== title && t.length > 5 && t.length < 300 && !/^\\d+[,.]?\\d*\\s*€/.test(t)) {
+                                description = t;
+                                break;
+                            }
+                        }
+                        addItem(title, parsePrice(priceM[1] + '.' + (priceM[2] || '00').padEnd(2, '0')), nearestHeading(nt), imageUrl, description);
                     });
                     if (out.length > 0) return out;
 
@@ -412,7 +427,8 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                             if (!priceM) return;
                             const lines = text.split('\\n').map(l => l.trim()).filter(l => l.length > 1);
                             const title = lines.find(l => !l.startsWith('€') && !/^\\d+[,.]?\\d*\\s*€/.test(l) && l.length > 2);
-                            if (title) addItem(title, parsePrice(priceM[1]), nearestHeading(el));
+                            const img = el.querySelector('img[src]');
+                            if (title) addItem(title, parsePrice(priceM[1]), nearestHeading(el), img ? img.src : null, null);
                         });
                         if (out.length > 0) return out;
                     }
@@ -425,7 +441,8 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                         if (!priceM) return;
                         const lines = text.split('\\n').map(l => l.trim()).filter(l => l.length > 1);
                         const title = lines.find(l => !l.includes('€') && !/^\\d+[,.]?\\d*$/.test(l) && l.length > 2);
-                        if (title) addItem(title, parsePrice(priceM[1] + '.' + (priceM[2] || '00').padEnd(2, '0')), nearestHeading(el));
+                        const img = el.querySelector('img[src]');
+                        if (title) addItem(title, parsePrice(priceM[1] + '.' + (priceM[2] || '00').padEnd(2, '0')), nearestHeading(el), img ? img.src : null, null);
                     });
                     return out;
                 }""")

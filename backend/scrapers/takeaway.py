@@ -38,7 +38,10 @@ _MENU_EVAL = """
             cur = { heading, items: [] };
             sections.push(cur);
         }
-        cur.items.push({ title, price });
+        const imgEl = node.querySelector('img[src]');
+        const descEl = node.querySelector('[data-qa="item-description"]');
+        const description = descEl ? (descEl.innerText || '').trim() || null : null;
+        cur.items.push({ title, price, image_url: imgEl ? imgEl.src : null, description });
     }
     return { sections };
 }
@@ -170,7 +173,7 @@ async def scrape_menu_page(page, listing_id: str, url: str) -> tuple[str, list[d
                 title = item.get("title", "").strip()
                 price = parse_menu_price(item.get("price", ""))
                 if title:
-                    items.append({"title": title, "price": price, "catalog_name": catalog})
+                    items.append({"title": title, "price": price, "catalog_name": catalog, "image_url": item.get("image_url"), "description": item.get("description")})
 
         promo_dom = await page.evaluate(_PROMO_EVAL)
         promo_lines = promo_dom.get("promoLines") or []

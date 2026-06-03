@@ -17,7 +17,8 @@ export default function LogDrawer({ runId, platform, onClose }: Props) {
     setLines([])
     setDone(false)
 
-    const ws = new WebSocket(`ws://localhost:8000/ws/${runId}`)
+    const token = localStorage.getItem('admin_token') ?? ''
+    const ws = new WebSocket(`ws://localhost:8000/ws/${runId}?token=${token}`)
     ws.onmessage = (e) => {
       const msg: WsMessage = JSON.parse(e.data)
       if (msg.type === 'log' && msg.line) {
