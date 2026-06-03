@@ -1,7 +1,4 @@
 import pytest
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-
 from scrapers.direct_classify import classify_url, _JUNK_RE
 
 
@@ -48,6 +45,9 @@ def test_none_without_phone_returns_website():
 
 def test_empty_string_with_phone_returns_phone():
     assert classify_url('', phone='+32471234567') == 'phone'
+
+def test_ordering_takes_precedence_over_menu_path():
+    assert classify_url('https://burger.sq-menu.com/menu') == 'ordering'
 
 
 # ── _JUNK_RE ──────────────────────────────────────────────────────────────────

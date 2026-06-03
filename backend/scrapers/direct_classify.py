@@ -16,7 +16,9 @@ _ORDERING_HOSTS = re.compile(
     r'|clickeat\.'
     r'|square\.site'
     r'|app\.orda\.io'
-    r'|orderingstack\.',
+    r'|orderingstack\.'
+    r'|yummyfood\.be'
+    r'|order\.me/',
     re.IGNORECASE,
 )
 
@@ -25,6 +27,9 @@ _MENU_PATHS = re.compile(
     re.IGNORECASE,
 )
 
+# Exported for use by clean_order_urls.py — not called inside classify_url.
+# Matches booking/reservation sites, PDFs, and link aggregators that are
+# scraped artifacts, not actual ordering links.
 _JUNK_RE = re.compile(
     r'google\.com/searchviewer'
     r'|zenchef\.com'
