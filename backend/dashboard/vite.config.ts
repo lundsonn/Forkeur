@@ -106,7 +106,7 @@ export default defineConfig(({ mode }) => {
     },
     base: '/dashboard/',
     build: {
-      outDir: '../static',
+      outDir: '../static/dashboard',
       emptyOutDir: true,
     },
   }
