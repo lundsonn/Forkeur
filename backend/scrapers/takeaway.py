@@ -10,7 +10,10 @@ from scrapers.base import (
 import db
 from scrapers.promos import parse_promo_texts
 
-LISTING_URL = "https://www.takeaway.com/be-fr/livraison/repas/bruxelles-1000"
+LISTING_BASE_URLS = [
+    "https://www.takeaway.com/be-fr/livraison/repas/bruxelles-1000",
+    "https://www.takeaway.com/be-fr/livraison/repas/bruxelles-1050",  # Ixelles
+]
 
 _CARD_JS = "document.querySelectorAll('[data-qa=\"card-element\"]').length"
 
@@ -196,36 +199,56 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
     try:
         page = await new_page(browser, lang="fr-BE")
 
-        log_fn(f"Loading listing: {LISTING_URL}")
-        await page.goto(LISTING_URL, wait_until="domcontentloaded", timeout=60000)
+        # Paginate each base URL until no cards are returned
+        all_by_slug: dict[str, dict] = {}
+        for base_url in LISTING_BASE_URLS:
+            page_num = 1
+            while True:
+                url = f"{base_url}?page={page_num}"
+                log_fn(f"Loading {base_url.split('/')[-1]} page {page_num}")
+                await page.goto(url, wait_until="domcontentloaded", timeout=60000)
 
-        title = await page.title()
-        if "just a moment" in title.lower():
-            log_fn("CF challenge detected — waiting up to 90s...")
-            cleared = await wait_for_cf_clear(page, timeout_s=90)
-            if not cleared:
-                log_fn("CF not cleared — aborting")
-                return ScraperResult(records_saved=0, restaurants=[], menu_items_saved=0)
-            log_fn("CF cleared")
+                title = await page.title()
+                if "just a moment" in title.lower():
+                    log_fn("CF challenge detected — waiting up to 90s...")
+                    cleared = await wait_for_cf_clear(page, timeout_s=90)
+                    if not cleared:
+                        log_fn("CF not cleared — stopping pagination")
+                        break
 
-        try:
-            await page.wait_for_selector('[data-qa="restaurant-card"]', timeout=30000)
-        except Exception:
-            log_fn("No restaurant cards found — aborting")
-            return ScraperResult(records_saved=0, restaurants=[], menu_items_saved=0)
+                try:
+                    await page.wait_for_selector('[data-qa="restaurant-card"]', timeout=20000)
+                except Exception:
+                    log_fn(f"No cards on page {page_num} — stopping")
+                    break
 
-        # Scroll to load all cards
-        prev_h = 0
-        for _ in range(20):
-            h = await page.evaluate("document.body.scrollHeight")
-            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            await asyncio.sleep(0.8)
-            if h == prev_h:
-                break
-            prev_h = h
+                # Scroll to ensure all cards on this page are rendered
+                prev_h = 0
+                for _ in range(10):
+                    h = await page.evaluate("document.body.scrollHeight")
+                    await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                    await asyncio.sleep(0.8)
+                    if h == prev_h:
+                        break
+                    prev_h = h
 
-        restaurants = await page.evaluate(_LISTING_EVAL)
-        log_fn(f"Found {len(restaurants)} restaurants")
+                page_restaurants = await page.evaluate(_LISTING_EVAL)
+                if not page_restaurants:
+                    log_fn(f"No restaurants on page {page_num} — stopping")
+                    break
+
+                new_count = 0
+                for r in page_restaurants:
+                    if r["slug"] not in all_by_slug:
+                        all_by_slug[r["slug"]] = r
+                        new_count += 1
+
+                log_fn(f"  Page {page_num}: {len(page_restaurants)} cards, {new_count} new")
+                page_num += 1
+                await asyncio.sleep(1)
+
+        restaurants = list(all_by_slug.values())
+        log_fn(f"Found {len(restaurants)} unique restaurants across all pages")
 
         if config.target:
             restaurants = [r for r in restaurants
