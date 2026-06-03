@@ -45,3 +45,16 @@ forkeur-app/
 - `/deals` — best deals ranked by type + quality score (server-fetched, client-filtered)
 - `/promotions` — redirects to `/deals`
 - `/restaurant/[id]` — detail page with basket simulator
+
+## i18n — ALWAYS develop in all 3 languages
+
+App supports **EN / FR / NL** via `next-intl` (cookie-based, no URL prefix).
+
+**Rule: every new UI string must be added to all three message files simultaneously.**
+
+- Translations live in `messages/en.json`, `messages/fr.json`, `messages/nl.json`
+- Client components: `const t = useTranslations('namespace')`
+- Server components / metadata: `const t = await getTranslations('namespace')`
+- Never hardcode user-visible strings — always use `t(key)` even for short labels
+- LangToggle (EN · FR · NL) is rendered in every page nav
+- Locale detected from `NEXT_LOCALE` cookie → `Accept-Language` header → `'en'`
