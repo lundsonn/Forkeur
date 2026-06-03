@@ -1,8 +1,18 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { NextIntlClientProvider } from 'next-intl'
 import CompareSheet from '../components/CompareSheet'
 import type { Platform } from '../lib/basket'
+import en from '../messages/en.json'
+
+function renderWithIntl(ui: React.ReactElement) {
+  return render(
+    <NextIntlClientProvider locale="en" messages={en}>
+      {ui}
+    </NextIntlClientProvider>
+  )
+}
 
 const baseProps = {
   cheapestPlatform: 'uber_eats' as Platform,
@@ -22,29 +32,29 @@ describe('CompareSheet', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('renders winner platform name', () => {
-    render(<CompareSheet {...baseProps} />)
+    renderWithIntl(<CompareSheet {...baseProps} />)
     expect(screen.getAllByText('Uber Eats').length).toBeGreaterThan(0)
   })
 
   it('renders total, eta, and savings', () => {
-    render(<CompareSheet {...baseProps} />)
+    renderWithIntl(<CompareSheet {...baseProps} />)
     expect(screen.getAllByText('€6.48').length).toBeGreaterThan(0)
     expect(screen.getAllByText('18 min').length).toBeGreaterThan(0)
     expect(screen.getByText('€1.20')).toBeInTheDocument()
   })
 
   it('does not render savings when savingsCents is null', () => {
-    render(<CompareSheet {...baseProps} savingsCents={null} />)
+    renderWithIntl(<CompareSheet {...baseProps} savingsCents={null} />)
     expect(screen.queryByText(/you save/i)).toBeNull()
   })
 
   it('renders Best badge on winner row', () => {
-    render(<CompareSheet {...baseProps} />)
+    renderWithIntl(<CompareSheet {...baseProps} />)
     expect(screen.getByText('Best')).toBeInTheDocument()
   })
 
   it('renders all 3 platform rows', () => {
-    render(<CompareSheet {...baseProps} />)
+    renderWithIntl(<CompareSheet {...baseProps} />)
     const uberEatsElements = screen.getAllByText('Uber Eats')
     const takeawayElements = screen.getAllByText('Takeaway')
     const deliverooElements = screen.getAllByText('Deliveroo')
@@ -54,14 +64,14 @@ describe('CompareSheet', () => {
   })
 
   it('CTA links to platformUrl and opens in new tab', () => {
-    render(<CompareSheet {...baseProps} />)
+    renderWithIntl(<CompareSheet {...baseProps} />)
     const link = screen.getByRole('link', { name: /order on uber eats/i })
     expect(link).toHaveAttribute('href', 'https://ubereats.com/test')
     expect(link).toHaveAttribute('target', '_blank')
   })
 
   it('CTA is a non-link button when platformUrl is null', () => {
-    render(<CompareSheet {...baseProps} platformUrl={null} />)
+    renderWithIntl(<CompareSheet {...baseProps} platformUrl={null} />)
     expect(screen.queryByRole('link', { name: /order on uber eats/i })).toBeNull()
     const orderButtons = screen.getAllByText(/Order on Uber Eats/)
     expect(orderButtons.length).toBeGreaterThan(0)
@@ -69,7 +79,7 @@ describe('CompareSheet', () => {
 
   it('calls onClose when backdrop clicked', async () => {
     const onClose = vi.fn()
-    render(<CompareSheet {...baseProps} onClose={onClose} />)
+    renderWithIntl(<CompareSheet {...baseProps} onClose={onClose} />)
     await userEvent.click(screen.getByTestId('sheet-backdrop'))
     expect(onClose).toHaveBeenCalledOnce()
   })
