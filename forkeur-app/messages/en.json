@@ -52,8 +52,14 @@
     "order_on": "Order on {platform}"
   },
   "direct": {
-    "badge": "Commander directement · sans frais",
-    "badge_long": "Commander directement · sans frais de plateforme"
+    "badge": "Order directly · no fees",
+    "badge_long": "Order directly · no platform fees"
+  },
+  "map": {
+    "free_delivery": "Free delivery",
+    "from": "from {fee}",
+    "save": "Save €{amount}",
+    "compare_cta": "Compare prices →"
   },
   "badge": {
     "bogo": "2-for-1",

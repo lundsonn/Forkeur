@@ -55,6 +55,12 @@
     "badge": "Commander directement · sans frais",
     "badge_long": "Commander directement · sans frais de plateforme"
   },
+  "map": {
+    "free_delivery": "Livraison gratuite",
+    "from": "à partir de {fee}",
+    "save": "Économie €{amount}",
+    "compare_cta": "Comparer les prix →"
+  },
   "badge": {
     "bogo": "2 pour 1",
     "pct_off": "{value}% de remise",

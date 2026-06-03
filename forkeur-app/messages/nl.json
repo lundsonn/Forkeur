@@ -55,6 +55,12 @@
     "badge": "Direct bestellen · zonder platformkosten",
     "badge_long": "Direct bestellen · zonder platformkosten"
   },
+  "map": {
+    "free_delivery": "Gratis bezorging",
+    "from": "vanaf {fee}",
+    "save": "Bespaar €{amount}",
+    "compare_cta": "Prijzen vergelijken →"
+  },
   "badge": {
     "bogo": "2-voor-1",
     "pct_off": "{value}% korting",

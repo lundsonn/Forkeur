@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useState } from 'react'
+import { useTranslations } from 'next-intl'
 import type { RestaurantSummary } from '@/lib/queries'
 
 const CUISINE_ICONS: Record<string, string> = {
@@ -43,6 +44,7 @@ type Props = {
 
 export default function MapPreviewCard({ restaurant, onClose }: Props) {
   const [imgError, setImgError] = useState(false)
+  const tMap = useTranslations('map')
 
   const showImage = !!restaurant.image_url && !imgError
   // cheapest.fee_label is "Free" | "€X.XX" | null
@@ -51,10 +53,10 @@ export default function MapPreviewCard({ restaurant, onClose }: Props) {
     rawFeeLabel == null
       ? null
       : rawFeeLabel === 'Free'
-        ? 'Free delivery'
-        : `from ${rawFeeLabel}`
+        ? tMap('free_delivery')
+        : tMap('from', { fee: rawFeeLabel })
   const savingsCents = restaurant.cheapest?.savings_cents ?? 0
-  const savingsLabel = savingsCents > 0 ? `Save €${(savingsCents / 100).toFixed(2)}` : null
+  const savingsLabel = savingsCents > 0 ? tMap('save', { amount: (savingsCents / 100).toFixed(2) }) : null
 
   return (
     <>
@@ -162,7 +164,7 @@ export default function MapPreviewCard({ restaurant, onClose }: Props) {
           className="block w-full text-center text-white font-medium py-3 rounded-lg text-sm"
           style={{ backgroundColor: '#1A1A1A' }}
         >
-          Compare prices →
+          {tMap('compare_cta')}
         </Link>
       </div>
     </>
