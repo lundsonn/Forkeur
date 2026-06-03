@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { RestaurantSummary } from '@/lib/queries'
+import type { RestaurantSummary } from '@/lib/queries'
 import RestaurantCard from './RestaurantCard'
 import MapView from './MapView'
 
@@ -39,6 +39,12 @@ export default function HomepageClient({
           </span>
         </div>
         <div className="flex items-center gap-1">
+          <Link
+            href="/promotions"
+            className="px-2.5 py-1 rounded-lg text-xs font-medium text-orange-500 hover:text-orange-600 transition-colors"
+          >
+            Deals 🏷️
+          </Link>
           <button
             onClick={() => setView('list')}
             className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${

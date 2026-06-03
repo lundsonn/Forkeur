@@ -1,5 +1,6 @@
 import os
 import re
+import unicodedata
 from supabase import create_client, Client
 from dotenv import load_dotenv
 
@@ -17,11 +18,43 @@ def get_client() -> Client:
     return _client
 
 
+def _is_junk(name: str) -> bool:
+    """Return True if the name looks like a scraped UI element, not a real restaurant."""
+    s = name.strip().lower()
+    return bool(re.match(
+        r'^(around\s+\d|pre[\s-]?order\s+\d|pré[\s-]?commande\s+\d'
+        r'|article\s+offert|\d+e?\s*à\s*moiti|\d+\s*%\s+off|-\s*\d+\s*%'
+        r'|•\s*à\s+partir|\d+e\s+à\s+moitié)',
+        s,
+    ))
+
+
 def _canonical(name: str) -> str:
-    """Strip platform-specific location suffixes for cross-platform matching.
-    'Burger King - Ixelles' → 'Burger King', 'McDonald's' → 'McDonald's'
+    """Strip platform-specific location suffixes and noise for cross-platform matching.
+    'Burger King - Ixelles' → 'Burger King'
+    '🩷 Crousty Factory 🧡 - Bruxelles' → 'Crousty Factory'
     """
-    return re.sub(r"\s+-\s+\S.*$", "", name).strip()
+    # Strip leading/trailing whitespace
+    name = name.strip()
+    # Remove emoji and symbols outside Basic Latin + Latin Extended blocks
+    name = re.sub(r'[^ -ɏḀ-ỿ\s\d\'\"\-&\(\)\.!,]', '', name).strip()
+    # Strip location suffix after " - " (regular hyphen only — em-dash separates distinct branches)
+    name = re.sub(r'\s+-\s+\S.*$', '', name).strip()
+    return name
+
+
+def _normalize_for_match(name: str) -> str:
+    """Fully normalize for fuzzy duplicate detection.
+    Handles mixed case, accents, smart quotes, emoji, extra whitespace.
+    """
+    c = _canonical(name).lower()
+    # Remove accents via NFD decomposition
+    c = unicodedata.normalize('NFD', c)
+    c = ''.join(ch for ch in c if unicodedata.category(ch) != 'Mn')
+    # Normalize all apostrophe/quote variants to straight single quote
+    c = re.sub(r"[''`ʼ´]", "'", c)
+    # Collapse whitespace
+    return re.sub(r'\s+', ' ', c).strip()
 
 
 # Simple keyword-based cuisine inference — covers common Brussels chains
@@ -52,27 +85,32 @@ def infer_cuisine(name: str) -> str | None:
 def upsert_restaurant(data: dict) -> str:
     """Match restaurant by name across platforms, insert if new. Returns id.
 
-    Deliveroo appends location (' - Ixelles') that UberEats omits.
-    We normalise both sides so the same chain maps to one row.
+    Matching is done in 5 escalating steps to handle cross-platform name
+    variations: exact → case-insensitive → canonical base → suffixed variant
+    → fully-normalized (accents, quotes, emoji).
     """
     client = get_client()
-    name: str = data["name"]
-    canonical = _canonical(name)
+    name: str = data["name"].strip()
+    data = {**data, "name": name}
 
-    # Infer cuisine from name if not provided
+    if _is_junk(name):
+        raise ValueError(f"Junk entry skipped: {name!r}")
+
+    canonical = _canonical(name)
+    norm = _normalize_for_match(name)
+    norm_canonical = _normalize_for_match(canonical)
+
     if not data.get("cuisine"):
         data = {**data, "cuisine": infer_cuisine(name)}
 
     def _found(rid: str) -> str:
-        # Backfill cuisine if existing row has none
         if data.get("cuisine"):
             existing = client.table("restaurants").select("cuisine").eq("id", rid).limit(1).execute()
             if existing.data and not existing.data[0].get("cuisine"):
                 client.table("restaurants").update({"cuisine": data["cuisine"]}).eq("id", rid).execute()
-            # Also update lat/lng if provided
-            updates = {k: data[k] for k in ("lat", "lng") if data.get(k) is not None}
-            if updates:
-                client.table("restaurants").update(updates).eq("id", rid).execute()
+        updates = {k: data[k] for k in ("lat", "lng") if data.get(k) is not None}
+        if updates:
+            client.table("restaurants").update(updates).eq("id", rid).execute()
         return rid
 
     # 1. Exact name match (same scraper re-running)
@@ -80,15 +118,18 @@ def upsert_restaurant(data: dict) -> str:
     if res.data:
         return _found(res.data[0]["id"])
 
-    # 2. We have a location suffix; check if canonical base name already exists
-    #    e.g. inserting "Burger King - Ixelles", canonical = "Burger King" already stored
+    # 2. Case-insensitive exact match ("GOMU" ↔ "Gomu", "Bombay Inn" ↔ "bombay inn")
+    res = client.table("restaurants").select("id").ilike("name", name).limit(1).execute()
+    if res.data:
+        return _found(res.data[0]["id"])
+
+    # 3. Canonical base match ("Burger King - Ixelles" → find "Burger King")
     if canonical != name:
-        res = client.table("restaurants").select("id").eq("name", canonical).limit(1).execute()
+        res = client.table("restaurants").select("id").ilike("name", canonical).limit(1).execute()
         if res.data:
             return _found(res.data[0]["id"])
 
-    # 3. We are the base name; check if a location-suffixed variant is already stored
-    #    e.g. inserting "Burger King", Deliveroo already stored "Burger King - Ixelles"
+    # 4. Suffixed variant match ("Burger King" → find "Burger King - Ixelles")
     res = (
         client.table("restaurants")
         .select("id")
@@ -98,6 +139,25 @@ def upsert_restaurant(data: dict) -> str:
     )
     if res.data:
         return _found(res.data[0]["id"])
+
+    # 5. Fully-normalized match: handles accents, smart quotes, emoji, trailing
+    #    spaces. Fetch candidates by the first non-article word of canonical.
+    _ARTICLES = {"le", "la", "les", "l'", "au", "aux", "un", "une", "de", "du", "the", "a"}
+    words = canonical.split()
+    sig_words = [w for w in words if w.lower().rstrip("'") not in _ARTICLES]
+    prefix = sig_words[0] if sig_words else (words[0] if words else canonical[:5])
+    if len(prefix) >= 3:
+        candidates = (
+            client.table("restaurants")
+            .select("id, name")
+            .ilike("name", f"{prefix}%")
+            .execute()
+        )
+        for cand in candidates.data:
+            cand_norm = _normalize_for_match(cand["name"])
+            cand_norm_can = _normalize_for_match(_canonical(cand["name"]))
+            if cand_norm in (norm, norm_canonical) or cand_norm_can in (norm, norm_canonical):
+                return _found(cand["id"])
 
     # Not found — insert new row
     res = client.table("restaurants").upsert(data, on_conflict="slug").execute()
@@ -125,6 +185,17 @@ def upsert_listing(data: dict) -> str:
 def patch_listing(listing_id: str, data: dict) -> None:
     """Patch specific fields on a platform_listing row by id."""
     get_client().table("platform_listings").update(data).eq("id", listing_id).execute()
+
+
+def upsert_promotions(listing_id: str, promotions: list[dict]) -> int:
+    """Replace all promotions for a listing. Returns count saved."""
+    client = get_client()
+    client.table("promotions").delete().eq("listing_id", listing_id).execute()
+    if not promotions:
+        return 0
+    rows = [{"listing_id": listing_id, **p} for p in promotions]
+    res = client.table("promotions").insert(rows).execute()
+    return len(res.data)
 
 
 def insert_menu_items(listing_id: str, items: list[dict]) -> int:

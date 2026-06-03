@@ -5,6 +5,7 @@ from typing import Callable
 from urllib.parse import urlparse, parse_qs
 from models import ScraperConfig, ScraperResult
 from scrapers.base import new_browser, new_page, check_cloudflare, noop_log, CloudflareBlockedError, parse_menu_price
+from scrapers.promos import parse_promo_texts
 import db
 
 _GH_BASE32 = "0123456789bcdefghjkmnpqrstuvwxyz"
@@ -221,10 +222,12 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 const reviewMatch = (ratingLine || '').match(/\\((\\d[\\d.,]*\\+?)\\)/);
                 const eta = lines.find(l => /^\\d+(-\\d+)?\\s*min$/i.test(l)) || 'N/A';
                 // Promo/discount: any line with delivery/fee/free/€ that isn't the name or rating
-                const discount = lines.find(l =>
-                    /spend|get|free|gratuit|promo|off|réduction|korting/i.test(l) &&
-                    l !== name && !ratingLine?.startsWith(l)
-                ) || null;
+                // Collect ALL promo lines from the card (not just the first)
+                const promoLines = lines.filter(l =>
+                    /spend|get|free|gratuit|promo|off|réduction|korting|gratis|achet|offert/i.test(l) &&
+                    l !== name && !ratingLine?.startsWith(l) &&
+                    !_isEta(l) && l.length < 120
+                );
                 return {
                     name,
                     url: a.href,
@@ -232,7 +235,8 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                     rating: ratingMatch ? ratingMatch[1] : 'N/A',
                     review_count: reviewMatch ? reviewMatch[1] : '',
                     eta,
-                    discount,
+                    discount: promoLines[0] || null,
+                    promoLines,
                 };
             });
         }""")
@@ -244,13 +248,17 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
 
         # --- Phase 1: upsert restaurants + listings ---
         saved: list[tuple[dict, str, str]] = []  # (r, rid, lid)
+        promo_total = 0
         for r in (restaurants[:config.max_items] if config.max_items else restaurants):
-            coords = _coords_from_url(r.get("url", ""))
-            rid = db.upsert_restaurant({
-                "name": r["name"],
-                "slug": r["slug"],
-                **({} if coords is None else {"lat": coords[0], "lng": coords[1]}),
-            })
+            try:
+                coords = _coords_from_url(r.get("url", ""))
+                rid = db.upsert_restaurant({
+                    "name": r["name"],
+                    "slug": r["slug"],
+                    **({} if coords is None else {"lat": coords[0], "lng": coords[1]}),
+                })
+            except ValueError:
+                continue  # junk entry filtered by db._is_junk
             lid = db.upsert_listing({
                 "restaurant_id": rid,
                 "platform": "deliveroo",
@@ -261,8 +269,12 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 "discount_label": r.get("discount"),
                 # delivery_fee: not exposed on listing page, filled in phase 2
             })
+            promos = parse_promo_texts(r.get("promoLines") or [])
+            promo_total += db.upsert_promotions(lid, promos)
             records_saved += 1
             saved.append((r, rid, lid))
+
+        log_fn(f"Phase 1 — {records_saved} listings, {promo_total} promotions saved")
 
         # --- Phase 2: goto per restaurant menu page ---
         # SPA click only renders a partial React tree → ~6 items.
@@ -468,12 +480,65 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                     db.patch_listing(lid, {"delivery_fee": fee})
                     log_fn(f"  Delivery fee: {fee}")
 
+                # Extract promotions from the restaurant page — richer than listing card
+                promo_texts: list[str] = await page.evaluate("""() => {
+                    const results = [];
+                    const seen = new Set();
+
+                    function add(text) {
+                        text = (text || '').trim();
+                        if (!text || text.length > 200 || seen.has(text.toLowerCase())) return;
+                        seen.add(text.toLowerCase());
+                        results.push(text);
+                    }
+
+                    // 1. Dedicated offer/promotion elements (data-testid)
+                    for (const sel of [
+                        '[data-testid*="offer"]', '[data-testid*="promotion"]',
+                        '[data-testid*="deal"]', '[data-test*="offer"]',
+                        '[data-testid*="voucher"]',
+                    ]) {
+                        document.querySelectorAll(sel).forEach(el => {
+                            const t = (el.innerText || '').trim();
+                            if (t && t.length < 200) add(t);
+                        });
+                    }
+
+                    // 2. Elements whose class names suggest offers
+                    for (const el of document.querySelectorAll('[class]')) {
+                        const cls = (el.className || '').toLowerCase();
+                        if (/offer|promo|deal|discount|voucher/.test(cls)) {
+                            const t = (el.innerText || '').trim();
+                            if (t && t.length < 200 && t.length > 5) add(t);
+                        }
+                    }
+
+                    // 3. Short text nodes with clear promo patterns
+                    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+                    let node;
+                    while ((node = walker.nextNode())) {
+                        const t = node.textContent.trim();
+                        if (t.length < 8 || t.length > 150) continue;
+                        if (/spend.{0,40}(free|get|off|gratuit)|buy \d|get \d free|free delivery|livraison (gratuite|offerte)|\d+%.{0,20}off|offert.{0,20}dès|\d+ (achet|offert)/i.test(t)) {
+                            add(t);
+                        }
+                    }
+
+                    return results;
+                }""")
+
+                if promo_texts:
+                    rich_promos = parse_promo_texts(promo_texts)
+                    if rich_promos:
+                        db.upsert_promotions(lid, rich_promos)
+                        log_fn(f"  {len(rich_promos)} promotions saved")
+
             except CloudflareBlockedError:
                 log_fn(f"  Cloudflare blocked — skipping menu for {r['name']}")
             except Exception as exc:
                 log_fn(f"  Error scraping menu for {r['name']}: {exc}")
 
-        log_fn(f"Done — {records_saved} listings, {menu_items_saved} menu items saved")
+        log_fn(f"Done — {records_saved} listings, {menu_items_saved} menu items, {promo_total} promos saved")
         return ScraperResult(records_saved=records_saved, restaurants=restaurants, menu_items_saved=menu_items_saved)
 
     finally:

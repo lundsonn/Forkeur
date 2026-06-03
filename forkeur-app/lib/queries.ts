@@ -139,6 +139,54 @@ export async function getRestaurants(): Promise<{
   return { restaurants, cuisines }
 }
 
+export type PromoItem = {
+  id: string
+  restaurant_id: string
+  restaurant_name: string
+  platform: Platform
+  platform_url: string | null
+  promo_type: 'free_delivery' | 'bogo' | 'pct_discount' | 'abs_discount' | 'free_item' | 'spend_save' | 'other'
+  label: string
+  value: number | null
+  min_order: number | null
+}
+
+export async function getPromotions(): Promise<PromoItem[]> {
+  const supabase = await getSupabase()
+
+  const { data, error } = await supabase
+    .from('promotions')
+    .select(`
+      id, promo_type, label, value, min_order,
+      platform_listings (
+        platform, url,
+        restaurants ( id, name )
+      )
+    `)
+    .neq('promo_type', 'other')
+    .in('platform_listings.platform', ['uber_eats', 'deliveroo', 'takeaway'])
+    .order('scraped_at', { ascending: false })
+
+  if (error) throw new Error(`getPromotions: ${error.message}`)
+
+  return (data ?? []).flatMap((p: any) => {
+    const listing = p.platform_listings
+    const restaurant = listing?.restaurants
+    if (!listing || !restaurant) return []
+    return [{
+      id: p.id,
+      restaurant_id: restaurant.id,
+      restaurant_name: restaurant.name,
+      platform: listing.platform as Platform,
+      platform_url: listing.url ?? null,
+      promo_type: p.promo_type,
+      label: p.label,
+      value: p.value != null ? Number(p.value) : null,
+      min_order: p.min_order != null ? Number(p.min_order) : null,
+    }]
+  })
+}
+
 export async function getRestaurantWithListings(
   id: string
 ): Promise<RestaurantDetail | null> {

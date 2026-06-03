@@ -4,6 +4,7 @@ import json
 from typing import Callable
 from models import ScraperConfig, ScraperResult
 from scrapers.base import new_browser, new_page, check_cloudflare, noop_log
+from scrapers.promos import classify_promo, extract_min_order, parse_promo_texts
 import db
 
 
@@ -118,17 +119,19 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
             fare_info = payload.get("fareInfo") or {}
             marker = s.get("mapMarker") or {}
             signposts = s.get("signposts") or []
+            # Keep first label for backward-compat discount_label; full promos parsed separately
             discount = signposts[0].get("text") if signposts else None
             restaurants.append({
                 "name": (s.get("title") or {}).get("text", "Unknown"),
                 "url": f"https://www.ubereats.com{s['actionUrl'].split('?')[0]}" if s.get("actionUrl") else None,
                 "store_uuid": s.get("storeUuid") or item.get("uuid"),
                 "rating": (s.get("rating") or {}).get("text", "N/A"),
-                "delivery_fee": fare_info.get("serviceFee"),   # exact float, no parsing
+                "delivery_fee": fare_info.get("serviceFee"),
                 "eta": (eta_meta or {}).get("text", "N/A"),
                 "lat": marker.get("latitude"),
                 "lng": marker.get("longitude"),
                 "discount": discount,
+                "_store": s,          # retained for promotion extraction below
             })
 
         if config.target:
@@ -136,14 +139,18 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
 
         log_fn(f"Saving {len(restaurants)} restaurants...")
         saved_listings: list[tuple[dict, str]] = []  # (restaurant_dict, listing_id)
+        promo_total = 0
         for r in (restaurants[:config.max_items] if config.max_items else restaurants):
-            slug = (r.get("url") or "").split("/store/")[-1].strip("/") or r["name"].lower().replace(" ", "-")
-            rid = db.upsert_restaurant({
-                "name": r["name"],
-                "slug": slug,
-                "lat": r.get("lat"),
-                "lng": r.get("lng"),
-            })
+            try:
+                slug = (r.get("url") or "").split("/store/")[-1].strip("/") or r["name"].lower().replace(" ", "-")
+                rid = db.upsert_restaurant({
+                    "name": r["name"],
+                    "slug": slug,
+                    "lat": r.get("lat"),
+                    "lng": r.get("lng"),
+                })
+            except ValueError:
+                continue  # junk entry filtered by db._is_junk
             lid = db.upsert_listing({
                 "restaurant_id": rid,
                 "platform": "uber_eats",
@@ -151,13 +158,15 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 "rating": _parse_float(r.get("rating")),
                 "eta_min": _parse_eta_min(r.get("eta")),
                 "eta_max": _parse_eta_max(r.get("eta")),
-                "delivery_fee": r.get("delivery_fee"),   # already float from fareInfo
+                "delivery_fee": r.get("delivery_fee"),
                 "discount_label": r.get("discount"),
             })
+            promos = _parse_promotions(r.get("_store") or {})
+            promo_total += db.upsert_promotions(lid, promos)
             saved_listings.append((r, lid))
             records_saved += 1
 
-        log_fn(f"Phase 1 done — {records_saved} listings saved")
+        log_fn(f"Phase 1 done — {records_saved} listings, {promo_total} promotions saved")
 
         # ── Phase 2: menu scraping via click-nav ─────────────────────────────
         # Direct goto(restaurant_url) triggers Uber bot-defense/reCAPTCHA.
@@ -264,6 +273,12 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 items = _parse_menu_items(store_data)
                 count = db.insert_menu_items(lid, items)
                 menu_items_saved += count
+                # getStoreV1 often has richer promotion detail — overwrite feed promos
+                store_obj = (store_data.get("data") or {}).get("storeInfo") or {}
+                if store_obj:
+                    rich_promos = _parse_promotions(store_obj)
+                    if rich_promos:
+                        db.upsert_promotions(lid, rich_promos)
                 log_fn(f"Menu: {i+1}/{n} — {name} — {count} items saved")
             except Exception as exc:
                 log_fn(f"Menu: {i+1}/{n} — {name} — parse/save error: {exc}")
@@ -312,6 +327,49 @@ def _parse_menu_items(store_data: dict) -> list[dict]:
                         "catalog_name": catalog_name,
                     })
     return items
+
+
+def _parse_promotions(store: dict) -> list[dict]:
+    """Extract all structured promotions from a UberEats store object.
+
+    Sources:
+      1. store.signposts[]                — feed-level badges (all, not just index 0)
+      2. store.promotionInfo.promotions[] — structured objects with numeric values
+      3. store.fareInfo.serviceFeeDeal    — delivery fee deal
+    """
+    seen: set[str] = set()
+    promos: list[dict] = []
+
+    def _add(text: str, override: dict | None = None) -> None:
+        text = text.strip()
+        if not text or text.lower() in seen:
+            return
+        seen.add(text.lower())
+        p = classify_promo(text)
+        if override:
+            p.update({k: v for k, v in override.items() if v is not None})
+        promos.append(p)
+
+    for sp in store.get("signposts") or []:
+        _add(sp.get("text", ""))
+
+    for p in (store.get("promotionInfo") or {}).get("promotions") or []:
+        title = (p.get("title") or "").strip()
+        if not title:
+            continue
+        override: dict = {}
+        if p.get("discountValue") is not None:
+            override["value"] = float(p["discountValue"])
+        if p.get("minOrderValue") is not None:
+            override["min_order"] = round(p["minOrderValue"] / 100, 2)
+        _add(title, override)
+
+    fare = store.get("fareInfo") or {}
+    deal_label = (fare.get("serviceFeeDeal") or {}).get("label") or (fare.get("serviceFeeDeal") or {}).get("title") or ""
+    if deal_label:
+        _add(deal_label)
+
+    return promos
 
 
 def _parse_fee(val: str | None) -> float | None:
