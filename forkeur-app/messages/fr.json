@@ -73,6 +73,12 @@
     "free_delivery": "Livraison gratuite",
     "free_item": "Article offert"
   },
+  "card": {
+    "direct_cta_ordering": "Commander directement",
+    "direct_cta_menu": "Voir le menu",
+    "direct_cta_website": "Site du restaurant",
+    "direct_cta_phone": "Appeler pour commander"
+  },
   "meta": {
     "home_title": "Forkeur — Comparez les prix des restos à Bruxelles",
     "home_description": "Comparez les prix des restaurants sur UberEats, Deliveroo et Takeaway à Bruxelles.",

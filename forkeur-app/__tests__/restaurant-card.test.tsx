@@ -94,6 +94,23 @@ const withDirectMenu: RestaurantSummary = {
   cheapest: { platform: 'uber_eats', fee_label: '€2.99', savings_cents: 0 },
 }
 
+const withNullUrlType: RestaurantSummary = {
+  id: '8',
+  name: 'Mystery Direct',
+  cuisine: ['Other'],
+  neighborhood: null,
+  lat: null,
+  lng: null,
+  order_url: 'https://mystery.be',
+  image_url: null,
+  rating: null,
+  direct_url_type: null,
+  listings: [
+    { platform: 'uber_eats', delivery_fee_cents: 199 },
+  ],
+  cheapest: { platform: 'uber_eats', fee_label: '€1.99', savings_cents: 0 },
+}
+
 describe('RestaurantCard', () => {
   it('shows all 3 platform fees when 3 listings exist', () => {
     render(<RestaurantCard restaurant={threeListings} directBadge="Commander directement · sans frais" />)
@@ -148,5 +165,10 @@ describe('RestaurantCard', () => {
     }
     render(<RestaurantCard restaurant={withWebsite} directBadge="Restaurant website" />)
     expect(screen.getByRole('link', { name: 'Restaurant website' })).toBeInTheDocument()
+  })
+
+  it('does not render direct pill when direct_url_type is null even if order_url is set', () => {
+    render(<RestaurantCard restaurant={withNullUrlType} directBadge="Should not appear" />)
+    expect(screen.queryByRole('link', { name: 'Should not appear' })).toBeNull()
   })
 })

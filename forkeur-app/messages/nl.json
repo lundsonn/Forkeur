@@ -73,6 +73,12 @@
     "free_delivery": "Gratis bezorging",
     "free_item": "Gratis artikel"
   },
+  "card": {
+    "direct_cta_ordering": "Rechtstreeks bestellen",
+    "direct_cta_menu": "Menu bekijken",
+    "direct_cta_website": "Website restaurant",
+    "direct_cta_phone": "Bellen om te bestellen"
+  },
   "meta": {
     "home_title": "Forkeur — Vergelijk voedselprijzen in Brussel",
     "home_description": "Vergelijk restaurantprijzen op UberEats, Deliveroo en Takeaway in Brussel.",

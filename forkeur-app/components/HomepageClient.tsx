@@ -24,6 +24,7 @@ export default function HomepageClient({
   const tFilters = useTranslations('filters')
   const tResults = useTranslations('results')
   const tDirect = useTranslations('direct')
+  const tCard = useTranslations('card')
 
   const filtered = useMemo(
     () =>
@@ -136,11 +137,15 @@ export default function HomepageClient({
                   restaurant={r}
                   isLast={i === filtered.length - 1}
                   directBadge={
-                    r.direct_url_type === 'menu'
-                      ? tDirect('badge_menu')
-                      : r.direct_url_type === 'website'
-                        ? tDirect('badge_website')
-                        : tDirect('badge')
+                    r.direct_url_type === 'ordering'
+                      ? tCard('direct_cta_ordering')
+                      : r.direct_url_type === 'menu'
+                        ? tCard('direct_cta_menu')
+                        : r.direct_url_type === 'website'
+                          ? tCard('direct_cta_website')
+                          : r.direct_url_type === 'phone'
+                            ? tCard('direct_cta_phone')
+                            : tDirect('badge')
                   }
                 />
               </Link>

@@ -15,7 +15,7 @@ type Props = {
 }
 
 export default function RestaurantCard({ restaurant, isLast, directBadge }: Props) {
-  const { name, cuisine, listings, cheapest, order_url } = restaurant
+  const { name, cuisine, listings, cheapest, order_url, direct_url_type } = restaurant
 
   const tiles = listings.filter((l) => l.delivery_fee_cents !== null)
 
@@ -29,7 +29,7 @@ export default function RestaurantCard({ restaurant, isLast, directBadge }: Prop
         <span aria-hidden="true" className="text-stone-300 text-xs ml-4 shrink-0 mt-0.5">›</span>
       </div>
 
-      {order_url && (
+      {order_url && direct_url_type && (
         <a
           href={order_url}
           target="_blank"

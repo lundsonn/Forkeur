@@ -73,6 +73,12 @@
     "free_delivery": "Free delivery",
     "free_item": "Free item"
   },
+  "card": {
+    "direct_cta_ordering": "Order directly",
+    "direct_cta_menu": "View menu",
+    "direct_cta_website": "Restaurant website",
+    "direct_cta_phone": "Call to order"
+  },
   "meta": {
     "home_title": "Forkeur — Compare food prices in Brussels",
     "home_description": "Compare restaurant prices across UberEats, Deliveroo, and Takeaway in Brussels.",
