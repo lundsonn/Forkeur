@@ -137,7 +137,20 @@ export async function getRestaurants(): Promise<{
         },
       }
     })
-    .sort((a, b) => (b.cheapest?.savings_cents ?? 0) - (a.cheapest?.savings_cents ?? 0))
+    .sort((a, b) => {
+      // Tier 1: self-delivery (order_url) restaurants float to the top
+      const selfA = a.order_url ? 1 : 0
+      const selfB = b.order_url ? 1 : 0
+      if (selfA !== selfB) return selfB - selfA
+
+      // Tier 2-4: more platform coverage first (3 > 2 > 1 > 0)
+      const countA = a.listings.filter((l) => l.delivery_fee_cents !== null).length
+      const countB = b.listings.filter((l) => l.delivery_fee_cents !== null).length
+      if (countA !== countB) return countB - countA
+
+      // Within a tier: biggest delivery-fee savings first
+      return (b.cheapest?.savings_cents ?? 0) - (a.cheapest?.savings_cents ?? 0)
+    })
 
   const cuisines = [
     ...new Set(restaurants.flatMap((r) => r.cuisine).filter(Boolean)),
