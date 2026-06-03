@@ -32,9 +32,18 @@ export default function ClaimForm({ restaurantId, restaurantName }: Props) {
       }
       setState('success')
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Erreur inconnue')
+      console.error('[ClaimForm]', err)
+      setErrorMsg('Une erreur est survenue. Veuillez réessayer.')
       setState('error')
     }
+  }
+
+  function handleCancel() {
+    setOpen(false)
+    setEmail('')
+    setUrl('')
+    setState('idle')
+    setErrorMsg('')
   }
 
   if (!open) {
@@ -103,7 +112,7 @@ export default function ClaimForm({ restaurantId, restaurantName }: Props) {
         </button>
         <button
           type="button"
-          onClick={() => setOpen(false)}
+          onClick={handleCancel}
           className="px-4 py-2 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-sm font-semibold transition-colors"
         >
           Annuler

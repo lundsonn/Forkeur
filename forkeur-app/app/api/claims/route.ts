@@ -3,12 +3,29 @@ import { NextRequest, NextResponse } from 'next/server'
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8000'
 
 export async function POST(req: NextRequest) {
-  const body = await req.json()
-  const res = await fetch(`${BACKEND}/api/claims`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const data = await res.json()
-  return NextResponse.json(data, { status: res.status })
+  try {
+    const raw = await req.json()
+
+    const restaurant_id = typeof raw?.restaurant_id === 'string' ? raw.restaurant_id.trim() : null
+    const owner_email = typeof raw?.owner_email === 'string' ? raw.owner_email.trim() : null
+    const direct_order_url = typeof raw?.direct_order_url === 'string' ? raw.direct_order_url.trim() : null
+
+    if (!restaurant_id || !owner_email || !direct_order_url) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    }
+
+    const res = await fetch(`${BACKEND}/api/claims`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ restaurant_id, owner_email, direct_order_url }),
+    })
+
+    const text = await res.text()
+    let data: unknown
+    try { data = JSON.parse(text) } catch { data = { error: text } }
+    return NextResponse.json(data, { status: res.status })
+  } catch (err) {
+    console.error('[claims proxy]', err)
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  }
 }
