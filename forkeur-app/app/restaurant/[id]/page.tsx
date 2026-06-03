@@ -1,7 +1,20 @@
+import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getRestaurantWithListings } from '@/lib/queries'
 import BasketSimulator from '@/components/BasketSimulator'
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}): Promise<Metadata> {
+  const { id } = await params
+  const data = await getRestaurantWithListings(id)
+  return {
+    title: data?.name ?? "Restaurant",
+  }
+}
 
 export default async function Page({
   params,

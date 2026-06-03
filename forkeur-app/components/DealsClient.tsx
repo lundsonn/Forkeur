@@ -16,15 +16,27 @@ const PLATFORM_META: Record<string, { name: string; color: string }> = {
   takeaway: { name: 'Takeaway', color: 'bg-orange-500 text-white' },
 }
 
+type ActiveSet = Set<Exclude<DealFilter, 'all'>>
+
 export default function DealsClient({ deals }: { deals: DealItem[] }) {
-  const [filter, setFilter] = useState<DealFilter>('all')
+  const [active, setActive] = useState<ActiveSet>(new Set())
 
   const counts = useMemo(() => filterCounts(deals), [deals])
 
   const visible = useMemo(() => {
-    const matched = deals.filter((d) => matchesFilter(d, filter))
-    return sortDeals(matched, filter)
-  }, [deals, filter])
+    const matched = deals.filter((d) => matchesFilter(d, active))
+    return sortDeals(matched, active)
+  }, [deals, active])
+
+  function toggle(key: DealFilter) {
+    if (key === 'all') { setActive(new Set()); return }
+    setActive((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   return (
     <div className="max-w-md mx-auto px-5">
@@ -52,13 +64,13 @@ export default function DealsClient({ deals }: { deals: DealItem[] }) {
       {/* Filter pills */}
       <div className="flex gap-2 overflow-x-auto pb-2 mb-5 scrollbar-hide">
         {DEAL_FILTERS.map(({ key, label }) => {
-          const isActive = filter === key
+          const isActive = key === 'all' ? active.size === 0 : active.has(key)
           const count = counts[key]
           if (key !== 'all' && count === 0) return null
           return (
             <button
               key={key}
-              onClick={() => setFilter(key)}
+              onClick={() => toggle(key)}
               className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                 isActive
                   ? 'text-white border-transparent'

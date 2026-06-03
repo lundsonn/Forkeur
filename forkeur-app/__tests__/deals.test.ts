@@ -1,13 +1,18 @@
 import { describe, it, expect } from 'vitest'
 import {
   matchesFilter,
+  matchesPill,
   filterCounts,
   dealBand,
   sortDeals,
   badgeText,
   qualityScore,
   type DealItem,
+  type DealFilter,
 } from '@/lib/deals'
+
+type ActiveSet = Set<Exclude<DealFilter, 'all'>>
+const s = (...keys: Exclude<DealFilter, 'all'>[]): ActiveSet => new Set(keys)
 
 function deal(overrides: Partial<DealItem>): DealItem {
   return {
@@ -27,14 +32,26 @@ function deal(overrides: Partial<DealItem>): DealItem {
   }
 }
 
-describe('matchesFilter', () => {
-  it('pct filter folds in abs_discount', () => {
-    expect(matchesFilter(deal({ promo_type: 'pct_discount' }), 'pct')).toBe(true)
-    expect(matchesFilter(deal({ promo_type: 'abs_discount' }), 'pct')).toBe(true)
-    expect(matchesFilter(deal({ promo_type: 'free_delivery' }), 'pct')).toBe(false)
+describe('matchesPill', () => {
+  it('pct folds in abs_discount', () => {
+    expect(matchesPill(deal({ promo_type: 'pct_discount' }), 'pct')).toBe(true)
+    expect(matchesPill(deal({ promo_type: 'abs_discount' }), 'pct')).toBe(true)
+    expect(matchesPill(deal({ promo_type: 'free_delivery' }), 'pct')).toBe(false)
   })
-  it('all matches everything', () => {
-    expect(matchesFilter(deal({ promo_type: 'free_item' }), 'all')).toBe(true)
+})
+
+describe('matchesFilter', () => {
+  it('empty set matches everything', () => {
+    expect(matchesFilter(deal({ promo_type: 'free_item' }), s())).toBe(true)
+  })
+  it('single filter', () => {
+    expect(matchesFilter(deal({ promo_type: 'bogo' }), s('bogo'))).toBe(true)
+    expect(matchesFilter(deal({ promo_type: 'free_delivery' }), s('bogo'))).toBe(false)
+  })
+  it('multi-filter: OR logic', () => {
+    const d = deal({ promo_type: 'free_delivery' })
+    expect(matchesFilter(d, s('bogo', 'free_delivery'))).toBe(true)
+    expect(matchesFilter(d, s('bogo', 'pct'))).toBe(false)
   })
 })
 
@@ -78,32 +95,39 @@ describe('qualityScore', () => {
 })
 
 describe('sortDeals', () => {
-  it('pct: discount value desc, quality tiebreak', () => {
+  it('single pct: discount value desc, quality tiebreak', () => {
     const a = deal({ promo_type: 'pct_discount', value: 20, rating: 5, review_count: 999 })
     const b = deal({ promo_type: 'pct_discount', value: 50, rating: 3, review_count: 1 })
     const c = deal({ promo_type: 'pct_discount', value: 50, rating: 5, review_count: 999 })
-    const out = sortDeals([a, b, c], 'pct')
+    const out = sortDeals([a, b, c], s('pct'))
     expect(out.map((d) => d.value)).toEqual([50, 50, 20])
-    expect(out[0]).toBe(c) // higher quality wins the 50 tie
+    expect(out[0]).toBe(c)
   })
 
-  it('quality-only filters sort by quality desc', () => {
+  it('single quality-only filter: quality desc', () => {
     const weak = deal({ promo_type: 'bogo', rating: 3, review_count: 2 })
     const strong = deal({ promo_type: 'bogo', rating: 4.9, review_count: 500 })
-    expect(sortDeals([weak, strong], 'bogo')[0]).toBe(strong)
+    expect(sortDeals([weak, strong], s('bogo'))[0]).toBe(strong)
   })
 
-  it('all: band asc then quality desc', () => {
+  it('empty set (all): band asc then quality desc', () => {
     const absDeal = deal({ promo_type: 'abs_discount', value: 5, rating: 5, review_count: 999 })
     const bogoDeal = deal({ promo_type: 'bogo', rating: 1, review_count: 1 })
-    const out = sortDeals([absDeal, bogoDeal], 'all')
-    expect(out[0]).toBe(bogoDeal) // band 0 beats band 4 despite worse quality
+    const out = sortDeals([absDeal, bogoDeal], s())
+    expect(out[0]).toBe(bogoDeal)
+  })
+
+  it('multi-select: band asc then quality desc', () => {
+    const fd = deal({ promo_type: 'free_delivery', rating: 5, review_count: 999 })
+    const bogo = deal({ promo_type: 'bogo', rating: 1, review_count: 1 })
+    const out = sortDeals([fd, bogo], s('bogo', 'free_delivery'))
+    expect(out[0]).toBe(bogo) // band 0 beats band 2 despite worse quality
   })
 
   it('is pure (does not mutate input)', () => {
     const input = [deal({ value: 10 }), deal({ value: 20 })]
     const snapshot = [...input]
-    sortDeals(input, 'pct')
+    sortDeals(input, s('pct'))
     expect(input).toEqual(snapshot)
   })
 })

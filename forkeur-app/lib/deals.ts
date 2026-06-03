@@ -33,14 +33,22 @@ export const DEAL_FILTERS: { key: DealFilter; label: string }[] = [
   { key: 'free_item', label: 'Free Item' },
 ]
 
-/** Does a deal belong under the given filter pill? */
-export function matchesFilter(d: DealItem, filter: DealFilter): boolean {
-  if (filter === 'all') return true
-  if (filter === 'pct') return d.promo_type === 'pct_discount' || d.promo_type === 'abs_discount'
-  return d.promo_type === filter
+/** Does a deal match a single pill key? */
+export function matchesPill(d: DealItem, key: Exclude<DealFilter, 'all'>): boolean {
+  if (key === 'pct') return d.promo_type === 'pct_discount' || d.promo_type === 'abs_discount'
+  return d.promo_type === key
 }
 
-/** Live counts per filter pill. */
+/**
+ * Does a deal pass the active selection?
+ * Empty set or 'all' = show everything.
+ */
+export function matchesFilter(d: DealItem, active: Set<Exclude<DealFilter, 'all'>>): boolean {
+  if (active.size === 0) return true
+  return [...active].some((key) => matchesPill(d, key))
+}
+
+/** Live counts per filter pill (always against full dataset, not current selection). */
 export function filterCounts(deals: DealItem[]): Record<DealFilter, number> {
   const counts: Record<DealFilter, number> = {
     all: deals.length,
@@ -50,10 +58,10 @@ export function filterCounts(deals: DealItem[]): Record<DealFilter, number> {
     free_item: 0,
   }
   for (const d of deals) {
-    if (matchesFilter(d, 'bogo')) counts.bogo++
-    if (matchesFilter(d, 'pct')) counts.pct++
-    if (matchesFilter(d, 'free_delivery')) counts.free_delivery++
-    if (matchesFilter(d, 'free_item')) counts.free_item++
+    if (matchesPill(d, 'bogo')) counts.bogo++
+    if (matchesPill(d, 'pct')) counts.pct++
+    if (matchesPill(d, 'free_delivery')) counts.free_delivery++
+    if (matchesPill(d, 'free_item')) counts.free_item++
   }
   return counts
 }
@@ -83,20 +91,23 @@ export function dealBand(d: DealItem): number {
 }
 
 /**
- * Sort deals for display given the active filter.
- *  - pct: discount value desc, quality tiebreak
- *  - bogo / free_delivery / free_item: quality desc
- *  - all: band asc, then quality desc
+ * Sort deals for display given the active selection.
+ *  - exactly {pct}: discount value desc, quality tiebreak
+ *  - exactly {bogo|free_delivery|free_item}: quality desc
+ *  - empty (all) or multiple: band asc, then quality desc
  * Pure: returns a new array.
  */
-export function sortDeals(deals: DealItem[], filter: DealFilter): DealItem[] {
+export function sortDeals(deals: DealItem[], active: Set<Exclude<DealFilter, 'all'>>): DealItem[] {
   const out = [...deals]
-  if (filter === 'pct') {
-    out.sort((a, b) => (b.value ?? 0) - (a.value ?? 0) || qualityScore(b) - qualityScore(a))
-  } else if (filter === 'all') {
-    out.sort((a, b) => dealBand(a) - dealBand(b) || qualityScore(b) - qualityScore(a))
+  if (active.size === 1) {
+    const [only] = active
+    if (only === 'pct') {
+      out.sort((a, b) => (b.value ?? 0) - (a.value ?? 0) || qualityScore(b) - qualityScore(a))
+    } else {
+      out.sort((a, b) => qualityScore(b) - qualityScore(a))
+    }
   } else {
-    out.sort((a, b) => qualityScore(b) - qualityScore(a))
+    out.sort((a, b) => dealBand(a) - dealBand(b) || qualityScore(b) - qualityScore(a))
   }
   return out
 }
