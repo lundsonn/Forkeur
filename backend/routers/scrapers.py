@@ -1,19 +1,27 @@
 from __future__ import annotations
 import asyncio
 from fastapi import APIRouter, HTTPException
-from models import RunTriggerOut, ScraperStatusOut, ScraperConfig, RunTriggerIn
+from models import RunTriggerOut, ScraperStatusOut, ScraperConfig, RunTriggerIn, ScraperResult
 import db
 import ws as ws_mod
-from scrapers import ubereats, deliveroo, takeaway, fees, direct
+from scrapers import ubereats, deliveroo, takeaway, fees, direct, direct_menu
 from scrapers.base import CloudflareBlockedError
 
 router = APIRouter(prefix="/scrapers", tags=["scrapers"])
+
+
+async def _direct_menu_adapter(config: ScraperConfig, log_fn) -> ScraperResult:
+    """Adapter to run direct_menu.run() via the standard (config, log_fn) interface."""
+    result = direct_menu.run(max_items=config.max_items)
+    return ScraperResult(records_saved=result.get("total_scraped", 0))
+
 
 SCRAPERS = {
     "ubereats": ubereats.run,
     "deliveroo": deliveroo.run,
     "takeaway": takeaway.run,
     "direct": direct.run,
+    "direct_menu": _direct_menu_adapter,
 }
 
 # Track currently running platforms
@@ -106,7 +114,7 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
 async def get_status():
     last_runs = db.get_last_run_per_platform()
     result = []
-    for platform in ("ubereats", "deliveroo", "takeaway", "direct"):
+    for platform in ("ubereats", "deliveroo", "takeaway", "direct", "direct_menu"):
         last = last_runs.get(platform)
         status = "running" if platform in _running else (last["status"] if last else "idle")
         result.append(ScraperStatusOut(

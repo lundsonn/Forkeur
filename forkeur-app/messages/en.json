@@ -38,7 +38,10 @@
     "items": "{count, plural, one {# item} other {# items}}",
     "best": "Best:",
     "direct_savings": "~{fee} in platform fees saved",
-    "direct_order_cta": "Order directly →"
+    "direct_order_cta": "Order directly →",
+    "direct_savings_banner": "Ordering directly saves you {amount}",
+    "direct_savings_subtitle": "Same dishes · no platform fees",
+    "direct_order_btn": "Order →"
   },
   "compare": {
     "best_now": "Best right now",

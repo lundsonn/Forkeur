@@ -38,7 +38,10 @@
     "items": "{count, plural, one {# artikel} other {# artikelen}}",
     "best": "Beste:",
     "direct_savings": "~{fee} aan platformkosten bespaard",
-    "direct_order_cta": "Direct bestellen →"
+    "direct_order_cta": "Direct bestellen →",
+    "direct_savings_banner": "Direct bestellen bespaart u {amount}",
+    "direct_savings_subtitle": "Dezelfde gerechten · zonder platformkosten",
+    "direct_order_btn": "Bestellen →"
   },
   "compare": {
     "best_now": "Beste aanbieding",

@@ -38,7 +38,10 @@
     "items": "{count, plural, one {# article} other {# articles}}",
     "best": "Meilleur :",
     "direct_savings": "~{fee} de frais de plateforme économisés",
-    "direct_order_cta": "Commander directement →"
+    "direct_order_cta": "Commander directement →",
+    "direct_savings_banner": "Commander directement vous économise {amount}",
+    "direct_savings_subtitle": "Mêmes plats · sans frais de plateforme",
+    "direct_order_btn": "Commander →"
   },
   "compare": {
     "best_now": "Meilleur prix",

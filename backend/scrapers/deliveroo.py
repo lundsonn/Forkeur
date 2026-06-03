@@ -23,7 +23,7 @@ LISTING_ZONES = [
     "Rue de Fiennes 1, 1140 Bruxelles",        # Evere
     "Avenue de Tervuren 1, 1150 Bruxelles",    # Woluwe-Saint-Pierre
     "Chaussée de Wavre 1, 1160 Bruxelles",     # Auderghem
-    "Chaussée d'Alsemberg 1, 1180 Bruxelles",  # Uccle
+    "Avenue Brugmann 1, 1180 Bruxelles",       # Uccle
     "Rue de Forest 1, 1190 Bruxelles",         # Forest
     "Avenue de Tervuren 200, 1200 Bruxelles",  # Woluwe-Saint-Lambert
     "Rue Rogier 1, 1210 Bruxelles",            # Saint-Josse

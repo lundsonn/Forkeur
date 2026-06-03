@@ -18,8 +18,22 @@ def _noop(line: str) -> None:
 
 
 async def _run_scraper(platform: str) -> None:
-    from scrapers import ubereats, deliveroo, takeaway, direct
-    SCRAPERS = {"ubereats": ubereats.run, "deliveroo": deliveroo.run, "takeaway": takeaway.run, "direct": direct.run}
+    from scrapers import ubereats, deliveroo, takeaway, direct, direct_menu
+    SCRAPERS = {
+        "ubereats": ubereats.run,
+        "deliveroo": deliveroo.run,
+        "takeaway": takeaway.run,
+        "direct": direct.run,
+    }
+
+    if platform == "direct_menu":
+        run_id = db.create_run(platform)
+        try:
+            result = direct_menu.run()
+            db.finish_run(run_id, "success", records_saved=result.get("total_scraped", 0))
+        except Exception as e:
+            db.finish_run(run_id, "failed", error_msg=str(e))
+        return
 
     run_id = db.create_run(platform)
     try:

@@ -67,6 +67,47 @@ export function centsToEuro(cents: number | null): string {
   return `€${(cents / 100).toFixed(2)}`
 }
 
+export type DirectOverlap = {
+  matchedCount: number
+  basketCount: number
+  thresholdMet: boolean
+}
+
+export function computeDirectOverlap(items: BasketItem[]): DirectOverlap {
+  const activeItems = items.filter(b => b.qty > 0)
+  const basketCount = activeItems.length
+  const matchedCount = activeItems.filter(b => b.prices.direct !== null).length
+  const thresholdMet = matchedCount >= 3 && basketCount > 0 && matchedCount / basketCount >= 0.5
+  return { matchedCount, basketCount, thresholdMet }
+}
+
+export function computeDirectSubtotal(items: BasketItem[]): number {
+  return items.reduce((sum, b) => {
+    const price = b.prices.direct
+    return price !== null ? sum + price * b.qty : sum
+  }, 0)
+}
+
+export function computeDirectSavingsCents(
+  items: BasketItem[],
+  fees: PlatformFees
+): number | null {
+  const overlap = computeDirectOverlap(items)
+  if (!overlap.thresholdMet) return null
+
+  const nonDirectTotals = PLATFORMS
+    .filter(p => p !== 'direct')
+    .map(p => calculatePlatformTotal(items, p, fees[p]))
+    .filter((t): t is number => t !== null)
+
+  if (nonDirectTotals.length === 0) return null
+
+  const cheapestPlatformTotal = Math.min(...nonDirectTotals)
+  const directSubtotal = computeDirectSubtotal(items)
+  const savings = cheapestPlatformTotal - directSubtotal
+  return savings > 0 ? savings : null
+}
+
 export const PLATFORM_COLORS: Record<Platform, { dot: string; label: string; ring: string }> = {
   uber_eats:  { dot: 'bg-green-500',  label: 'text-green-600',  ring: 'border-green-500' },
   deliveroo:  { dot: 'bg-cyan-500',   label: 'text-cyan-600',   ring: 'border-cyan-500'  },

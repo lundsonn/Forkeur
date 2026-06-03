@@ -12,6 +12,7 @@ import {
   calculateAllTotals,
   findCheapestPlatform,
   centsToEuro,
+  computeDirectSavingsCents,
 } from '@/lib/basket'
 import { MenuItemWithPrices, PlatformListing } from '@/lib/queries'
 import CompareSheet from './CompareSheet'
@@ -84,6 +85,11 @@ export default function BasketSimulator({ menuItems, listings, phone }: Props) {
 
   const totals = useMemo(() => calculateAllTotals(basket, fees), [basket, fees])
   const cheapestPlatform = useMemo(() => findCheapestPlatform(totals), [totals])
+
+  const directSavingsCents = useMemo(
+    () => computeDirectSavingsCents(basket, fees),
+    [basket, fees]
+  )
 
   const grouped = useMemo(() => {
     const map = new Map<string, MenuItemWithPrices[]>()
@@ -280,9 +286,17 @@ export default function BasketSimulator({ menuItems, listings, phone }: Props) {
                         {PLATFORMS.map((platform) => {
                           const price = item.prices[platform]
                           const isCheapest = platform === cheapest && price !== null
+                          const isDirectCheapest = platform === 'direct' && isCheapest
+                          const priceClass = isDirectCheapest
+                            ? 'font-semibold text-orange-500'
+                            : isCheapest
+                              ? 'font-semibold text-green-600'
+                              : price !== null
+                                ? 'text-stone-500'
+                                : 'text-stone-300'
                           return (
                             <td key={platform} className="text-center py-3 w-14">
-                              <span className={`text-xs ${isCheapest ? 'font-semibold text-green-600' : price !== null ? 'text-stone-500' : 'text-stone-300'}`}>
+                              <span className={`text-xs ${priceClass}`}>
                                 {price !== null ? centsToEuro(price) : '—'}
                               </span>
                             </td>
@@ -324,6 +338,32 @@ export default function BasketSimulator({ menuItems, listings, phone }: Props) {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Direct ordering savings banner */}
+      {directSavingsCents !== null && basket.length > 0 && (
+        <div className="mb-4 p-3.5 rounded-xl bg-orange-50 border border-orange-200">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-bold text-orange-700">
+                {tBasket('direct_savings_banner', { amount: centsToEuro(directSavingsCents) })}
+              </p>
+              <p className="text-xs text-orange-500 mt-0.5">
+                {tBasket('direct_savings_subtitle')}
+              </p>
+            </div>
+            {listings.find(l => l.platform === 'direct')?.platform_url && (
+              <a
+                href={listings.find(l => l.platform === 'direct')!.platform_url!}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 px-3 py-1.5 rounded-lg bg-orange-500 text-white text-xs font-semibold hover:bg-orange-600 transition-colors"
+              >
+                {tBasket('direct_order_btn')}
+              </a>
+            )}
+          </div>
         </div>
       )}
 

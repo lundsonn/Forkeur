@@ -5,8 +5,12 @@ import {
   calculateAllTotals,
   findCheapestPlatform,
   centsToEuro,
+  computeDirectOverlap,
+  computeDirectSubtotal,
+  computeDirectSavingsCents,
   type BasketItem,
   type PlatformTotals,
+  type PlatformFees,
 } from '../lib/basket'
 
 const twoItems: BasketItem[] = [
@@ -84,5 +88,116 @@ describe('centsToEuro', () => {
 
   it('returns "—" for null', () => {
     expect(centsToEuro(null)).toBe('—')
+  })
+})
+
+const standardFees: PlatformFees = {
+  uber_eats: 249,
+  deliveroo: 199,
+  takeaway: 299,
+  direct: null,
+}
+
+describe('computeDirectOverlap', () => {
+  it('below threshold: fewer than 3 matched items', () => {
+    const items: BasketItem[] = [
+      { name: 'A', qty: 1, prices: { uber_eats: 500, deliveroo: 500, takeaway: 500, direct: 500 } },
+      { name: 'B', qty: 1, prices: { uber_eats: 500, deliveroo: 500, takeaway: 500, direct: 500 } },
+    ]
+    const result = computeDirectOverlap(items)
+    expect(result.thresholdMet).toBe(false)
+    expect(result.matchedCount).toBe(2)
+  })
+
+  it('threshold met: exactly 3 matched items, 100% basket', () => {
+    const items: BasketItem[] = [
+      { name: 'A', qty: 1, prices: { uber_eats: 500, deliveroo: 500, takeaway: 500, direct: 500 } },
+      { name: 'B', qty: 1, prices: { uber_eats: 500, deliveroo: 500, takeaway: 500, direct: 500 } },
+      { name: 'C', qty: 1, prices: { uber_eats: 500, deliveroo: 500, takeaway: 500, direct: 500 } },
+    ]
+    expect(computeDirectOverlap(items).thresholdMet).toBe(true)
+  })
+
+  it('boundary: 3 matched out of 6 = exactly 50%', () => {
+    const m = { uber_eats: 500, deliveroo: 500, takeaway: 500, direct: 500 }
+    const u = { uber_eats: 500, deliveroo: 500, takeaway: 500, direct: null }
+    const items: BasketItem[] = [
+      { name: 'A', qty: 1, prices: m },
+      { name: 'B', qty: 1, prices: m },
+      { name: 'C', qty: 1, prices: m },
+      { name: 'D', qty: 1, prices: u },
+      { name: 'E', qty: 1, prices: u },
+      { name: 'F', qty: 1, prices: u },
+    ]
+    expect(computeDirectOverlap(items).thresholdMet).toBe(true)
+  })
+
+  it('below threshold: 3 matched out of 7 < 50%', () => {
+    const m = { uber_eats: 500, deliveroo: 500, takeaway: 500, direct: 500 }
+    const u = { uber_eats: 500, deliveroo: 500, takeaway: 500, direct: null }
+    const items: BasketItem[] = [
+      { name: 'A', qty: 1, prices: m },
+      { name: 'B', qty: 1, prices: m },
+      { name: 'C', qty: 1, prices: m },
+      { name: 'D', qty: 1, prices: u },
+      { name: 'E', qty: 1, prices: u },
+      { name: 'F', qty: 1, prices: u },
+      { name: 'G', qty: 1, prices: u },
+    ]
+    expect(computeDirectOverlap(items).thresholdMet).toBe(false)
+  })
+
+  it('ignores items with qty=0', () => {
+    const m = { uber_eats: 500, deliveroo: 500, takeaway: 500, direct: 500 }
+    const items: BasketItem[] = [
+      { name: 'A', qty: 0, prices: m },
+      { name: 'B', qty: 1, prices: m },
+      { name: 'C', qty: 1, prices: m },
+      { name: 'D', qty: 1, prices: m },
+    ]
+    const result = computeDirectOverlap(items)
+    expect(result.basketCount).toBe(3)
+    expect(result.matchedCount).toBe(3)
+  })
+})
+
+describe('computeDirectSubtotal', () => {
+  it('sums price * qty for items with direct prices, skips others', () => {
+    const items: BasketItem[] = [
+      { name: 'A', qty: 2, prices: { uber_eats: 100, deliveroo: 100, takeaway: 100, direct: 500 } },
+      { name: 'B', qty: 1, prices: { uber_eats: 100, deliveroo: 100, takeaway: 100, direct: null } },
+    ]
+    expect(computeDirectSubtotal(items)).toBe(1000)
+  })
+})
+
+describe('computeDirectSavingsCents — three alert states', () => {
+  const makeItems = (directPrices: number[]): BasketItem[] =>
+    directPrices.map((d, i) => ({
+      name: `Item${i}`,
+      qty: 1,
+      prices: { uber_eats: 1000, deliveroo: 900, takeaway: 1100, direct: d },
+    }))
+
+  it('state 1: direct cheaper + threshold met → positive savings', () => {
+    // 3 items: direct=600 each, cheapest platform=deliveroo: 3*900+199=2899, direct=3*600=1800
+    const items = makeItems([600, 600, 600])
+    const savings = computeDirectSavingsCents(items, standardFees)
+    expect(savings).toBe(2899 - 1800)  // 1099
+  })
+
+  it('state 2: direct same/higher + threshold met → null', () => {
+    // 3 items: direct=1200 each → direct subtotal > cheapest platform total
+    const items = makeItems([1200, 1200, 1200])
+    expect(computeDirectSavingsCents(items, standardFees)).toBeNull()
+  })
+
+  it('state 3: below threshold → null regardless of price', () => {
+    // Only 2 matched items
+    const items: BasketItem[] = [
+      { name: 'A', qty: 1, prices: { uber_eats: 1000, deliveroo: 900, takeaway: 1100, direct: 500 } },
+      { name: 'B', qty: 1, prices: { uber_eats: 1000, deliveroo: 900, takeaway: 1100, direct: 500 } },
+    ]
+    expect(computeDirectSavingsCents(items, standardFees)).toBeNull()
   })
 })

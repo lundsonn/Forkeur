@@ -226,6 +226,16 @@ export async function getDeals(): Promise<DealItem[]> {
   })
 }
 
+export function normalizeTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 export async function getRestaurantWithListings(
   id: string
 ): Promise<RestaurantDetail | null> {
@@ -264,7 +274,7 @@ export async function getRestaurantWithListings(
   for (const listing of (data.platform_listings ?? []) as any[]) {
     const platform = listing.platform as Platform
     for (const item of listing.menu_items ?? []) {
-      const key = item.title
+      const key = normalizeTitle(item.title)
       if (!itemMap.has(key)) {
         itemMap.set(key, {
           name: item.title,
