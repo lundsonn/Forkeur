@@ -203,6 +203,11 @@ def upsert_promotions(listing_id: str, promotions: list[dict]) -> int:
     return len(res.data)
 
 
+def delete_menu_items(listing_id: str) -> None:
+    """Delete all menu items for a listing."""
+    get_client().table("menu_items").delete().eq("listing_id", listing_id).execute()
+
+
 def insert_menu_items(listing_id: str, items: list[dict]) -> int:
     """Delete existing items for listing, insert new ones. Returns count."""
     client = get_client()

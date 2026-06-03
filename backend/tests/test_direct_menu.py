@@ -588,6 +588,7 @@ class TestRun:
 
         with (
             patch("scrapers.direct_menu.db.get_client", return_value=db_client_mock),
+            patch("scrapers.direct_menu.db.delete_menu_items") as mock_delete,
             patch("scrapers.direct_menu.db.insert_menu_items") as mock_insert,
             patch("httpx.Client") as mock_http_cls,
         ):
@@ -605,6 +606,10 @@ class TestRun:
         assert result["listings_processed"] == 3
         assert result["total_scraped"] == 16  # 5 + 5 + 6
         assert result["errors"] == []
+        # delete must be called once per listing, before insert
+        assert mock_delete.call_count == 3
+        deleted_ids = [call.args[0] for call in mock_delete.call_args_list]
+        assert deleted_ids == ["listing-sq", "listing-odoo", "listing-piki"]
 
     def test_run_continues_after_per_listing_error(self, mock_listings):
         db_client_mock = MagicMock()
@@ -613,11 +618,13 @@ class TestRun:
 
         with (
             patch("scrapers.direct_menu.db.get_client", return_value=db_client_mock),
+            patch("scrapers.direct_menu.db.delete_menu_items") as mock_delete,
             patch("scrapers.direct_menu.db.insert_menu_items") as mock_insert,
             patch("httpx.Client") as mock_http_cls,
         ):
-            # First listing raises, second/third succeed
-            mock_insert.side_effect = [RuntimeError("DB error"), 5, 6]
+            # First listing raises on delete, second/third succeed
+            mock_delete.side_effect = [RuntimeError("DB error"), None, None]
+            mock_insert.side_effect = [5, 6]
             http_instance = MagicMock()
             mock_http_cls.return_value.__enter__.return_value = http_instance
             http_instance.get.return_value = _mock_response(404)
@@ -638,6 +645,7 @@ class TestRun:
 
         with (
             patch("scrapers.direct_menu.db.get_client", return_value=db_client_mock),
+            patch("scrapers.direct_menu.db.delete_menu_items") as mock_delete,
             patch("scrapers.direct_menu.db.insert_menu_items") as mock_insert,
             patch("httpx.Client") as mock_http_cls,
         ):
@@ -648,6 +656,8 @@ class TestRun:
 
             result = run(max_items=3)
 
+        # delete was called for the listing before insert
+        mock_delete.assert_called_once_with("listing-sq")
         # insert_menu_items was called with at most 3 items
         call_args = mock_insert.call_args
         inserted_items = call_args[0][1]  # second positional arg = items list
@@ -660,10 +670,12 @@ class TestRun:
 
         with (
             patch("scrapers.direct_menu.db.get_client", return_value=db_client_mock),
+            patch("scrapers.direct_menu.db.delete_menu_items") as mock_delete,
             patch("scrapers.direct_menu.db.insert_menu_items") as mock_insert,
             patch("httpx.Client"),
         ):
             result = run()
 
         assert result == {"total_scraped": 0, "listings_processed": 0, "errors": []}
+        mock_delete.assert_not_called()
         mock_insert.assert_not_called()

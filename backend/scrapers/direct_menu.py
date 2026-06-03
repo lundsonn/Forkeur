@@ -450,6 +450,7 @@ def run(max_items: int | None = None) -> dict[str, Any]:
                         break
                     items = items[:remaining]
 
+                db.delete_menu_items(lid)
                 saved = db.insert_menu_items(lid, items)
                 total_scraped += saved
                 listings_processed += 1
