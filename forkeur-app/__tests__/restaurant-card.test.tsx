@@ -13,6 +13,7 @@ const threeListings: RestaurantSummary = {
   order_url: null,
   image_url: null,
   rating: null,
+  direct_url_type: null,
   listings: [
     { platform: 'uber_eats', delivery_fee_cents: 49 },
     { platform: 'deliveroo', delivery_fee_cents: 149 },
@@ -31,6 +32,7 @@ const nullFees: RestaurantSummary = {
   order_url: null,
   image_url: null,
   rating: null,
+  direct_url_type: null,
   listings: [
     { platform: 'uber_eats', delivery_fee_cents: null },
     { platform: 'deliveroo', delivery_fee_cents: 299 },
@@ -48,6 +50,7 @@ const freeListing: RestaurantSummary = {
   order_url: null,
   image_url: null,
   rating: null,
+  direct_url_type: null,
   listings: [
     { platform: 'uber_eats', delivery_fee_cents: 0 },
     { platform: 'deliveroo', delivery_fee_cents: 99 },

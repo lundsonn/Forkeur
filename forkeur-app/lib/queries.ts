@@ -13,6 +13,7 @@ export type RestaurantSummary = {
   order_url: string | null
   image_url: string | null
   rating: number | null
+  direct_url_type: string | null
   listings: { platform: Platform; delivery_fee_cents: number | null }[]
   cheapest: {
     platform: Platform
@@ -25,6 +26,7 @@ export type PlatformListing = {
   id: string
   platform: Platform
   platform_url: string | null
+  url_type: string | null
   delivery_fee_cents: number | null
   delivery_fee_label: string | null
   min_order_cents: number | null
@@ -81,7 +83,7 @@ export async function getRestaurants(): Promise<{
     .from('restaurants')
     .select(`
       id, name, cuisine, neighborhood, lat, lng, order_url, image_url,
-      platform_listings ( platform, delivery_fee, rating )
+      platform_listings ( platform, delivery_fee, rating, url_type )
     `)
 
   if (error) throw new Error(`getRestaurants: ${error.message}`)
@@ -92,12 +94,16 @@ export async function getRestaurants(): Promise<{
         platform: string
         delivery_fee: number | null
         rating: number | null
+        url_type: string | null
       }[]
 
       const listings = rawListings.map((l) => ({
         platform: l.platform as Platform,
         delivery_fee_cents: feeCents(l.delivery_fee),
       }))
+
+      const directListing = rawListings.find((l) => l.platform === 'direct') ?? null
+      const direct_url_type: string | null = directListing?.url_type ?? null
 
       const bestRating = rawListings.reduce<number | null>((best, l) => {
         if (l.rating == null) return best
@@ -124,6 +130,7 @@ export async function getRestaurants(): Promise<{
           order_url,
           image_url,
           rating: bestRating,
+          direct_url_type,
           listings,
           cheapest: null,
         }
@@ -145,6 +152,7 @@ export async function getRestaurants(): Promise<{
         order_url,
         image_url,
         rating: bestRating,
+        direct_url_type,
         listings,
         cheapest: {
           platform: cheapest.platform,
@@ -228,7 +236,7 @@ export async function getRestaurantWithListings(
     .select(`
       id, name, neighborhood, cuisine, phone, order_url,
       platform_listings (
-        id, platform, url,
+        id, platform, url, url_type,
         delivery_fee, min_order, eta_min, eta_max, rating,
         menu_items ( title, price, catalog_name, image_url, description )
       )
@@ -242,6 +250,7 @@ export async function getRestaurantWithListings(
     id: l.id,
     platform: l.platform as Platform,
     platform_url: l.url ?? null,
+    url_type: l.url_type ?? null,
     delivery_fee_cents: feeCents(l.delivery_fee),
     delivery_fee_label: feeLabel(l.delivery_fee),
     min_order_cents: feeCents(l.min_order),
