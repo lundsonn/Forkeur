@@ -1,0 +1,46 @@
+{
+  "jsonrpc": "2.0",
+  "id": null,
+  "result": [
+    {
+      "id": 42,
+      "name": "Poulet yassa",
+      "list_price": 14.50,
+      "categ_id": [5, "Plats chauds"],
+      "description_sale": "Poulet mariné au citron et oignons, riz basmati",
+      "image_128": "/9j/4AAQ..."
+    },
+    {
+      "id": 43,
+      "name": "Thiéboudienne",
+      "list_price": 13.00,
+      "categ_id": [5, "Plats chauds"],
+      "description_sale": "Riz au poisson sénégalais, légumes",
+      "image_128": null
+    },
+    {
+      "id": 44,
+      "name": "Mafé",
+      "list_price": 12.50,
+      "categ_id": [5, "Plats chauds"],
+      "description_sale": "Ragoût de bœuf sauce arachide, riz",
+      "image_128": null
+    },
+    {
+      "id": 45,
+      "name": "Jus de bissap",
+      "list_price": 3.50,
+      "categ_id": [8, "Boissons"],
+      "description_sale": "Jus d'hibiscus frais",
+      "image_128": null
+    },
+    {
+      "id": 46,
+      "name": "Jus de gingembre",
+      "list_price": 3.50,
+      "categ_id": [8, "Boissons"],
+      "description_sale": null,
+      "image_128": null
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "vendor": {
+    "id": "allo-couscous",
+    "name": "Allo Couscous",
+    "slug": "allo-couscous"
+  },
+  "categories": [
+    {
+      "id": "c1",
+      "name": "Couscous",
+      "items": [
+        {
+          "id": "item-1",
+          "name": "Couscous Royal",
+          "price": 1650,
+          "description": "Merguez, agneau, poulet, légumes",
+          "imageUrl": "https://storage.piki-app.com/items/couscous-royal.jpg"
+        },
+        {
+          "id": "item-2",
+          "name": "Couscous Végétarien",
+          "price": 1200,
+          "description": "Légumes frais de saison",
+          "imageUrl": null
+        },
+        {
+          "id": "item-3",
+          "name": "Couscous Agneau",
+          "price": 1450,
+          "description": "Épaule d'agneau confite",
+          "imageUrl": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "name": "Tajines",
+      "items": [
+        {
+          "id": "item-4",
+          "name": "Tajine poulet citron",
+          "price": 1350,
+          "description": "Poulet, citron confit, olives",
+          "imageUrl": "https://storage.piki-app.com/items/tajine-poulet.jpg"
+        },
+        {
+          "id": "item-5",
+          "name": "Tajine kefta",
+          "price": 1250,
+          "description": "Boulettes de bœuf, œufs, tomates",
+          "imageUrl": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "name": "Entrées",
+      "items": [
+        {
+          "id": "item-6",
+          "name": "Briouates fromage",
+          "price": 750,
+          "description": "Feuilletés au fromage frais",
+          "imageUrl": null
+        }
+      ]
+    }
+  ]
+}

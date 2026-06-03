@@ -1,0 +1,60 @@
+{
+  "id": "v4pnd",
+  "name": "Brasserie de l'Orge",
+  "slug": "brasserie-de-lorge",
+  "categories": [
+    {
+      "id": "cat-1",
+      "name": "Entrées",
+      "products": [
+        {
+          "id": "prod-1",
+          "name": "Soupe du jour",
+          "price": 6.50,
+          "description": "Soupe fraîche du jour avec pain",
+          "imageUrl": "https://cdn.sq-menu.com/images/soupe.jpg"
+        },
+        {
+          "id": "prod-2",
+          "name": "Croquettes aux crevettes",
+          "price": 12.00,
+          "description": "6 croquettes maison",
+          "imageUrl": null
+        }
+      ]
+    },
+    {
+      "id": "cat-2",
+      "name": "Plats",
+      "products": [
+        {
+          "id": "prod-3",
+          "name": "Entrecôte sauce poivre",
+          "price": 22.50,
+          "description": "Entrecôte 200g, frites, salade",
+          "imageUrl": "https://cdn.sq-menu.com/images/entrecote.jpg"
+        },
+        {
+          "id": "prod-4",
+          "name": "Carbonade flamande",
+          "price": 18.00,
+          "description": "Carbonade traditionnelle, frites maison",
+          "imageUrl": null
+        }
+      ]
+    },
+    {
+      "id": "cat-3",
+      "name": "Desserts",
+      "products": [
+        {
+          "id": "prod-5",
+          "name": "Dame blanche",
+          "price": 7.50,
+          "description": "Glace vanille, chocolat chaud, crème fouettée",
+          "imageUrl": "https://cdn.sq-menu.com/images/dame-blanche.jpg"
+        }
+      ]
+    }
+  ]
+}
