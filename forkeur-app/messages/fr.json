@@ -56,7 +56,9 @@
   },
   "direct": {
     "badge": "Commander directement · sans frais",
-    "badge_long": "Commander directement · sans frais de plateforme"
+    "badge_long": "Commander directement · sans frais de plateforme",
+    "badge_menu": "Voir le menu",
+    "badge_website": "Site du restaurant"
   },
   "map": {
     "free_delivery": "Livraison gratuite",

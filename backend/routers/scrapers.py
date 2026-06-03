@@ -5,6 +5,7 @@ from models import RunTriggerOut, ScraperStatusOut, ScraperConfig, RunTriggerIn,
 import db
 import ws as ws_mod
 from scrapers import ubereats, deliveroo, takeaway, fees, direct, direct_menu
+from scrapers import dom_menu
 from scrapers.base import CloudflareBlockedError
 
 router = APIRouter(prefix="/scrapers", tags=["scrapers"])
@@ -22,6 +23,7 @@ SCRAPERS = {
     "takeaway": takeaway.run,
     "direct": direct.run,
     "direct_menu": _direct_menu_adapter,
+    "dom_menu": dom_menu.run,
 }
 
 # Track currently running platforms
@@ -114,7 +116,7 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
 async def get_status():
     last_runs = db.get_last_run_per_platform()
     result = []
-    for platform in ("ubereats", "deliveroo", "takeaway", "direct", "direct_menu"):
+    for platform in ("ubereats", "deliveroo", "takeaway", "direct", "direct_menu", "dom_menu"):
         last = last_runs.get(platform)
         status = "running" if platform in _running else (last["status"] if last else "idle")
         result.append(ScraperStatusOut(

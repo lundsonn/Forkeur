@@ -132,7 +132,17 @@ export default function HomepageClient({
           <div>
             {filtered.map((r, i) => (
               <Link key={r.id} href={`/restaurant/${r.id}`}>
-                <RestaurantCard restaurant={r} isLast={i === filtered.length - 1} directBadge={tDirect('badge')} />
+                <RestaurantCard
+                  restaurant={r}
+                  isLast={i === filtered.length - 1}
+                  directBadge={
+                    r.direct_url_type === 'menu'
+                      ? tDirect('badge_menu')
+                      : r.direct_url_type === 'website'
+                        ? tDirect('badge_website')
+                        : tDirect('badge')
+                  }
+                />
               </Link>
             ))}
             {filtered.length === 0 && (

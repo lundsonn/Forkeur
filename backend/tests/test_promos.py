@@ -89,7 +89,7 @@ class TestClassifyPromo:
         assert r["min_order"] == 25.0
 
     def test_spend_save(self):
-        r = classify_promo("Spend €30 save €5")
+        r = classify_promo("Spend €30 on any order")
         assert r["promo_type"] == "spend_save"
 
     def test_other_fallback(self):

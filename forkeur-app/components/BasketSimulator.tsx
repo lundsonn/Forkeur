@@ -13,6 +13,7 @@ import {
   findCheapestPlatform,
   centsToEuro,
   computeDirectSavingsCents,
+  computeDirectSavingsCentsFromMenu,
 } from '@/lib/basket'
 import { MenuItemWithPrices, PlatformListing } from '@/lib/queries'
 import CompareSheet from './CompareSheet'
@@ -90,6 +91,22 @@ export default function BasketSimulator({ menuItems, listings, phone }: Props) {
     () => computeDirectSavingsCents(basket, fees),
     [basket, fees]
   )
+
+  /**
+   * Menu-aware savings: uses item prices from menuItems to compute direct savings.
+   * Applies threshold: ≥3 basket items with direct prices AND ≥50% coverage.
+   * platformTotals must be in euros (float) as required by computeDirectSavingsCentsFromMenu.
+   */
+  const menuDirectSavingsCents = useMemo(() => {
+    if (basket.length === 0) return null
+    const platformTotalsEuros: Record<Platform, number | null> = {
+      uber_eats: totals.uber_eats !== null ? totals.uber_eats / 100 : null,
+      deliveroo: totals.deliveroo !== null ? totals.deliveroo / 100 : null,
+      takeaway: totals.takeaway !== null ? totals.takeaway / 100 : null,
+      direct: totals.direct !== null ? totals.direct / 100 : null,
+    }
+    return computeDirectSavingsCentsFromMenu(basket, menuItems, platformTotalsEuros)
+  }, [basket, menuItems, totals])
 
   const grouped = useMemo(() => {
     const map = new Map<string, MenuItemWithPrices[]>()
@@ -341,15 +358,18 @@ export default function BasketSimulator({ menuItems, listings, phone }: Props) {
         </div>
       )}
 
-      {/* Direct ordering savings banner */}
-      {directSavingsCents !== null && basket.length > 0 && (
-        <div className="mb-4 p-3.5 rounded-xl bg-orange-50 border border-orange-200">
+      {/* Direct ordering savings banner (menu-aware) */}
+      {menuDirectSavingsCents !== null && menuDirectSavingsCents > 0 && (
+        <div
+          data-testid="direct-savings-banner"
+          className="mb-4 p-3.5 rounded-xl bg-orange-100 border border-orange-300"
+        >
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-bold text-orange-700">
-                {tBasket('direct_savings_banner', { amount: centsToEuro(directSavingsCents) })}
+              <p className="text-sm font-bold text-orange-800">
+                {tBasket('direct_savings_banner', { amount: centsToEuro(menuDirectSavingsCents) })}
               </p>
-              <p className="text-xs text-orange-500 mt-0.5">
+              <p className="text-xs text-orange-700 mt-0.5">
                 {tBasket('direct_savings_subtitle')}
               </p>
             </div>

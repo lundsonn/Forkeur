@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { NextIntlClientProvider } from 'next-intl'
 import BasketSimulator from '../components/BasketSimulator'
@@ -21,6 +21,42 @@ const L = (overrides: Partial<PlatformListing>): PlatformListing => ({
   eta_label: '18 min', rating: null,
   ...overrides,
 })
+
+// ---------------------------------------------------------------------------
+// Fixtures for savings banner tests
+// ---------------------------------------------------------------------------
+
+// 3 menu items with direct prices (cheaper than platform). Threshold: directCount >= 3.
+// Platform: uber_eats fee 299 cents. Per-item: UE=1000, direct=800 cents.
+// With 3 items in basket: UE total = 3*1000 + 299 = 3299 cents = €32.99
+//                         direct subtotal = 3*800 = 2400 cents = €24.00
+// Savings = 3299 - 2400 = 899 cents → banner shows €8.99
+const bannerMenuItems: MenuItemWithPrices[] = [
+  { name: 'Item A', description: null, category: 'Mains', image_url: null, prices: { uber_eats: 1000, deliveroo: 1050, takeaway: 1100, direct: 800 } },
+  { name: 'Item B', description: null, category: 'Mains', image_url: null, prices: { uber_eats: 1000, deliveroo: 1050, takeaway: 1100, direct: 800 } },
+  { name: 'Item C', description: null, category: 'Mains', image_url: null, prices: { uber_eats: 1000, deliveroo: 1050, takeaway: 1100, direct: 800 } },
+]
+
+// 3 menu items WITHOUT direct prices (threshold not met)
+const noDirectMenuItems: MenuItemWithPrices[] = [
+  { name: 'Item A', description: null, category: 'Mains', image_url: null, prices: { uber_eats: 1000, deliveroo: 1050, takeaway: 1100, direct: null } },
+  { name: 'Item B', description: null, category: 'Mains', image_url: null, prices: { uber_eats: 1000, deliveroo: 1050, takeaway: 1100, direct: null } },
+  { name: 'Item C', description: null, category: 'Mains', image_url: null, prices: { uber_eats: 1000, deliveroo: 1050, takeaway: 1100, direct: null } },
+]
+
+// 3 items with direct prices that are MORE expensive than platform
+// UE total = 3*800 + 299 = 2699; direct = 3*1000 = 3000 → no savings
+const directMoreExpensiveMenuItems: MenuItemWithPrices[] = [
+  { name: 'Item A', description: null, category: 'Mains', image_url: null, prices: { uber_eats: 800, deliveroo: 850, takeaway: 900, direct: 1000 } },
+  { name: 'Item B', description: null, category: 'Mains', image_url: null, prices: { uber_eats: 800, deliveroo: 850, takeaway: 900, direct: 1000 } },
+  { name: 'Item C', description: null, category: 'Mains', image_url: null, prices: { uber_eats: 800, deliveroo: 850, takeaway: 900, direct: 1000 } },
+]
+
+const bannerListings: PlatformListing[] = [
+  L({ id: '1', platform: 'uber_eats', platform_url: 'https://ubereats.com', delivery_fee_cents: 299, delivery_fee_label: '€2.99', eta_label: '18 min', rating: 4.5 }),
+  L({ id: '2', platform: 'deliveroo', platform_url: null, delivery_fee_cents: 399, delivery_fee_label: '€3.99', eta_label: '22 min', rating: null }),
+  L({ id: '3', platform: 'direct', platform_url: 'https://myrestaurant.com', delivery_fee_cents: null, delivery_fee_label: null, eta_label: null, rating: null }),
+]
 
 const listings: PlatformListing[] = [
   L({ id: '1', platform: 'uber_eats', platform_url: 'https://ubereats.com', delivery_fee_cents: 299, delivery_fee_label: '€2.99', eta_label: '18 min', rating: 4.5 }),
@@ -116,5 +152,91 @@ describe('BasketSimulator — direct fee-savings signal', () => {
   it('does NOT show fee-savings line when no direct listing at all', () => {
     renderWithIntl(<BasketSimulator menuItems={menuItems} listings={listings} phone={null} />)
     expect(screen.queryByTestId('direct-fee-savings')).toBeNull()
+  })
+})
+
+describe('BasketSimulator — direct savings banner (menu-aware)', () => {
+  it('banner shows when direct is cheaper and threshold met (≥3 items with direct prices)', () => {
+    renderWithIntl(
+      <BasketSimulator menuItems={bannerMenuItems} listings={bannerListings} phone={null} />
+    )
+    // Add all 3 items to meet the threshold
+    fireEvent.click(screen.getByLabelText('Add Item A to basket'))
+    fireEvent.click(screen.getByLabelText('Add Item B to basket'))
+    fireEvent.click(screen.getByLabelText('Add Item C to basket'))
+    expect(screen.getByTestId('direct-savings-banner')).toBeInTheDocument()
+  })
+
+  it('banner shows savings amount formatted as €X.XX', () => {
+    renderWithIntl(
+      <BasketSimulator menuItems={bannerMenuItems} listings={bannerListings} phone={null} />
+    )
+    fireEvent.click(screen.getByLabelText('Add Item A to basket'))
+    fireEvent.click(screen.getByLabelText('Add Item B to basket'))
+    fireEvent.click(screen.getByLabelText('Add Item C to basket'))
+    const banner = screen.getByTestId('direct-savings-banner')
+    // Banner should contain a euro amount (savings from direct ordering)
+    expect(banner).toHaveTextContent(/€\d+\.\d{2}/)
+  })
+
+  it('banner shows the locked French copy', () => {
+    renderWithIntl(
+      <BasketSimulator menuItems={bannerMenuItems} listings={bannerListings} phone={null} />
+    )
+    fireEvent.click(screen.getByLabelText('Add Item A to basket'))
+    fireEvent.click(screen.getByLabelText('Add Item B to basket'))
+    fireEvent.click(screen.getByLabelText('Add Item C to basket'))
+    // Test with EN locale — messages use en.json keys; sub-line key is direct_savings_subtitle
+    const banner = screen.getByTestId('direct-savings-banner')
+    expect(banner).toHaveTextContent('Same dishes · no platform fees')
+  })
+
+  it('banner includes CTA link to direct URL', () => {
+    renderWithIntl(
+      <BasketSimulator menuItems={bannerMenuItems} listings={bannerListings} phone={null} />
+    )
+    fireEvent.click(screen.getByLabelText('Add Item A to basket'))
+    fireEvent.click(screen.getByLabelText('Add Item B to basket'))
+    fireEvent.click(screen.getByLabelText('Add Item C to basket'))
+    const link = screen.getByRole('link', { name: /order →/i })
+    expect(link).toHaveAttribute('href', 'https://myrestaurant.com')
+  })
+
+  it('banner hidden when threshold not met (fewer than 3 items with direct prices)', () => {
+    // Only add 2 items — threshold requires directCount >= 3
+    const twoItemMenuItems: MenuItemWithPrices[] = bannerMenuItems.slice(0, 2)
+    renderWithIntl(
+      <BasketSimulator menuItems={twoItemMenuItems} listings={bannerListings} phone={null} />
+    )
+    fireEvent.click(screen.getByLabelText('Add Item A to basket'))
+    fireEvent.click(screen.getByLabelText('Add Item B to basket'))
+    expect(screen.queryByTestId('direct-savings-banner')).toBeNull()
+  })
+
+  it('banner hidden when basket is empty', () => {
+    renderWithIntl(
+      <BasketSimulator menuItems={bannerMenuItems} listings={bannerListings} phone={null} />
+    )
+    expect(screen.queryByTestId('direct-savings-banner')).toBeNull()
+  })
+
+  it('banner hidden when direct is more expensive than platform', () => {
+    renderWithIntl(
+      <BasketSimulator menuItems={directMoreExpensiveMenuItems} listings={bannerListings} phone={null} />
+    )
+    fireEvent.click(screen.getByLabelText('Add Item A to basket'))
+    fireEvent.click(screen.getByLabelText('Add Item B to basket'))
+    fireEvent.click(screen.getByLabelText('Add Item C to basket'))
+    expect(screen.queryByTestId('direct-savings-banner')).toBeNull()
+  })
+
+  it('banner hidden when no items have direct prices (threshold not met)', () => {
+    renderWithIntl(
+      <BasketSimulator menuItems={noDirectMenuItems} listings={bannerListings} phone={null} />
+    )
+    fireEvent.click(screen.getByLabelText('Add Item A to basket'))
+    fireEvent.click(screen.getByLabelText('Add Item B to basket'))
+    fireEvent.click(screen.getByLabelText('Add Item C to basket'))
+    expect(screen.queryByTestId('direct-savings-banner')).toBeNull()
   })
 })

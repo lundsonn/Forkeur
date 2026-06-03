@@ -21,13 +21,9 @@ _SAMPLE_RESTAURANTS = [
     {
         "id": "r1",
         "name": "Pizza Palace",
-        "platform": "uber_eats",
-        "url": "https://ubereats.com/pizza",
-        "delivery_fee": 1.99,
-        "min_order": 10.0,
-        "eta_min": 20,
-        "eta_max": 35,
-        "rating": 4.5,
+        "slug": "pizza-palace",
+        "cuisine": "Italian",
+        "neighborhood": "Ixelles",
     }
 ]
 

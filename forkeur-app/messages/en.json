@@ -56,7 +56,9 @@
   },
   "direct": {
     "badge": "Order directly · no fees",
-    "badge_long": "Order directly · no platform fees"
+    "badge_long": "Order directly · no platform fees",
+    "badge_menu": "View menu",
+    "badge_website": "Restaurant website"
   },
   "map": {
     "free_delivery": "Free delivery",

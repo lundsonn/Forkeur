@@ -59,6 +59,41 @@ const freeListing: RestaurantSummary = {
   cheapest: { platform: 'uber_eats', fee_label: 'Free', savings_cents: 149 },
 }
 
+const withDirectOrdering: RestaurantSummary = {
+  id: '5',
+  name: 'Burger Direct',
+  cuisine: ['Burgers'],
+  neighborhood: null,
+  lat: null,
+  lng: null,
+  order_url: 'https://burger.sq-menu.com',
+  image_url: null,
+  rating: null,
+  direct_url_type: 'ordering',
+  listings: [
+    { platform: 'uber_eats', delivery_fee_cents: 299 },
+    { platform: 'deliveroo', delivery_fee_cents: 199 },
+  ],
+  cheapest: { platform: 'deliveroo', fee_label: '€1.99', savings_cents: 100 },
+}
+
+const withDirectMenu: RestaurantSummary = {
+  id: '6',
+  name: 'Pizza Direct',
+  cuisine: ['Pizza'],
+  neighborhood: null,
+  lat: null,
+  lng: null,
+  order_url: 'https://pizza.be/menu',
+  image_url: null,
+  rating: null,
+  direct_url_type: 'menu',
+  listings: [
+    { platform: 'uber_eats', delivery_fee_cents: 299 },
+  ],
+  cheapest: { platform: 'uber_eats', fee_label: '€2.99', savings_cents: 0 },
+}
+
 describe('RestaurantCard', () => {
   it('shows all 3 platform fees when 3 listings exist', () => {
     render(<RestaurantCard restaurant={threeListings} directBadge="Commander directement · sans frais" />)
@@ -93,5 +128,25 @@ describe('RestaurantCard', () => {
   it('shows Free for zero-cent delivery fee', () => {
     render(<RestaurantCard restaurant={freeListing} directBadge="Commander directement · sans frais" />)
     expect(screen.getByText('Free')).toBeInTheDocument()
+  })
+
+  it('shows ordering badge when url_type is ordering', () => {
+    render(<RestaurantCard restaurant={withDirectOrdering} directBadge="Order directly · no fees" />)
+    expect(screen.getByRole('link', { name: 'Order directly · no fees' })).toBeInTheDocument()
+  })
+
+  it('shows menu badge when url_type is menu', () => {
+    render(<RestaurantCard restaurant={withDirectMenu} directBadge="View menu" />)
+    expect(screen.getByRole('link', { name: 'View menu' })).toBeInTheDocument()
+  })
+
+  it('shows website badge when url_type is website', () => {
+    const withWebsite: RestaurantSummary = {
+      ...withDirectOrdering,
+      id: '7',
+      direct_url_type: 'website',
+    }
+    render(<RestaurantCard restaurant={withWebsite} directBadge="Restaurant website" />)
+    expect(screen.getByRole('link', { name: 'Restaurant website' })).toBeInTheDocument()
   })
 })

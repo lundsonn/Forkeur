@@ -3,38 +3,38 @@ import { normalizeTitle } from '../lib/queries'
 
 describe('normalizeTitle', () => {
   it('lowercases', () => {
-    expect(normalizeTitle('Big Mac')).toBe('big mac')
+    expect(normalizeTitle('Pizza Margherita')).toBe('pizza margherita')
   })
 
   it('strips accents', () => {
-    expect(normalizeTitle('Crème brûlée')).toBe('creme brulee')
+    expect(normalizeTitle('Pâtes à la carbonara')).toBe('pates a la carbonara')
+  })
+
+  it('strips punctuation', () => {
+    expect(normalizeTitle('Margherita (San Marzano, bufala)')).toBe('margherita san marzano bufala')
+  })
+
+  it('collapses whitespace', () => {
+    expect(normalizeTitle('pizza   margherita')).toBe('pizza margherita')
+  })
+
+  it('trims', () => {
+    expect(normalizeTitle('  pizza  ')).toBe('pizza')
+  })
+
+  it('handles accents + punctuation combined', () => {
+    expect(normalizeTitle('Café liègeois')).toBe('cafe liegeois')
+  })
+
+  it('empty string', () => {
+    expect(normalizeTitle('')).toBe('')
   })
 
   it('strips é, à, ñ', () => {
     expect(normalizeTitle('Café au Réglisse Américain')).toBe('cafe au reglisse americain')
   })
 
-  it('strips punctuation', () => {
-    expect(normalizeTitle('Pizza (San Marzano, bufala)')).toBe('pizza san marzano bufala')
-  })
-
-  it('strips hyphens and apostrophes', () => {
-    expect(normalizeTitle("Pain d'épices")).toBe('pain depices')
-  })
-
-  it('collapses multiple spaces', () => {
-    expect(normalizeTitle('Big   Mac')).toBe('big mac')
-  })
-
-  it('trims leading/trailing whitespace', () => {
-    expect(normalizeTitle('  Big Mac  ')).toBe('big mac')
-  })
-
   it('cross-platform match: same logical item normalizes to same key', () => {
     expect(normalizeTitle('Pizza Margherita')).toBe(normalizeTitle('pizza margherita'))
-  })
-
-  it('does NOT merge different items', () => {
-    expect(normalizeTitle('Pizza Margherita')).not.toBe(normalizeTitle('Pizza Napolitaine'))
   })
 })

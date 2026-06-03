@@ -8,9 +8,13 @@ import {
   computeDirectOverlap,
   computeDirectSubtotal,
   computeDirectSavingsCents,
+  computeDirectOverlapFromMenu,
+  computeDirectSubtotalFromMenu,
+  computeDirectSavingsCentsFromMenu,
   type BasketItem,
   type PlatformTotals,
   type PlatformFees,
+  type MenuItemDirectPrice,
 } from '../lib/basket'
 
 const twoItems: BasketItem[] = [
@@ -199,5 +203,213 @@ describe('computeDirectSavingsCents — three alert states', () => {
       { name: 'B', qty: 1, prices: { uber_eats: 1000, deliveroo: 900, takeaway: 1100, direct: 500 } },
     ]
     expect(computeDirectSavingsCents(items, standardFees)).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Menu-item-aware helpers
+// ---------------------------------------------------------------------------
+
+/** Build a MenuItemDirectPrice with all platforms priced the same unless overridden. */
+function makeMenuItem(
+  name: string,
+  directCents: number | null,
+  otherCents = 1000
+): MenuItemDirectPrice {
+  return {
+    name,
+    prices: {
+      uber_eats: otherCents,
+      deliveroo: otherCents,
+      takeaway: otherCents,
+      direct: directCents,
+    },
+  }
+}
+
+describe('computeDirectOverlapFromMenu', () => {
+  it('3 items, 2 have direct → { directCount: 2, totalCount: 3 }', () => {
+    const basket: BasketItem[] = [
+      { name: 'Burger', qty: 1, prices: { uber_eats: 800, deliveroo: 800, takeaway: 800, direct: null } },
+      { name: 'Fries',  qty: 1, prices: { uber_eats: 300, deliveroo: 300, takeaway: 300, direct: null } },
+      { name: 'Drink',  qty: 1, prices: { uber_eats: 250, deliveroo: 250, takeaway: 250, direct: null } },
+    ]
+    const menu: MenuItemDirectPrice[] = [
+      makeMenuItem('Burger', 700),
+      makeMenuItem('Fries',  280),
+      makeMenuItem('Drink',  null),   // no direct price
+    ]
+    const result = computeDirectOverlapFromMenu(basket, menu)
+    expect(result).toEqual({ directCount: 2, totalCount: 3 })
+  })
+
+  it('all items have direct → { directCount: 3, totalCount: 3 }', () => {
+    const basket: BasketItem[] = [
+      { name: 'A', qty: 1, prices: { uber_eats: 500, deliveroo: 500, takeaway: 500, direct: null } },
+      { name: 'B', qty: 1, prices: { uber_eats: 500, deliveroo: 500, takeaway: 500, direct: null } },
+      { name: 'C', qty: 1, prices: { uber_eats: 500, deliveroo: 500, takeaway: 500, direct: null } },
+    ]
+    const menu: MenuItemDirectPrice[] = [
+      makeMenuItem('A', 400),
+      makeMenuItem('B', 400),
+      makeMenuItem('C', 400),
+    ]
+    expect(computeDirectOverlapFromMenu(basket, menu)).toEqual({ directCount: 3, totalCount: 3 })
+  })
+
+  it('matching is case-insensitive', () => {
+    const basket: BasketItem[] = [
+      { name: 'big mac', qty: 1, prices: { uber_eats: 600, deliveroo: 600, takeaway: 600, direct: null } },
+    ]
+    const menu: MenuItemDirectPrice[] = [makeMenuItem('Big Mac', 500)]
+    expect(computeDirectOverlapFromMenu(basket, menu).directCount).toBe(1)
+  })
+
+  it('items with qty=0 are excluded from totalCount', () => {
+    const basket: BasketItem[] = [
+      { name: 'A', qty: 0, prices: { uber_eats: 500, deliveroo: 500, takeaway: 500, direct: null } },
+      { name: 'B', qty: 1, prices: { uber_eats: 500, deliveroo: 500, takeaway: 500, direct: null } },
+    ]
+    const menu: MenuItemDirectPrice[] = [makeMenuItem('A', 400), makeMenuItem('B', 400)]
+    const result = computeDirectOverlapFromMenu(basket, menu)
+    expect(result).toEqual({ directCount: 1, totalCount: 1 })
+  })
+})
+
+describe('computeDirectSubtotalFromMenu', () => {
+  it('returns correct sum of (price * qty) in euros for items with direct price', () => {
+    // Item A: 500 cents * 2 = 1000 cents = €10.00
+    // Item B: no direct price — excluded
+    const basket: BasketItem[] = [
+      { name: 'A', qty: 2, prices: { uber_eats: 600, deliveroo: 600, takeaway: 600, direct: null } },
+      { name: 'B', qty: 1, prices: { uber_eats: 600, deliveroo: 600, takeaway: 600, direct: null } },
+    ]
+    const menu: MenuItemDirectPrice[] = [
+      makeMenuItem('A', 500),
+      makeMenuItem('B', null),
+    ]
+    expect(computeDirectSubtotalFromMenu(basket, menu)).toBeCloseTo(10.0)
+  })
+
+  it('returns null when no direct prices exist in menu', () => {
+    const basket: BasketItem[] = [
+      { name: 'X', qty: 2, prices: { uber_eats: 600, deliveroo: 600, takeaway: 600, direct: null } },
+    ]
+    const menu: MenuItemDirectPrice[] = [makeMenuItem('X', null)]
+    expect(computeDirectSubtotalFromMenu(basket, menu)).toBeNull()
+  })
+
+  it('returns null when basket items have no matching menu entry', () => {
+    const basket: BasketItem[] = [
+      { name: 'Unknown Item', qty: 1, prices: { uber_eats: 600, deliveroo: 600, takeaway: 600, direct: null } },
+    ]
+    const menu: MenuItemDirectPrice[] = [makeMenuItem('Something Else', 400)]
+    expect(computeDirectSubtotalFromMenu(basket, menu)).toBeNull()
+  })
+
+  it('accounts for qty > 1', () => {
+    const basket: BasketItem[] = [
+      { name: 'Pizza', qty: 3, prices: { uber_eats: 1200, deliveroo: 1200, takeaway: 1200, direct: null } },
+    ]
+    const menu: MenuItemDirectPrice[] = [makeMenuItem('Pizza', 1000)]
+    // 1000 cents * 3 = 3000 cents = €30.00
+    expect(computeDirectSubtotalFromMenu(basket, menu)).toBeCloseTo(30.0)
+  })
+})
+
+describe('computeDirectSavingsCentsFromMenu', () => {
+  // platformTotals: totals in euros including delivery
+  const platformTotals: Record<import('../lib/basket').Platform, number | null> = {
+    uber_eats:  28.99,
+    deliveroo:  26.99,   // cheapest non-direct
+    takeaway:   30.99,
+    direct:     null,
+  }
+
+  it('threshold met, direct cheaper → positive savings in cents', () => {
+    // direct subtotal = 3 items * 500 cents = €15.00
+    // cheapest non-direct = €26.99 → savings = €11.99 = 1199 cents
+    const basket: BasketItem[] = [
+      { name: 'A', qty: 1, prices: { uber_eats: 1000, deliveroo: 1000, takeaway: 1000, direct: null } },
+      { name: 'B', qty: 1, prices: { uber_eats: 1000, deliveroo: 1000, takeaway: 1000, direct: null } },
+      { name: 'C', qty: 1, prices: { uber_eats: 1000, deliveroo: 1000, takeaway: 1000, direct: null } },
+    ]
+    const menu: MenuItemDirectPrice[] = [
+      makeMenuItem('A', 500),
+      makeMenuItem('B', 500),
+      makeMenuItem('C', 500),
+    ]
+    const savings = computeDirectSavingsCentsFromMenu(basket, menu, platformTotals)
+    expect(savings).toBe(1199)
+  })
+
+  it('threshold met, direct more expensive → negative savings in cents', () => {
+    // direct subtotal = 3 items * 1500 cents = €45.00 > deliveroo €26.99
+    const basket: BasketItem[] = [
+      { name: 'A', qty: 1, prices: { uber_eats: 1000, deliveroo: 1000, takeaway: 1000, direct: null } },
+      { name: 'B', qty: 1, prices: { uber_eats: 1000, deliveroo: 1000, takeaway: 1000, direct: null } },
+      { name: 'C', qty: 1, prices: { uber_eats: 1000, deliveroo: 1000, takeaway: 1000, direct: null } },
+    ]
+    const menu: MenuItemDirectPrice[] = [
+      makeMenuItem('A', 1500),
+      makeMenuItem('B', 1500),
+      makeMenuItem('C', 1500),
+    ]
+    const savings = computeDirectSavingsCentsFromMenu(basket, menu, platformTotals)
+    expect(savings).toBeLessThan(0)
+    // (26.99 - 45.00) * 100 = -1801
+    expect(savings).toBe(-1801)
+  })
+
+  it('exactly 3 items / 50% threshold boundary → meets threshold', () => {
+    // 6 items total, 3 have direct prices (exactly 50%)
+    const basket: BasketItem[] = [
+      { name: 'A', qty: 1, prices: { uber_eats: 1000, deliveroo: 1000, takeaway: 1000, direct: null } },
+      { name: 'B', qty: 1, prices: { uber_eats: 1000, deliveroo: 1000, takeaway: 1000, direct: null } },
+      { name: 'C', qty: 1, prices: { uber_eats: 1000, deliveroo: 1000, takeaway: 1000, direct: null } },
+      { name: 'D', qty: 1, prices: { uber_eats: 1000, deliveroo: 1000, takeaway: 1000, direct: null } },
+      { name: 'E', qty: 1, prices: { uber_eats: 1000, deliveroo: 1000, takeaway: 1000, direct: null } },
+      { name: 'F', qty: 1, prices: { uber_eats: 1000, deliveroo: 1000, takeaway: 1000, direct: null } },
+    ]
+    const menu: MenuItemDirectPrice[] = [
+      makeMenuItem('A', 500),
+      makeMenuItem('B', 500),
+      makeMenuItem('C', 500),
+      makeMenuItem('D', null),   // no direct
+      makeMenuItem('E', null),
+      makeMenuItem('F', null),
+    ]
+    // directCount=3, totalCount=6 → exactly 50% → threshold met
+    // direct subtotal = 3 * 500 cents = €15.00; cheapest non-direct = €26.99
+    const savings = computeDirectSavingsCentsFromMenu(basket, menu, platformTotals)
+    expect(savings).not.toBeNull()
+    expect(savings).toBeGreaterThan(0)
+  })
+
+  it('2 items (< 3) → null (below count threshold)', () => {
+    const basket: BasketItem[] = [
+      { name: 'A', qty: 1, prices: { uber_eats: 1000, deliveroo: 1000, takeaway: 1000, direct: null } },
+      { name: 'B', qty: 1, prices: { uber_eats: 1000, deliveroo: 1000, takeaway: 1000, direct: null } },
+    ]
+    const menu: MenuItemDirectPrice[] = [
+      makeMenuItem('A', 500),
+      makeMenuItem('B', 500),
+    ]
+    expect(computeDirectSavingsCentsFromMenu(basket, menu, platformTotals)).toBeNull()
+  })
+
+  it('3 items but only 1 has direct (33%) → null (below 50% ratio)', () => {
+    const basket: BasketItem[] = [
+      { name: 'A', qty: 1, prices: { uber_eats: 1000, deliveroo: 1000, takeaway: 1000, direct: null } },
+      { name: 'B', qty: 1, prices: { uber_eats: 1000, deliveroo: 1000, takeaway: 1000, direct: null } },
+      { name: 'C', qty: 1, prices: { uber_eats: 1000, deliveroo: 1000, takeaway: 1000, direct: null } },
+    ]
+    const menu: MenuItemDirectPrice[] = [
+      makeMenuItem('A', 500),
+      makeMenuItem('B', null),
+      makeMenuItem('C', null),
+    ]
+    // directCount=1, totalCount=3 → 33% < 50% → null
+    expect(computeDirectSavingsCentsFromMenu(basket, menu, platformTotals)).toBeNull()
   })
 })

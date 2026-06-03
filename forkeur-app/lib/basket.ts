@@ -108,6 +108,107 @@ export function computeDirectSavingsCents(
   return savings > 0 ? savings : null
 }
 
+// ---------------------------------------------------------------------------
+// Menu-item-aware variants (use MenuItemWithPrices from lib/queries.ts)
+// These accept a basket of named items and a cross-platform menu item list,
+// matching by name to resolve direct prices at query time.
+// ---------------------------------------------------------------------------
+
+/** Minimal shape required from MenuItemWithPrices for direct-ordering helpers. */
+export interface MenuItemDirectPrice {
+  name: string
+  prices: { direct: number | null } & Partial<Record<Platform, number | null>>
+}
+
+/**
+ * Count how many basket items have a direct price, resolved via menuItems.
+ *
+ * An item "has a direct price" if the matching menu item's prices.direct is
+ * not null/undefined. Matching is case-insensitive by name.
+ *
+ * @returns { directCount, totalCount }
+ */
+export function computeDirectOverlapFromMenu(
+  basket: BasketItem[],
+  menuItems: MenuItemDirectPrice[]
+): { directCount: number; totalCount: number } {
+  const activeItems = basket.filter(b => b.qty > 0)
+  const totalCount = activeItems.length
+
+  const directCount = activeItems.filter(b => {
+    const key = b.name.toLowerCase()
+    const found = menuItems.find(m => m.name.toLowerCase() === key)
+    return found != null && found.prices.direct != null
+  }).length
+
+  return { directCount, totalCount }
+}
+
+/**
+ * Compute total basket cost for direct ordering, resolved via menuItems.
+ *
+ * Only items that have a matching menu item with prices.direct are included.
+ * Prices in menuItems are expected to be in cents (same unit as BasketItem.prices).
+ *
+ * @returns total in euros (float), or null if no items have direct prices
+ */
+export function computeDirectSubtotalFromMenu(
+  basket: BasketItem[],
+  menuItems: MenuItemDirectPrice[]
+): number | null {
+  let totalCents = 0
+  let hasAny = false
+
+  for (const b of basket) {
+    if (b.qty <= 0) continue
+    const key = b.name.toLowerCase()
+    const found = menuItems.find(m => m.name.toLowerCase() === key)
+    if (found != null && found.prices.direct != null) {
+      totalCents += found.prices.direct * b.qty
+      hasAny = true
+    }
+  }
+
+  return hasAny ? totalCents / 100 : null
+}
+
+/**
+ * Compute savings in cents vs the cheapest non-direct platform.
+ *
+ * Applies the overlap threshold: directCount >= 3 AND
+ * directCount / totalCount >= 0.5. Below threshold → returns null.
+ *
+ * @param platformTotals - totals per platform in euros (float); null means platform unavailable
+ * @returns positive number if direct is cheaper, negative if more expensive,
+ *          null if threshold not met or no non-direct platform is available
+ */
+export function computeDirectSavingsCentsFromMenu(
+  basket: BasketItem[],
+  menuItems: MenuItemDirectPrice[],
+  platformTotals: Record<Platform, number | null>
+): number | null {
+  const { directCount, totalCount } = computeDirectOverlapFromMenu(basket, menuItems)
+
+  if (directCount < 3 || totalCount === 0 || directCount / totalCount < 0.5) {
+    return null
+  }
+
+  const nonDirectTotals = (PLATFORMS as Platform[])
+    .filter(p => p !== 'direct')
+    .map(p => platformTotals[p])
+    .filter((t): t is number => t !== null)
+
+  if (nonDirectTotals.length === 0) return null
+
+  const cheapestNonDirectEuros = Math.min(...nonDirectTotals)
+  const directEuros = computeDirectSubtotalFromMenu(basket, menuItems)
+  if (directEuros === null) return null
+
+  // Convert to cents for the return value (consistent with existing cents-based API)
+  const savingsCents = Math.round((cheapestNonDirectEuros - directEuros) * 100)
+  return savingsCents
+}
+
 export const PLATFORM_COLORS: Record<Platform, { dot: string; label: string; ring: string }> = {
   uber_eats:  { dot: 'bg-green-500',  label: 'text-green-600',  ring: 'border-green-500' },
   deliveroo:  { dot: 'bg-cyan-500',   label: 'text-cyan-600',   ring: 'border-cyan-500'  },

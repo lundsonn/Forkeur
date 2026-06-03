@@ -19,11 +19,13 @@ def _noop(line: str) -> None:
 
 async def _run_scraper(platform: str) -> None:
     from scrapers import ubereats, deliveroo, takeaway, direct, direct_menu
+    from scrapers import dom_menu
     SCRAPERS = {
         "ubereats": ubereats.run,
         "deliveroo": deliveroo.run,
         "takeaway": takeaway.run,
         "direct": direct.run,
+        "dom_menu": dom_menu.run,
     }
 
     if platform == "direct_menu":

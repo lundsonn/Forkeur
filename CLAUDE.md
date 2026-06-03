@@ -37,6 +37,18 @@ MCP wired: `.mcp.json` → use Supabase MCP tools for schema/query work.
 - `fees.py` — refresh `delivery_fee` + `min_order` for existing UberEats and Deliveroo listings
 - `promos.py` — shared promotion-parsing utilities (classify + deduplicate promo labels into structured rows)
 - `direct.py` — two phases: enrich existing restaurant websites for direct ordering; discover new restaurants via Google Maps
+- `direct_classify.py` — URL classifier (`ordering` | `menu` | `website` | `phone`)
+- `direct_menu.py` — structured API scrapers for `url_type=ordering` listings (sq-menu/foodbooking, Odoo POS, piki-app); sync httpx; 66 tests
+- `dom_menu/` — hybrid DOM scraper for `url_type=website|menu` listings (447 sites):
+  - `generic.py` — JSON-LD first, then price-proximity heuristic (Playwright)
+  - `sites/__init__.py` — per-site adapter registry (empty; add as needed after first run)
+
+### Direct ordering — probed API shapes (do not re-probe)
+
+Fixtures saved in `backend/tests/fixtures/`:
+- `sq_menu_response.json` — shape: `{categories:[{name, products:[{name, price(€), imageUrl}]}]}`
+- `odoo_pos_response.json` — shape: `{result:[{name, list_price, categ_id:[id,name], description_sale}]}`; `categ_id` (NOT `pos_category_id`); requires session cookie (SessionExpiredException → GET pos-self URL first)
+- `piki_app_response.json` — shape: `{categories:[{name, items:[{name, price(cents), imageUrl}]}]}`; prices in **cents** (÷100); top-level `categories` key (not bare array)
 
 ## Running
 
@@ -60,7 +72,7 @@ cd forkeur-app && npm run dev   # :3000
 - **Backend API:** `http://localhost:8000` (internal only)
 - **Auth:** POST `/api/auth/login` with `{"password":"<ADMIN_PASSWORD>"}` → Bearer token (JWT, 30-day expiry; requires `JWT_SECRET` env var)
 - **Deploy:** `cd /opt/forkeur && git pull && systemctl restart forkeur-backend`
-- **Trigger scraper:** `POST /api/scrapers/{ubereats|deliveroo|takeaway|fees|direct}/run` with Bearer token
+- **Trigger scraper:** `POST /api/scrapers/{ubereats|deliveroo|takeaway|fees|direct|direct_menu|dom_menu}/run` with Bearer token
 
 ## Key conventions
 
