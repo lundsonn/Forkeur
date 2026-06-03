@@ -1,0 +1,69 @@
+{
+  "nav": {
+    "deals": "Aanbiedingen 🏷️",
+    "list": "Lijst",
+    "map": "Kaart",
+    "back_restaurants": "← Restaurants"
+  },
+  "hero": {
+    "heading_line1": "Waar bestelt u",
+    "heading_line2": "uw maaltijd?"
+  },
+  "search": {
+    "placeholder": "Zoek een restaurant"
+  },
+  "filters": {
+    "all": "Alles",
+    "bogo": "2-voor-1",
+    "pct": "% Korting",
+    "free_delivery": "Gratis bezorging",
+    "free_item": "Gratis artikel"
+  },
+  "results": {
+    "restaurants": "Restaurants",
+    "count": "{count, plural, one {# resultaat} other {# resultaten}}",
+    "none": "Geen restaurants gevonden"
+  },
+  "deals": {
+    "heading": "Beste aanbiedingen",
+    "subtitle": "{count} actieve aanbiedingen op UberEats, Deliveroo & Takeaway",
+    "none": "Geen aanbiedingen in deze categorie.",
+    "min_order": "Min. €{amount}"
+  },
+  "basket": {
+    "no_menu": "Nog geen menugegevens beschikbaar.",
+    "item": "Artikel",
+    "free_delivery": "Gratis bezorging",
+    "delivery": "Bezorging {fee}",
+    "items": "{count, plural, one {# artikel} other {# artikelen}}",
+    "best": "Beste:"
+  },
+  "compare": {
+    "best_now": "Beste aanbieding",
+    "subtitle": "Goedkoopst en snelst beschikbaar.",
+    "total": "Totaal",
+    "delivery": "Bezorging",
+    "you_save": "Besparing",
+    "all_live": "Alle drie · live prijzen",
+    "best_badge": "Beste",
+    "why": "Waarom {platform}? Laagste totaal inclusief alle kosten.",
+    "order_on": "Bestellen bij {platform}"
+  },
+  "direct": {
+    "badge": "Direct bestellen · zonder platformkosten",
+    "badge_long": "Direct bestellen · zonder platformkosten"
+  },
+  "badge": {
+    "bogo": "2-voor-1",
+    "pct_off": "{value}% korting",
+    "eur_off": "€{value} korting",
+    "free_delivery": "Gratis bezorging",
+    "free_item": "Gratis artikel"
+  },
+  "meta": {
+    "home_title": "Forkeur — Vergelijk voedselprijzen in Brussel",
+    "home_description": "Vergelijk restaurantprijzen op UberEats, Deliveroo en Takeaway in Brussel.",
+    "deals_title": "Beste aanbiedingen",
+    "deals_description": "Beste restaurantaanbiedingen op UberEats, Deliveroo & Takeaway in Brussel."
+  }
+}

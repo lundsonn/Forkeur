@@ -1,0 +1,69 @@
+{
+  "nav": {
+    "deals": "Deals 🏷️",
+    "list": "List",
+    "map": "Map",
+    "back_restaurants": "← Restaurants"
+  },
+  "hero": {
+    "heading_line1": "Where are you",
+    "heading_line2": "ordering from?"
+  },
+  "search": {
+    "placeholder": "Search a restaurant"
+  },
+  "filters": {
+    "all": "All",
+    "bogo": "2-for-1",
+    "pct": "% Off",
+    "free_delivery": "Free Delivery",
+    "free_item": "Free Item"
+  },
+  "results": {
+    "restaurants": "Restaurants",
+    "count": "{count, plural, one {# result} other {# results}}",
+    "none": "No restaurants found"
+  },
+  "deals": {
+    "heading": "Best deals",
+    "subtitle": "{count} live offers across UberEats, Deliveroo & Takeaway",
+    "none": "No deals in this category right now.",
+    "min_order": "Min. €{amount}"
+  },
+  "basket": {
+    "no_menu": "No menu data available yet.",
+    "item": "Item",
+    "free_delivery": "Free delivery",
+    "delivery": "Delivery {fee}",
+    "items": "{count, plural, one {# item} other {# items}}",
+    "best": "Best:"
+  },
+  "compare": {
+    "best_now": "Best right now",
+    "subtitle": "Cheapest and fastest right now.",
+    "total": "Total",
+    "delivery": "Delivery",
+    "you_save": "You save",
+    "all_live": "All three · live prices",
+    "best_badge": "Best",
+    "why": "Why {platform}? Lowest total including all fees.",
+    "order_on": "Order on {platform}"
+  },
+  "direct": {
+    "badge": "Commander directement · sans frais",
+    "badge_long": "Commander directement · sans frais de plateforme"
+  },
+  "badge": {
+    "bogo": "2-for-1",
+    "pct_off": "{value}% off",
+    "eur_off": "€{value} off",
+    "free_delivery": "Free delivery",
+    "free_item": "Free item"
+  },
+  "meta": {
+    "home_title": "Forkeur — Compare food prices in Brussels",
+    "home_description": "Compare restaurant prices across UberEats, Deliveroo, and Takeaway in Brussels.",
+    "deals_title": "Best deals",
+    "deals_description": "Best restaurant deals and promotions across UberEats, Deliveroo & Takeaway in Brussels."
+  }
+}
