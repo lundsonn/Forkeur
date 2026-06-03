@@ -5,11 +5,29 @@ from pathlib import Path
 
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 
+import auth
 import scheduler as sched
 import ws as ws_mod
 from routers import scrapers, runs, schedule, data
+from routers.auth_router import router as auth_router
+
+# Paths that don't require a token
+_PUBLIC_PATHS = {"/api/auth/login"}
+
+
+class AuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path.startswith("/api/") and request.url.path not in _PUBLIC_PATHS:
+            header = request.headers.get("Authorization", "")
+            token = header.removeprefix("Bearer ").strip()
+            if not auth.verify_token(token):
+                return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+        return await call_next(request)
 
 
 @asynccontextmanager
@@ -27,7 +45,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(AuthMiddleware)
 
+app.include_router(auth_router, prefix="/api")
 app.include_router(scrapers.router, prefix="/api")
 app.include_router(runs.router, prefix="/api")
 app.include_router(schedule.router, prefix="/api")
