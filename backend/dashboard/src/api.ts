@@ -87,3 +87,30 @@ export async function getMenuItems(listingId: string): Promise<MenuItem[]> {
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
+
+export interface Claim {
+  id: string
+  restaurant_id: string
+  owner_email: string
+  direct_order_url: string
+  verified: boolean
+  claimed_at: string
+  restaurants?: { name: string } | null
+}
+
+export async function getClaims(verified?: boolean): Promise<Claim[]> {
+  const qs = verified !== undefined ? `?verified=${verified}` : ''
+  const res = await apiFetch(`${BASE}/claims${qs}`)
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export async function approveClaim(id: string): Promise<void> {
+  const res = await apiFetch(`${BASE}/claims/${id}/approve`, { method: 'POST' })
+  if (!res.ok) throw new Error(await res.text())
+}
+
+export async function rejectClaim(id: string): Promise<void> {
+  const res = await apiFetch(`${BASE}/claims/${id}/reject`, { method: 'POST' })
+  if (!res.ok) throw new Error(await res.text())
+}

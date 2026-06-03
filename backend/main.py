@@ -13,10 +13,11 @@ from starlette.requests import Request
 import auth
 import scheduler as sched
 import ws as ws_mod
-from routers import scrapers, runs, schedule, data, websites
+from routers import scrapers, runs, schedule, data, websites, claims as claims_router_mod
 from routers.auth_router import router as auth_router
 
 _PUBLIC_PATHS = {"/api/auth/login"}
+_PUBLIC_POST_PATHS = {"/api/claims"}
 _PUBLIC_PREFIXES = ("/dashboard/",)
 
 
@@ -24,6 +25,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
         if path in _PUBLIC_PATHS or any(path.startswith(p) for p in _PUBLIC_PREFIXES):
+            return await call_next(request)
+        if path in _PUBLIC_POST_PATHS and request.method == "POST":
             return await call_next(request)
 
         # WebSocket: token comes as ?token= query param (browsers can't send headers)
@@ -61,6 +64,7 @@ app.include_router(runs.router, prefix="/api")
 app.include_router(schedule.router, prefix="/api")
 app.include_router(data.router, prefix="/api")
 app.include_router(websites.router, prefix="/api")
+app.include_router(claims_router_mod.router, prefix="/api")
 
 
 @app.websocket("/ws/{run_id}")

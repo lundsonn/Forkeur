@@ -1,5 +1,6 @@
 'use client'
 import React, { useState, useMemo } from 'react'
+import { useTranslations } from 'next-intl'
 import Image from 'next/image'
 import {
   BasketItem,
@@ -41,6 +42,8 @@ type Props = {
 export default function BasketSimulator({ menuItems, listings, phone }: Props) {
   const [basket, setBasket] = useState<BasketItem[]>([])
   const [sheetOpen, setSheetOpen] = useState(false)
+
+  const tBasket = useTranslations('basket')
 
   const fees: PlatformFees = useMemo(() => {
     const result: PlatformFees = { uber_eats: null, deliveroo: null, takeaway: null, direct: null }
@@ -134,8 +137,8 @@ export default function BasketSimulator({ menuItems, listings, phone }: Props) {
     const feeText = l.delivery_fee_cents === null
       ? null
       : l.delivery_fee_cents === 0
-        ? 'Free delivery'
-        : `Delivery ${centsToEuro(l.delivery_fee_cents)}`
+        ? tBasket('free_delivery')
+        : tBasket('delivery', { fee: centsToEuro(l.delivery_fee_cents) })
     const minText = l.min_order_label ?? null
     const isPhone = l.platform === 'direct' && !l.platform_url
     const href = l.platform === 'direct' && phone
@@ -174,13 +177,13 @@ export default function BasketSimulator({ menuItems, listings, phone }: Props) {
 
       {/* Menu items list */}
       {menuItems.length === 0 ? (
-        <p className="text-sm text-stone-400 py-6">No menu data available yet.</p>
+        <p className="text-sm text-stone-400 py-6">{tBasket('no_menu')}</p>
       ) : (
         <div className="mb-6 -mx-5 px-5 overflow-x-auto">
           <table className="w-full min-w-[300px]">
             <thead>
               <tr className="border-b border-stone-200">
-                <th className="text-left text-[10px] font-semibold tracking-widest text-stone-400 uppercase pb-2 pr-2">Item</th>
+                <th className="text-left text-[10px] font-semibold tracking-widest text-stone-400 uppercase pb-2 pr-2">{tBasket('item')}</th>
                 {PLATFORMS.map((p) => (
                   <th key={p} className={`text-center text-[10px] font-semibold tracking-widest uppercase pb-2 w-14 ${PLATFORM_COLORS[p].label}`}>
                     {PLATFORM_SHORT[p]}
@@ -288,10 +291,10 @@ export default function BasketSimulator({ menuItems, listings, phone }: Props) {
           >
             <div>
               <p className="text-xs text-stone-400">
-                {itemCount} item{itemCount !== 1 ? 's' : ''} · {centsToEuro(subtotalCents)}
+                {tBasket('items', { count: itemCount })} · {centsToEuro(subtotalCents)}
               </p>
               <p className="text-sm font-bold">
-                Best:{' '}
+                {tBasket('best')}{' '}
                 <span className={PLATFORM_COLORS[cheapestPlatform].label}>
                   {PLATFORM_LABELS[cheapestPlatform]}
                 </span>{' '}

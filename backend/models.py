@@ -13,6 +13,7 @@ class ScraperConfig:
     max_items: int | None = None  # None = no cap (full run); set to 10 for test mode
     scrape_menus: bool = False
     max_menus: int = 3
+    listing_only: bool = False  # skip Phase 2 (menu scraping); counts only
 
 
 @dataclass

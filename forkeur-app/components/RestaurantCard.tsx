@@ -11,9 +11,10 @@ const PLATFORM_SHORT: Record<Platform, string> = {
 type Props = {
   restaurant: RestaurantSummary
   isLast?: boolean
+  directBadge: string
 }
 
-export default function RestaurantCard({ restaurant, isLast }: Props) {
+export default function RestaurantCard({ restaurant, isLast, directBadge }: Props) {
   const { name, cuisine, listings, cheapest, order_url } = restaurant
 
   const tiles = listings.filter((l) => l.delivery_fee_cents !== null)
@@ -36,7 +37,7 @@ export default function RestaurantCard({ restaurant, isLast }: Props) {
           onClick={(e) => e.stopPropagation()}
           className="inline-flex items-center gap-1 mb-2.5 px-2.5 py-1 rounded-full bg-orange-50 border border-orange-200 text-orange-600 text-[11px] font-semibold hover:bg-orange-100 transition-colors"
         >
-          Commander directement · sans frais
+          {directBadge}
         </a>
       )}
 

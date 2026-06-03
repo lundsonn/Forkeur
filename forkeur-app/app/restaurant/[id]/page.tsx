@@ -1,8 +1,10 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { getTranslations } from 'next-intl/server'
 import { getRestaurantWithListings } from '@/lib/queries'
 import BasketSimulator from '@/components/BasketSimulator'
+import ClaimForm from '@/components/ClaimForm'
 
 export async function generateMetadata({
   params,
@@ -23,6 +25,7 @@ export default async function Page({
 }) {
   const { id } = await params
   const data = await getRestaurantWithListings(id)
+  const tDirect = await getTranslations('direct')
 
   if (!data) notFound()
 
@@ -55,12 +58,15 @@ export default async function Page({
             rel="noopener noreferrer"
             className="mt-3 flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-semibold text-sm transition-colors"
           >
-            Commander directement · sans frais de plateforme
+            {tDirect('badge_long')}
           </a>
         )}
       </div>
 
       <BasketSimulator menuItems={data.menuItems} listings={data.listings} phone={data.phone} />
+      <div className="px-5 pb-8">
+        <ClaimForm restaurantId={data.id} restaurantName={data.name} />
+      </div>
     </div>
   )
 }

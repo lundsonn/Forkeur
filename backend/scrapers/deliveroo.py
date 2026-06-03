@@ -8,6 +8,27 @@ from scrapers.base import new_browser, new_page, check_cloudflare, noop_log, Clo
 from scrapers.promos import parse_promo_texts
 import db
 
+# One representative address per Brussels postal code — mirrors Takeaway zone strategy.
+# Each zone is scraped with a fresh browser context (CF clearance per IP+session).
+LISTING_ZONES = [
+    "Grand-Place 1, 1000 Bruxelles",          # Centre / Pentagone
+    "Avenue de Laeken 1, 1020 Bruxelles",      # Laeken
+    "Place Colignon 1, 1030 Bruxelles",        # Schaerbeek
+    "Chaussée d'Etterbeek 1, 1040 Bruxelles",  # Etterbeek
+    "Chaussée d'Ixelles 1, 1050 Bruxelles",    # Ixelles
+    "Parvis de Saint-Gilles 1, 1060 Bruxelles",# Saint-Gilles
+    "Place de la Vaillance 1, 1070 Bruxelles", # Anderlecht
+    "Chaussée de Gand 1, 1080 Bruxelles",      # Molenbeek
+    "Rue du Prêtre 1, 1090 Bruxelles",         # Jette
+    "Rue de Fiennes 1, 1140 Bruxelles",        # Evere
+    "Avenue de Tervuren 1, 1150 Bruxelles",    # Woluwe-Saint-Pierre
+    "Chaussée de Wavre 1, 1160 Bruxelles",     # Auderghem
+    "Chaussée d'Alsemberg 1, 1180 Bruxelles",  # Uccle
+    "Rue de Forest 1, 1190 Bruxelles",         # Forest
+    "Avenue de Tervuren 200, 1200 Bruxelles",  # Woluwe-Saint-Lambert
+    "Rue Rogier 1, 1210 Bruxelles",            # Saint-Josse
+]
+
 _GH_BASE32 = "0123456789bcdefghjkmnpqrstuvwxyz"
 
 
@@ -143,20 +164,55 @@ async def scrape_menu_page(page, listing_id: str, url: str) -> tuple[str, list[d
     return (listing_id, items)
 
 
-async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -> ScraperResult:
-    log_fn("Starting Deliveroo scraper")
-    browser = await new_browser(lang="fr-BE")
-    records_saved = 0
+_LISTING_JS = """anchors => {
+    const seen = new Set();
+    return anchors.filter(a => {
+        const slug = (a.href.match(/\\/menu\\/([^?#]+)/) || [])[1];
+        if (!slug || seen.has(slug)) return false;
+        seen.add(slug);
+        return true;
+    }).map(a => {
+        const slug = (a.href.match(/\\/menu\\/([^?#]+)/) || [])[1] || '';
+        let card = a;
+        for (let i = 0; i < 8; i++) {
+            if (!card.parentElement) break;
+            card = card.parentElement;
+            if (card.tagName === 'LI' || card.tagName === 'ARTICLE') break;
+        }
+        const lines = (card.innerText || '').split('\\n').map(l => l.trim()).filter(Boolean);
+        const ratingIdx = lines.findIndex(l => /^[1-5][,.]\\d(\\s|$|\\()/.test(l));
+        const ratingLine = ratingIdx >= 0 ? lines[ratingIdx] : null;
+        const _isEta = l => /^\\d+(-\\d+)?\\s*min$|around\\s+\\d+/i.test(l);
+        const name = ratingIdx > 0 ? lines[ratingIdx - 1] : (lines.find(l => !_isEta(l) && !l.includes('€') && l.length > 3) || slug);
+        const ratingMatch = (ratingLine || '').match(/^(\\d[,.]\\d)/);
+        const reviewMatch = (ratingLine || '').match(/\\((\\d[\\d.,]*\\+?)\\)/);
+        const eta = lines.find(l => /^\\d+(-\\d+)?\\s*min$/i.test(l)) || 'N/A';
+        const promoLines = lines.filter(l =>
+            /spend|get|free|gratuit|promo|off|réduction|korting|gratis|achet|offert/i.test(l) &&
+            l !== name && !ratingLine?.startsWith(l) &&
+            !_isEta(l) && l.length < 120
+        );
+        const heroImg = card.querySelector('img[src]');
+        return {
+            name, url: a.href, slug,
+            rating: ratingMatch ? ratingMatch[1] : 'N/A',
+            review_count: reviewMatch ? reviewMatch[1] : '',
+            eta,
+            discount: promoLines[0] || null,
+            promoLines,
+            image_url: heroImg ? heroImg.src : null,
+        };
+    });
+}"""
 
+
+async def _scrape_zone_listings(browser, zone_address: str, log_fn) -> list[dict]:
+    """Load Deliveroo listing page for one address and return restaurant dicts."""
+    page = await new_page(browser, lang="fr-BE")
     try:
-        page = await new_page(browser, lang="fr-BE")
-
-        log_fn("Opening deliveroo.be/fr...")
         await page.goto("https://deliveroo.be/fr", wait_until="domcontentloaded", timeout=60000)
         check_cloudflare(await page.title())
-        log_fn("Page loaded")
 
-        # Accept cookies if banner present
         try:
             await page.click('button:has-text("Accept all"), button:has-text("Continue without accepting")', timeout=4000)
             await asyncio.sleep(0.5)
@@ -166,93 +222,76 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
         input_sel = 'input[id="location-search"], input[placeholder*="address" i], input[placeholder*="adresse" i]'
         await page.wait_for_selector(input_sel, timeout=10000)
         await page.click(input_sel)
-        await page.type(input_sel, config.address, delay=60)
-        # Suggestions render as li.ccl-ee4ea4aaab604785 — click the first one
+        await page.type(input_sel, zone_address, delay=60)
+
         suggestion_sel = 'li.ccl-ee4ea4aaab604785'
         try:
             await page.wait_for_selector(suggestion_sel, timeout=8000)
             await page.click(suggestion_sel)
         except Exception:
-            # Fallback: keyboard navigation
             await asyncio.sleep(2)
             await page.keyboard.press("ArrowDown")
             await asyncio.sleep(0.5)
             await page.keyboard.press("Enter")
 
-        # Wait for navigation to restaurants page (up to 20s)
         try:
             await page.wait_for_url("**/restaurants**", timeout=20000)
         except Exception:
             pass
 
-        listing_url = page.url
-        if "restaurants" not in listing_url:
-            raise RuntimeError(f"Did not land on restaurant listing — got: {listing_url}")
+        if "restaurants" not in page.url:
+            log_fn(f"  Did not reach listing page — got: {page.url}")
+            return []
 
-        log_fn(f"Listing page: {listing_url}")
         await page.wait_for_selector('a[href*="/menu/"]', timeout=10000)
 
-        # Height-stable + link-count-stable scroll to load all restaurants
+        # Height + count stable scroll (1.5s per tick, stale=5)
         prev_h, prev_count, stale = 0, 0, 0
-        for _ in range(60):
+        for _ in range(80):
             await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            await asyncio.sleep(0.8)
+            await asyncio.sleep(1.5)
             h = await page.evaluate("document.body.scrollHeight")
             count = await page.evaluate("document.querySelectorAll('a[href*=\"/menu/\"]').length")
             if h == prev_h and count == prev_count:
                 stale += 1
-                if stale >= 3:
+                if stale >= 5:
                     break
             else:
                 stale = 0
             prev_h, prev_count = h, count
-        await asyncio.sleep(1)
+        await asyncio.sleep(1.5)
 
-        restaurants = await page.eval_on_selector_all('a[href*="/menu/"]', """anchors => {
-            const seen = new Set();
-            return anchors.filter(a => {
-                const slug = (a.href.match(/\\/menu\\/([^?#]+)/) || [])[1];
-                if (!slug || seen.has(slug)) return false;
-                seen.add(slug);
-                return true;
-            }).map(a => {
-                const slug = (a.href.match(/\\/menu\\/([^?#]+)/) || [])[1] || '';
-                let card = a;
-                for (let i = 0; i < 8; i++) {
-                    if (!card.parentElement) break;
-                    card = card.parentElement;
-                    if (card.tagName === 'LI' || card.tagName === 'ARTICLE') break;
-                }
-                const lines = (card.innerText || '').split('\\n').map(l => l.trim()).filter(Boolean);
-                // Match "4.2 Excellent", "4,2 Bien", "4.2 (1234)", or bare "4.2"
-                const ratingIdx = lines.findIndex(l => /^[1-5][,.]\\d(\\s|$|\\()/.test(l));
-                const ratingLine = ratingIdx >= 0 ? lines[ratingIdx] : null;
-                const _isEta = l => /^\\d+(-\\d+)?\\s*min$|around\\s+\\d+/i.test(l);
-                const name = ratingIdx > 0 ? lines[ratingIdx - 1] : (lines.find(l => !_isEta(l) && !l.includes('€') && l.length > 3) || slug);
-                const ratingMatch = (ratingLine || '').match(/^(\\d[,.]\\d)/);
-                const reviewMatch = (ratingLine || '').match(/\\((\\d[\\d.,]*\\+?)\\)/);
-                const eta = lines.find(l => /^\\d+(-\\d+)?\\s*min$/i.test(l)) || 'N/A';
-                // Promo/discount: any line with delivery/fee/free/€ that isn't the name or rating
-                // Collect ALL promo lines from the card (not just the first)
-                const promoLines = lines.filter(l =>
-                    /spend|get|free|gratuit|promo|off|réduction|korting|gratis|achet|offert/i.test(l) &&
-                    l !== name && !ratingLine?.startsWith(l) &&
-                    !_isEta(l) && l.length < 120
-                );
-                return {
-                    name,
-                    url: a.href,
-                    slug,
-                    rating: ratingMatch ? ratingMatch[1] : 'N/A',
-                    review_count: reviewMatch ? reviewMatch[1] : '',
-                    eta,
-                    discount: promoLines[0] || null,
-                    promoLines,
-                };
-            });
-        }""")
+        return await page.eval_on_selector_all('a[href*="/menu/"]', _LISTING_JS)
+    except Exception as exc:
+        log_fn(f"  Error: {exc}")
+        return []
+    finally:
+        await page.close()
 
-        log_fn(f"Found {len(restaurants)} restaurants")
+
+async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -> ScraperResult:
+    log_fn("Starting Deliveroo scraper")
+    browser = await new_browser(lang="fr-BE")
+    records_saved = 0
+    page = None
+
+    try:
+        # Phase 0: collect listings across all zones, dedup by slug
+        zones = LISTING_ZONES
+        all_by_slug: dict[str, dict] = {}
+        for zone_address in zones:
+            log_fn(f"Zone: {zone_address}")
+            zone_restaurants = await _scrape_zone_listings(browser, zone_address, log_fn)
+            new_count = 0
+            for r in zone_restaurants:
+                if r["slug"] not in all_by_slug:
+                    all_by_slug[r["slug"]] = r
+                    new_count += 1
+            log_fn(f"  {len(zone_restaurants)} cards, {new_count} new (total {len(all_by_slug)})")
+            await asyncio.sleep(1)
+
+        restaurants = list(all_by_slug.values())
+        log_fn(f"Found {len(restaurants)} unique restaurants across {len(zones)} zones")
 
         if config.target:
             restaurants = [r for r in restaurants if config.target.lower() in r["name"].lower() or config.target.lower() in r["slug"].lower()]
@@ -266,6 +305,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 rid = db.upsert_restaurant({
                     "name": r["name"],
                     "slug": r["slug"],
+                    "image_url": r.get("image_url"),
                     **({} if coords is None else {"lat": coords[0], "lng": coords[1]}),
                 })
             except ValueError:
@@ -287,12 +327,16 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
 
         log_fn(f"Phase 1 — {records_saved} listings, {promo_total} promotions saved")
 
+        if config.listing_only:
+            return ScraperResult(records_saved=records_saved)
+
         # --- Phase 2: goto per restaurant menu page ---
         # SPA click only renders a partial React tree → ~6 items.
         # Full goto gives 100+ items because the full SSR + hydration runs.
         # Deliveroo has no CF on menu pages so goto is safe.
         menu_items_saved = 0
         n = len(saved)
+        page = await new_page(browser, lang="fr-BE")
         for i, (r, rid, lid) in enumerate(saved):
             log_fn(f"Menu: {i + 1}/{n} — {r['name']}")
             try:
@@ -570,6 +614,10 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
         return ScraperResult(records_saved=records_saved, restaurants=restaurants, menu_items_saved=menu_items_saved)
 
     finally:
+        try:
+            await page.close()
+        except Exception:
+            pass
         await browser.close()
 
 

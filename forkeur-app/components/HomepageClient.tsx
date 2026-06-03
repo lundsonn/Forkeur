@@ -4,6 +4,8 @@ import Link from 'next/link'
 import type { RestaurantSummary } from '@/lib/queries'
 import RestaurantCard from './RestaurantCard'
 import MapView from './MapView'
+import { useTranslations } from 'next-intl'
+import LangToggle from './LangToggle'
 
 export default function HomepageClient({
   restaurants,
@@ -15,6 +17,13 @@ export default function HomepageClient({
   const [search, setSearch] = useState('')
   const [selectedCuisine, setSelectedCuisine] = useState<string | null>(null)
   const [view, setView] = useState<'list' | 'map'>('list')
+
+  const tNav = useTranslations('nav')
+  const tHero = useTranslations('hero')
+  const tSearch = useTranslations('search')
+  const tFilters = useTranslations('filters')
+  const tResults = useTranslations('results')
+  const tDirect = useTranslations('direct')
 
   const filtered = useMemo(
     () =>
@@ -39,11 +48,12 @@ export default function HomepageClient({
           </span>
         </div>
         <div className="flex items-center gap-1">
+          <LangToggle />
           <Link
             href="/deals"
             className="px-2.5 py-1 rounded-lg text-xs font-medium text-orange-500 hover:text-orange-600 transition-colors"
           >
-            Deals 🏷️
+            {tNav('deals')}
           </Link>
           <button
             onClick={() => setView('list')}
@@ -53,7 +63,7 @@ export default function HomepageClient({
                 : 'text-stone-500 hover:text-stone-700'
             }`}
           >
-            List
+            {tNav('list')}
           </button>
           <button
             onClick={() => setView('map')}
@@ -63,14 +73,14 @@ export default function HomepageClient({
                 : 'text-stone-500 hover:text-stone-700'
             }`}
           >
-            Map
+            {tNav('map')}
           </button>
         </div>
       </div>
 
       {/* Hero */}
       <h1 className="text-[1.65rem] font-bold text-stone-900 leading-tight mb-4">
-        Where are you<br />ordering from?
+        {tHero('heading_line1')}<br />{tHero('heading_line2')}
       </h1>
 
       {/* Search */}
@@ -78,7 +88,7 @@ export default function HomepageClient({
         <span className="text-stone-400 text-sm">🔍</span>
         <input
           className="flex-1 text-sm outline-none placeholder:text-stone-400"
-          placeholder="Search a restaurant"
+          placeholder={tSearch('placeholder')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -94,7 +104,7 @@ export default function HomepageClient({
           className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
             !selectedCuisine ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600'
           }`}
-        >All</button>
+        >{tFilters('all')}</button>
         {cuisines.map((c) => (
           <button
             key={c}
@@ -115,18 +125,18 @@ export default function HomepageClient({
         <>
           {/* List label */}
           <p className="text-[10px] font-semibold tracking-widest text-stone-400 uppercase mb-3">
-            {search || selectedCuisine ? `${filtered.length} result${filtered.length !== 1 ? 's' : ''}` : 'Restaurants'}
+            {search || selectedCuisine ? tResults('count', { count: filtered.length }) : tResults('restaurants')}
           </p>
 
           {/* Restaurant list */}
           <div>
             {filtered.map((r, i) => (
               <Link key={r.id} href={`/restaurant/${r.id}`}>
-                <RestaurantCard restaurant={r} isLast={i === filtered.length - 1} />
+                <RestaurantCard restaurant={r} isLast={i === filtered.length - 1} directBadge={tDirect('badge')} />
               </Link>
             ))}
             {filtered.length === 0 && (
-              <p className="text-center text-stone-400 text-sm py-16">No restaurants found</p>
+              <p className="text-center text-stone-400 text-sm py-16">{tResults('none')}</p>
             )}
           </div>
         </>

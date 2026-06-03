@@ -131,7 +131,8 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 "lat": marker.get("latitude"),
                 "lng": marker.get("longitude"),
                 "discount": discount,
-                "_store": s,          # retained for promotion extraction below
+                "image_url": _extract_store_image(s),
+                "_store": s,
             })
 
         if config.target:
@@ -148,6 +149,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                     "slug": slug,
                     "lat": r.get("lat"),
                     "lng": r.get("lng"),
+                    "image_url": r.get("image_url"),
                 })
             except ValueError:
                 continue  # junk entry filtered by db._is_junk
@@ -167,6 +169,9 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
             records_saved += 1
 
         log_fn(f"Phase 1 done — {records_saved} listings, {promo_total} promotions saved")
+
+        if config.listing_only:
+            return ScraperResult(records_saved=records_saved)
 
         # ── Phase 2: menu scraping via click-nav ─────────────────────────────
         # Direct goto(restaurant_url) triggers Uber bot-defense/reCAPTCHA.
@@ -292,6 +297,17 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
 
     finally:
         await browser.close()
+
+
+def _extract_store_image(store: dict) -> str | None:
+    """Extract best restaurant hero/thumbnail image from a UberEats store object."""
+    for key in ("heroImageUrls", "thumbnailImageUrls", "coverImageUrls"):
+        imgs = store.get(key)
+        if imgs and isinstance(imgs, list):
+            url = (imgs[0] or {}).get("url")
+            if url:
+                return url
+    return store.get("trackingImageUrl") or store.get("imageUrl") or None
 
 
 def _parse_menu_items(store_data: dict) -> list[dict]:

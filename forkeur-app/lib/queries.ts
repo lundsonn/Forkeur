@@ -7,9 +7,12 @@ export type RestaurantSummary = {
   id: string
   name: string
   cuisine: string[]
+  neighborhood: string | null
   lat: number | null
   lng: number | null
   order_url: string | null
+  image_url: string | null
+  rating: number | null
   listings: { platform: Platform; delivery_fee_cents: number | null }[]
   cheapest: {
     platform: Platform
@@ -77,8 +80,8 @@ export async function getRestaurants(): Promise<{
   const { data, error } = await supabase
     .from('restaurants')
     .select(`
-      id, name, cuisine, lat, lng, order_url,
-      platform_listings ( platform, delivery_fee )
+      id, name, cuisine, neighborhood, lat, lng, order_url, image_url,
+      platform_listings ( platform, delivery_fee, rating )
     `)
 
   if (error) throw new Error(`getRestaurants: ${error.message}`)
@@ -88,6 +91,7 @@ export async function getRestaurants(): Promise<{
       const rawListings = (r.platform_listings ?? []) as {
         platform: string
         delivery_fee: number | null
+        rating: number | null
       }[]
 
       const listings = rawListings.map((l) => ({
@@ -95,20 +99,31 @@ export async function getRestaurants(): Promise<{
         delivery_fee_cents: feeCents(l.delivery_fee),
       }))
 
+      const bestRating = rawListings.reduce<number | null>((best, l) => {
+        if (l.rating == null) return best
+        const v = Number(l.rating)
+        return best == null || v > best ? v : best
+      }, null)
+
       const available = listings.filter((l) => l.delivery_fee_cents !== null)
 
       const lat = r.lat != null ? Number(r.lat) : null
       const lng = r.lng != null ? Number(r.lng) : null
       const order_url: string | null = (r as any).order_url ?? null
+      const image_url: string | null = (r as any).image_url ?? null
+      const neighborhood: string | null = (r as any).neighborhood ?? null
 
       if (available.length === 0) {
         return {
           id: r.id,
           name: r.name,
           cuisine: r.cuisine ? [r.cuisine] : [],
+          neighborhood,
           lat,
           lng,
           order_url,
+          image_url,
+          rating: bestRating,
           listings,
           cheapest: null,
         }
@@ -124,9 +139,12 @@ export async function getRestaurants(): Promise<{
         id: r.id,
         name: r.name,
         cuisine: r.cuisine ? [r.cuisine] : [],
+        neighborhood,
         lat,
         lng,
         order_url,
+        image_url,
+        rating: bestRating,
         listings,
         cheapest: {
           platform: cheapest.platform,

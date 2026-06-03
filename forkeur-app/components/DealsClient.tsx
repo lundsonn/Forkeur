@@ -7,8 +7,9 @@ import {
   matchesFilter,
   filterCounts,
   sortDeals,
-  badgeText,
 } from '@/lib/deals'
+import { useTranslations } from 'next-intl'
+import LangToggle from './LangToggle'
 
 const PLATFORM_META: Record<string, { name: string; color: string }> = {
   uber_eats: { name: 'UberEats', color: 'bg-black text-white' },
@@ -20,6 +21,30 @@ type ActiveSet = Set<Exclude<DealFilter, 'all'>>
 
 export default function DealsClient({ deals }: { deals: DealItem[] }) {
   const [active, setActive] = useState<ActiveSet>(new Set())
+
+  const tNav = useTranslations('nav')
+  const tDeals = useTranslations('deals')
+  const tFilters = useTranslations('filters')
+  const tBadge = useTranslations('badge')
+
+  function localizedBadge(d: DealItem): string {
+    switch (d.promo_type) {
+      case 'bogo': return tBadge('bogo')
+      case 'pct_discount': return d.value != null ? tBadge('pct_off', { value: Math.round(d.value) }) : '%'
+      case 'abs_discount': return d.value != null ? tBadge('eur_off', { value: d.value.toFixed(2) }) : '€'
+      case 'free_delivery': return tBadge('free_delivery')
+      case 'free_item': return tBadge('free_item')
+      default: return d.label
+    }
+  }
+
+  const filterLabel: Record<DealFilter, string> = {
+    all: tFilters('all'),
+    bogo: tFilters('bogo'),
+    pct: tFilters('pct'),
+    free_delivery: tFilters('free_delivery'),
+    free_item: tFilters('free_item'),
+  }
 
   const counts = useMemo(() => filterCounts(deals), [deals])
 
@@ -48,22 +73,25 @@ export default function DealsClient({ deals }: { deals: DealItem[] }) {
             fork<span className="text-orange-500">eur</span>
           </span>
         </Link>
-        <Link href="/" className="text-xs text-stone-400 hover:text-stone-600">
-          ← Restaurants
-        </Link>
+        <div className="flex items-center gap-1">
+          <LangToggle />
+          <Link href="/" className="text-xs text-stone-400 hover:text-stone-600">
+            {tNav('back_restaurants')}
+          </Link>
+        </div>
       </div>
 
       {/* Hero */}
       <h1 className="text-[1.65rem] font-bold leading-tight mb-1" style={{ color: '#1A1A1A' }}>
-        Best deals
+        {tDeals('heading')}
       </h1>
       <p className="text-sm text-stone-400 mb-5">
-        {deals.length} live offers across UberEats, Deliveroo & Takeaway
+        {tDeals('subtitle', { count: deals.length })}
       </p>
 
       {/* Filter pills */}
       <div className="flex gap-2 overflow-x-auto pb-2 mb-5 scrollbar-hide">
-        {DEAL_FILTERS.map(({ key, label }) => {
+        {DEAL_FILTERS.map(({ key }) => {
           const isActive = key === 'all' ? active.size === 0 : active.has(key)
           const count = counts[key]
           if (key !== 'all' && count === 0) return null
@@ -78,7 +106,7 @@ export default function DealsClient({ deals }: { deals: DealItem[] }) {
               }`}
               style={isActive ? { backgroundColor: '#2E86D8' } : undefined}
             >
-              <span>{label}</span>
+              <span>{filterLabel[key]}</span>
               {key !== 'all' && (
                 <span className={`text-[10px] ${isActive ? 'text-blue-100' : 'text-stone-400'}`}>
                   {count}
@@ -92,7 +120,7 @@ export default function DealsClient({ deals }: { deals: DealItem[] }) {
       {/* Deal cards */}
       {visible.length === 0 ? (
         <p className="text-sm text-stone-400 text-center py-16">
-          No deals in this category right now.
+          {tDeals('none')}
         </p>
       ) : (
         <div className="space-y-3 pb-10">
@@ -131,11 +159,11 @@ export default function DealsClient({ deals }: { deals: DealItem[] }) {
                     className="inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full text-white"
                     style={{ backgroundColor: '#1E8A5A' }}
                   >
-                    {badgeText(d)}
+                    {localizedBadge(d)}
                   </span>
                   {d.min_order != null && (
                     <span className="text-xs" style={{ color: '#888780' }}>
-                      Min. €{d.min_order}
+                      {tDeals('min_order', { amount: d.min_order })}
                     </span>
                   )}
                   {d.rating != null && (

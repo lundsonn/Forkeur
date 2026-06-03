@@ -6,6 +6,7 @@ const links = [
   { to: '/history', label: 'History' },
   { to: '/schedule', label: 'Schedule' },
   { to: '/data', label: 'Data' },
+  { to: '/claims', label: 'Claims' },
 ]
 
 export default function Sidebar() {

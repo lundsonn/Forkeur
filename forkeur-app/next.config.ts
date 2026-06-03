@@ -11,6 +11,8 @@ const nextConfig: NextConfig = {
       { hostname: '**.deliveroo.com' },
       { hostname: '**.roocdn.com' },
       { hostname: '**.cloudinary.com' },
+      { hostname: '**.takeaway.com' },
+      { hostname: '**.just-eat.com' },
     ],
   },
 }

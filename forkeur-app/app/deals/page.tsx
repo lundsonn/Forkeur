@@ -1,10 +1,14 @@
 import type { Metadata } from 'next'
+import { getTranslations } from 'next-intl/server'
 import { getDeals } from '@/lib/queries'
 import DealsClient from '@/components/DealsClient'
 
-export const metadata: Metadata = {
-  title: "Best deals",
-  description: "Best restaurant deals and promotions across UberEats, Deliveroo, and Takeaway in Brussels.",
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('meta')
+  return {
+    title: t('deals_title'),
+    description: t('deals_description'),
+  }
 }
 
 export default async function DealsPage() {

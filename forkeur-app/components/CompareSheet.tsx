@@ -1,6 +1,7 @@
 'use client'
 import { useRef } from 'react'
 import { Platform, PLATFORM_LABELS, PLATFORM_COLORS, centsToEuro } from '@/lib/basket'
+import { useTranslations } from 'next-intl'
 
 type SortedEntry = {
   platform: Platform
@@ -29,10 +30,11 @@ export default function CompareSheet({
 }: Props) {
   const colors = PLATFORM_COLORS[cheapestPlatform]
   const swipeRef = useRef<{ startY: number } | null>(null)
+  const tCompare = useTranslations('compare')
 
   const cta = (
     <div className="bg-blue-600 text-white rounded-xl px-5 py-3.5 text-center font-semibold text-sm">
-      Order on {PLATFORM_LABELS[cheapestPlatform]}
+      {t('order_on', { platform: PLATFORM_LABELS[cheapestPlatform] })}
     </div>
   )
 
@@ -64,7 +66,7 @@ export default function CompareSheet({
         <div className="px-5 pb-8">
           {/* Winner card */}
           <p className="text-[10px] font-semibold tracking-widest text-stone-400 uppercase mb-3">
-            Best right now
+            {t('best_now')}
           </p>
           <div className="flex items-center gap-2 mb-1">
             <span className={`w-2.5 h-2.5 rounded-full ${colors.dot}`} />
@@ -72,31 +74,31 @@ export default function CompareSheet({
               {PLATFORM_LABELS[cheapestPlatform]}
             </p>
           </div>
-          <p className="text-sm text-stone-500 mb-4">Cheapest and fastest right now.</p>
+          <p className="text-sm text-stone-500 mb-4">{t('subtitle')}</p>
 
           {/* Metrics */}
           <div className="flex gap-6 mb-5">
             <div>
               <p className="text-xl font-bold text-stone-900">{centsToEuro(total)}</p>
-              <p className="text-[10px] text-stone-400 uppercase tracking-wide mt-0.5">Total</p>
+              <p className="text-[10px] text-stone-400 uppercase tracking-wide mt-0.5">{t('total')}</p>
             </div>
             {eta && (
               <div>
                 <p className="text-xl font-bold text-stone-900">{eta}</p>
-                <p className="text-[10px] text-stone-400 uppercase tracking-wide mt-0.5">Delivery</p>
+                <p className="text-[10px] text-stone-400 uppercase tracking-wide mt-0.5">{t('delivery')}</p>
               </div>
             )}
             {savingsCents !== null && savingsCents > 0 && (
               <div>
                 <p className="text-xl font-bold text-green-600">{centsToEuro(savingsCents)}</p>
-                <p className="text-[10px] text-stone-400 uppercase tracking-wide mt-0.5">You save</p>
+                <p className="text-[10px] text-stone-400 uppercase tracking-wide mt-0.5">{t('you_save')}</p>
               </div>
             )}
           </div>
 
           {/* All three */}
           <p className="text-[10px] font-semibold tracking-widest text-stone-400 uppercase mb-2 pt-4 border-t border-stone-100">
-            All three · live prices
+            {t('all_live')}
           </p>
           {sortedByTotal.map(({ platform, total: t, eta: e }) => {
             const isBest = platform === cheapestPlatform
@@ -113,7 +115,7 @@ export default function CompareSheet({
                   </span>
                   {isBest && (
                     <span className="text-[10px] border border-stone-300 rounded-full px-1.5 py-0.5 text-stone-500 leading-none">
-                      Best
+                      {t('best_badge')}
                     </span>
                   )}
                 </div>
@@ -128,7 +130,7 @@ export default function CompareSheet({
           })}
 
           <p className="text-xs text-stone-400 mt-3 mb-5">
-            Why {PLATFORM_LABELS[cheapestPlatform]}? Lowest total including all fees.
+            {t('why', { platform: PLATFORM_LABELS[cheapestPlatform] })}
           </p>
 
           {/* CTA */}
@@ -137,7 +139,7 @@ export default function CompareSheet({
               href={platformUrl}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label={`Order on ${PLATFORM_LABELS[cheapestPlatform]}`}
+              aria-label={t('order_on', { platform: PLATFORM_LABELS[cheapestPlatform] })}
             >
               {cta}
             </a>

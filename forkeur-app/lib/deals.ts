@@ -25,12 +25,12 @@ export type DealItem = {
 /** Active filter pills. `pct` covers both pct_discount and abs_discount. */
 export type DealFilter = 'all' | 'bogo' | 'pct' | 'free_delivery' | 'free_item'
 
-export const DEAL_FILTERS: { key: DealFilter; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'bogo', label: '2-for-1' },
-  { key: 'pct', label: '% Off' },
-  { key: 'free_delivery', label: 'Free Delivery' },
-  { key: 'free_item', label: 'Free Item' },
+export const DEAL_FILTERS: { key: DealFilter }[] = [
+  { key: 'all' },
+  { key: 'bogo' },
+  { key: 'pct' },
+  { key: 'free_delivery' },
+  { key: 'free_item' },
 ]
 
 /** Does a deal match a single pill key? */

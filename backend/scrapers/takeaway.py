@@ -107,7 +107,10 @@ _LISTING_EVAL = """
         const feeEl = card.querySelector('[data-qa="delivery-fee"], [data-qa="restaurant-delivery-fee"]');
         const feeText = feeEl ? (feeEl.innerText || '').trim() : null;
 
-        return [{ name, slug, href, rating, eta, feeText, promoLines }];
+        const heroImg = card.querySelector('img[src]');
+        const image_url = heroImg ? heroImg.src : null;
+
+        return [{ name, slug, href, rating, eta, feeText, promoLines, image_url }];
     });
 }
 """
@@ -272,7 +275,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
         saved: list[tuple[dict, str]] = []
         for r in restaurants:
             try:
-                rid = db.upsert_restaurant({"name": r["name"], "slug": r["slug"]})
+                rid = db.upsert_restaurant({"name": r["name"], "slug": r["slug"], "image_url": r.get("image_url")})
             except ValueError:
                 continue
             url = f"https://www.takeaway.com{r['href']}"
@@ -291,6 +294,9 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
             saved.append((r, lid))
 
         log_fn(f"Phase 1 done — {records_saved} listings saved")
+
+        if config.listing_only:
+            return ScraperResult(records_saved=records_saved)
 
         # Phase 2: menu per restaurant — fresh page per restaurant to avoid CF re-challenge
 

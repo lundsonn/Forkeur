@@ -104,11 +104,16 @@ def upsert_restaurant(data: dict) -> str:
         data = {**data, "cuisine": infer_cuisine(name)}
 
     def _found(rid: str) -> str:
-        if data.get("cuisine"):
-            existing = client.table("restaurants").select("cuisine").eq("id", rid).limit(1).execute()
-            if existing.data and not existing.data[0].get("cuisine"):
-                client.table("restaurants").update({"cuisine": data["cuisine"]}).eq("id", rid).execute()
-        updates = {k: data[k] for k in ("lat", "lng") if data.get(k) is not None}
+        existing = client.table("restaurants").select("cuisine, image_url").eq("id", rid).limit(1).execute()
+        row = existing.data[0] if existing.data else {}
+        updates: dict = {}
+        if data.get("cuisine") and not row.get("cuisine"):
+            updates["cuisine"] = data["cuisine"]
+        if data.get("image_url") and not row.get("image_url"):
+            updates["image_url"] = data["image_url"]
+        for k in ("lat", "lng"):
+            if data.get(k) is not None:
+                updates[k] = data[k]
         if updates:
             client.table("restaurants").update(updates).eq("id", rid).execute()
         return rid
@@ -322,3 +327,58 @@ def mark_restaurant_searched(restaurant_id: str) -> None:
     get_client().table("restaurants").update({
         "website_searched_at": datetime.now(timezone.utc).isoformat(),
     }).eq("id", restaurant_id).execute()
+
+
+def insert_claim(restaurant_id: str, owner_email: str, direct_order_url: str) -> str:
+    """Insert a restaurant claim (verified=False). Returns claim id."""
+    client = get_client()
+    res = client.table("restaurant_claims").insert({
+        "restaurant_id": restaurant_id,
+        "owner_email": owner_email,
+        "direct_order_url": direct_order_url,
+        "verified": False,
+    }).execute()
+    return res.data[0]["id"]
+
+
+def get_claims(verified: bool | None = None) -> list[dict]:
+    """Return claims, optionally filtered by verified status."""
+    client = get_client()
+    q = client.table("restaurant_claims").select(
+        "id, restaurant_id, owner_email, direct_order_url, verified, claimed_at, "
+        "restaurants(name)"
+    )
+    if verified is not None:
+        q = q.eq("verified", verified)
+    return q.order("claimed_at", desc=True).execute().data
+
+
+def approve_claim(claim_id: str) -> None:
+    """Approve a claim: set verified=True, update restaurants.order_url, upsert direct listing."""
+    client = get_client()
+    rows = client.table("restaurant_claims").select(
+        "id, restaurant_id, direct_order_url"
+    ).eq("id", claim_id).execute().data
+    if not rows:
+        raise ValueError(f"Claim not found: {claim_id!r}")
+    claim = rows[0]
+
+    client.table("restaurants").update(
+        {"order_url": claim["direct_order_url"]}
+    ).eq("id", claim["restaurant_id"]).execute()
+
+    client.table("restaurant_claims").update(
+        {"verified": True}
+    ).eq("id", claim_id).execute()
+
+    upsert_listing({
+        "restaurant_id": claim["restaurant_id"],
+        "platform": "direct",
+        "url": claim["direct_order_url"],
+        "is_available": True,
+    })
+
+
+def reject_claim(claim_id: str) -> None:
+    """Delete a claim (rejected — not approved)."""
+    get_client().table("restaurant_claims").delete().eq("id", claim_id).execute()
