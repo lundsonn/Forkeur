@@ -108,11 +108,12 @@ async def _check_website(page, url: str, log: Callable) -> dict:
 
     out['phone'] = _extract_phone(text)
 
-    # Collect all hrefs
+    # Collect all hrefs — SVG <a> elements return SVGAnimatedString dicts, filter those out
     try:
-        links: list[str] = await page.eval_on_selector_all(
+        raw_links = await page.eval_on_selector_all(
             'a[href]', 'els => els.map(e => e.href).filter(Boolean)'
         )
+        links: list[str] = [l for l in raw_links if isinstance(l, str)]
     except Exception:
         links = []
 
