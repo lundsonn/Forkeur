@@ -7,6 +7,8 @@ const threeListings: RestaurantSummary = {
   id: '1',
   name: "McDonald's",
   cuisine: ['Burgers'],
+  lat: null,
+  lng: null,
   listings: [
     { platform: 'uber_eats', delivery_fee_cents: 49 },
     { platform: 'deliveroo', delivery_fee_cents: 149 },
@@ -19,6 +21,8 @@ const nullFees: RestaurantSummary = {
   id: '3',
   name: 'Sushi Place',
   cuisine: ['Asian'],
+  lat: null,
+  lng: null,
   listings: [
     { platform: 'uber_eats', delivery_fee_cents: null },
     { platform: 'deliveroo', delivery_fee_cents: 299 },
@@ -30,6 +34,8 @@ const freeListing: RestaurantSummary = {
   id: '4',
   name: 'Burger King',
   cuisine: ['Fast food'],
+  lat: null,
+  lng: null,
   listings: [
     { platform: 'uber_eats', delivery_fee_cents: 0 },
     { platform: 'deliveroo', delivery_fee_cents: 99 },

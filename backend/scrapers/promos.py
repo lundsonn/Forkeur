@@ -4,18 +4,29 @@ import re
 
 
 def extract_min_order(text: str) -> float | None:
-    """Parse the minimum spend amount from a promotion text (FR/DE/EN)."""
+    """Parse the minimum spend amount from a promotion text (FR/NL/DE/EN)."""
     low = text.lower()
     patterns = [
-        r"spend\s+€\s*(\d+(?:[,.]\d+)?)",
-        r"zahle\s+(\d+(?:[,.]\d+)?)\s*€",
-        r"\(zahle\s+(\d+(?:[,.]\d+)?)(?:\s*€)?\)",
-        r"ab einem warenwert von\s+(\d+(?:[,.]\d+)?)\s*€",
-        r"(?:dès|à partir de)\s+(\d+(?:[,.]\d+)?)\s*€",
-        r"(?:pour|for).{0,20}(?:≥|>=|>|de)\s*€?\s*(\d+(?:[,.]\d+)?)",
-        r"(?:min|minimum)[.:\s]+€?\s*(\d+(?:[,.]\d+)?)",
-        r"(?:commande|order) (?:de |d'au moins |of |minimum )?€?\s*(\d+(?:[,.]\d+)?)",
-        r"(\d+(?:[,.]\d+)?)\s*€(?:\s+d'achat|\s+minimum|\s+min\.?)?$",
+        # EN: "on orders over €15", "on orders of €10 or more", "on orders €15+"
+        r"orders?\s+(?:over|above|of)\s+[€$£]?\s*(\d+(?:[,.]\d+)?)",
+        r"orders?\s+[€$£]\s*(\d+(?:[,.]\d+)?)\s*\+",
+        # FR: "dès €15" or "dès 15€" or "à partir de €15"
+        r"(?:dès|à partir de)\s+[€$£]?\s*(\d+(?:[,.]\d+)?)(?:\s*[€$£])?",
+        # NL: "vanaf €20"
+        r"vanaf\s+[€$£]?\s*(\d+(?:[,.]\d+)?)",
+        # DE: "ab €12", "ab einem Warenwert von €12"
+        r"ab\s+(?:einem\s+warenwert\s+von\s+)?[€$£]?\s*(\d+(?:[,.]\d+)?)",
+        # EN: "spend €15"
+        r"spend\s+[€$£]\s*(\d+(?:[,.]\d+)?)",
+        # DE: "zahle 10 €" or "(zahle 10)"
+        r"\(?zahle\s+(\d+(?:[,.]\d+)?)(?:\s*[€$£])?\)?",
+        # FR/EN: "pour/for ... > €X", "minimum €X"
+        r"(?:pour|for).{0,20}(?:≥|>=|>|de)\s*[€$£]?\s*(\d+(?:[,.]\d+)?)",
+        r"(?:min|minimum)[.:\s]+[€$£]?\s*(\d+(?:[,.]\d+)?)",
+        # FR: "commande de €X", EN: "order of €X"
+        r"(?:commande|order)\s+(?:de\s+|d'au moins\s+|of\s+|minimum\s+)?[€$£]?\s*(\d+(?:[,.]\d+)?)",
+        # Trailing: "15€ d'achat", "15€ minimum"
+        r"(\d+(?:[,.]\d+)?)\s*[€$£](?:\s+d'achat|\s+minimum|\s+min\.?)?$",
     ]
     for pat in patterns:
         m = re.search(pat, low)

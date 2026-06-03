@@ -1,12 +1,13 @@
 // lib/basket.ts
 
-export type Platform = 'uber_eats' | 'deliveroo' | 'takeaway'
-export const PLATFORMS: Platform[] = ['uber_eats', 'deliveroo', 'takeaway']
+export type Platform = 'uber_eats' | 'deliveroo' | 'takeaway' | 'direct'
+export const PLATFORMS: Platform[] = ['uber_eats', 'deliveroo', 'takeaway', 'direct']
 
 export const PLATFORM_LABELS: Record<Platform, string> = {
   uber_eats: 'Uber Eats',
   deliveroo: 'Deliveroo',
   takeaway: 'Takeaway',
+  direct: 'Direct',
 }
 
 export type BasketItem = {
@@ -70,4 +71,5 @@ export const PLATFORM_COLORS: Record<Platform, { dot: string; label: string; rin
   uber_eats:  { dot: 'bg-green-500',  label: 'text-green-600',  ring: 'border-green-500' },
   deliveroo:  { dot: 'bg-cyan-500',   label: 'text-cyan-600',   ring: 'border-cyan-500'  },
   takeaway:   { dot: 'bg-orange-500', label: 'text-orange-600', ring: 'border-orange-500'},
+  direct:     { dot: 'bg-violet-500', label: 'text-violet-600', ring: 'border-violet-500'},
 }

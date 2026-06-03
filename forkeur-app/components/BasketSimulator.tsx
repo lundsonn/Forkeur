@@ -18,6 +18,7 @@ const PLATFORM_SHORT: Record<Platform, string> = {
   uber_eats: 'UE',
   deliveroo: 'DE',
   takeaway: 'TW',
+  direct:    'DIR',
 }
 
 function cheapestPlatformForItem(prices: Record<Platform, number | null>): Platform | null {
@@ -33,14 +34,15 @@ function cheapestPlatformForItem(prices: Record<Platform, number | null>): Platf
 type Props = {
   menuItems: MenuItemWithPrices[]
   listings: PlatformListing[]
+  phone: string | null
 }
 
-export default function BasketSimulator({ menuItems, listings }: Props) {
+export default function BasketSimulator({ menuItems, listings, phone }: Props) {
   const [basket, setBasket] = useState<BasketItem[]>([])
   const [sheetOpen, setSheetOpen] = useState(false)
 
   const fees: PlatformFees = useMemo(() => {
-    const result: PlatformFees = { uber_eats: null, deliveroo: null, takeaway: null }
+    const result: PlatformFees = { uber_eats: null, deliveroo: null, takeaway: null, direct: null }
     for (const l of listings) result[l.platform] = l.delivery_fee_cents
     return result
   }, [listings])
@@ -125,8 +127,50 @@ export default function BasketSimulator({ menuItems, listings }: Props) {
     ? listings.find((l) => l.platform === cheapestPlatform)?.eta_label ?? null
     : null
 
+  // Build per-platform fee info for the header bar
+  const platformFeeRows = listings.map((l) => {
+    const colors = PLATFORM_COLORS[l.platform]
+    const feeText = l.delivery_fee_cents === null
+      ? null
+      : l.delivery_fee_cents === 0
+        ? 'Free delivery'
+        : `Delivery ${centsToEuro(l.delivery_fee_cents)}`
+    const minText = l.min_order_label ?? null
+    const isPhone = l.platform === 'direct' && !l.platform_url
+    const href = l.platform === 'direct' && phone
+      ? `tel:${phone}`
+      : l.platform_url ?? null
+    return { platform: l.platform, colors, feeText, minText, href, isPhone, label: PLATFORM_LABELS[l.platform] }
+  })
+
   return (
     <div className="px-5">
+      {/* Platform delivery fee bar */}
+      {platformFeeRows.length > 0 && (
+        <div className="mb-5 -mx-5 px-5 py-3 bg-stone-50 border-y border-stone-100 flex flex-wrap gap-x-5 gap-y-2">
+          {platformFeeRows.map(({ platform, colors, feeText, minText, href, label }) => (
+            <div key={platform} className="flex items-start gap-1.5 min-w-[120px]">
+              <span className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${colors.dot}`} />
+              <div>
+                <p className={`text-xs font-semibold ${colors.label}`}>
+                  {href ? (
+                    <a href={href} target={platform !== 'direct' ? '_blank' : undefined}
+                       rel="noopener noreferrer" className="underline underline-offset-2">
+                      {label}
+                    </a>
+                  ) : label}
+                </p>
+                {feeText && <p className="text-[11px] text-stone-500">{feeText}</p>}
+                {minText && <p className="text-[11px] text-stone-400">{minText}</p>}
+                {platform === 'direct' && phone && !href?.startsWith('http') && (
+                  <p className="text-[11px] text-stone-500">{phone}</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Menu items list */}
       {menuItems.length === 0 ? (
         <p className="text-sm text-stone-400 py-6">No menu data available yet.</p>

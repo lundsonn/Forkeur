@@ -22,6 +22,8 @@ export type PlatformListing = {
   platform_url: string | null
   delivery_fee_cents: number | null
   delivery_fee_label: string | null
+  min_order_cents: number | null
+  min_order_label: string | null
   eta_label: string | null
   rating: number | null
 }
@@ -39,6 +41,7 @@ export type RestaurantDetail = {
   name: string
   city: string
   cuisine: string[]
+  phone: string | null
   listings: PlatformListing[]
   menuItems: MenuItemWithPrices[]
 }
@@ -195,10 +198,10 @@ export async function getRestaurantWithListings(
   const { data, error } = await supabase
     .from('restaurants')
     .select(`
-      id, name, neighborhood, cuisine,
+      id, name, neighborhood, cuisine, phone,
       platform_listings (
         id, platform, url,
-        delivery_fee, eta_min, eta_max, rating,
+        delivery_fee, min_order, eta_min, eta_max, rating,
         menu_items ( title, price, catalog_name )
       )
     `)
@@ -213,6 +216,8 @@ export async function getRestaurantWithListings(
     platform_url: l.url ?? null,
     delivery_fee_cents: feeCents(l.delivery_fee),
     delivery_fee_label: feeLabel(l.delivery_fee),
+    min_order_cents: feeCents(l.min_order),
+    min_order_label: l.min_order != null ? `min €${Number(l.min_order).toFixed(2)}` : null,
     eta_label: etaLabel(l.eta_min, l.eta_max),
     rating: l.rating !== null ? parseFloat(String(l.rating)) : null,
   }))
@@ -229,7 +234,7 @@ export async function getRestaurantWithListings(
           description: null,
           category: item.catalog_name ?? null,
           image_url: null,
-          prices: { uber_eats: null, deliveroo: null, takeaway: null },
+          prices: { uber_eats: null, deliveroo: null, takeaway: null, direct: null },
         })
       }
       itemMap.get(key)!.prices[platform] = feeCents(item.price)
@@ -241,6 +246,7 @@ export async function getRestaurantWithListings(
     name: data.name,
     city: data.neighborhood ?? 'Brussels',
     cuisine: data.cuisine ? [data.cuisine] : [],
+    phone: (data as any).phone ?? null,
     listings,
     menuItems: Array.from(itemMap.values()),
   }

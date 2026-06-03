@@ -18,8 +18,8 @@ def _noop(line: str) -> None:
 
 
 async def _run_scraper(platform: str) -> None:
-    from scrapers import ubereats, deliveroo, takeaway
-    SCRAPERS = {"ubereats": ubereats.run, "deliveroo": deliveroo.run, "takeaway": takeaway.run}
+    from scrapers import ubereats, deliveroo, takeaway, direct
+    SCRAPERS = {"ubereats": ubereats.run, "deliveroo": deliveroo.run, "takeaway": takeaway.run, "direct": direct.run}
 
     run_id = db.create_run(platform)
     try:

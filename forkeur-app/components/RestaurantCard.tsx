@@ -5,6 +5,7 @@ const PLATFORM_SHORT: Record<Platform, string> = {
   uber_eats: 'UE',
   deliveroo: 'DE',
   takeaway: 'TW',
+  direct:    'DIR',
 }
 
 type Props = {

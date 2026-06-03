@@ -37,7 +37,7 @@ export default async function Page({
         </p>
       </div>
 
-      <BasketSimulator menuItems={data.menuItems} listings={data.listings} />
+      <BasketSimulator menuItems={data.menuItems} listings={data.listings} phone={data.phone} />
     </div>
   )
 }

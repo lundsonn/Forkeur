@@ -13,12 +13,12 @@ const twoItems: BasketItem[] = [
   {
     name: 'Big Mac',
     qty: 1,
-    prices: { uber_eats: 660, deliveroo: 640, takeaway: 620 },
+    prices: { uber_eats: 660, deliveroo: 640, takeaway: 620, direct: null },
   },
   {
     name: 'Large Fries',
     qty: 2,
-    prices: { uber_eats: 350, deliveroo: 320, takeaway: 340 },
+    prices: { uber_eats: 350, deliveroo: 320, takeaway: 340, direct: null },
   },
 ]
 
@@ -34,7 +34,7 @@ describe('calculatePlatformTotal', () => {
 
   it('skips items with null price for the platform', () => {
     const items: BasketItem[] = [
-      { name: 'Big Mac', qty: 1, prices: { uber_eats: null, deliveroo: 640, takeaway: 620 } },
+      { name: 'Big Mac', qty: 1, prices: { uber_eats: null, deliveroo: 640, takeaway: 620, direct: null } },
     ]
     // uber_eats: 0 (skipped) + 299 delivery = 299
     expect(calculatePlatformTotal(items, 'uber_eats', 299)).toBe(299)
@@ -46,9 +46,9 @@ describe('calculatePlatformTotal', () => {
 
   it('sums only available items when multiple have null prices', () => {
     const items: BasketItem[] = [
-      { name: 'A', qty: 1, prices: { uber_eats: 100, deliveroo: null, takeaway: null } },
-      { name: 'B', qty: 1, prices: { uber_eats: null, deliveroo: 200, takeaway: 300 } },
-      { name: 'C', qty: 2, prices: { uber_eats: 150, deliveroo: 160, takeaway: 170 } },
+      { name: 'A', qty: 1, prices: { uber_eats: 100, deliveroo: null, takeaway: null, direct: null } },
+      { name: 'B', qty: 1, prices: { uber_eats: null, deliveroo: 200, takeaway: 300, direct: null } },
+      { name: 'C', qty: 2, prices: { uber_eats: 150, deliveroo: 160, takeaway: 170, direct: null } },
     ]
     // uber_eats: 100 + 0 (skipped) + 150*2 + 399 = 799
     expect(calculatePlatformTotal(items, 'uber_eats', 399)).toBe(799)
@@ -59,16 +59,16 @@ describe('calculatePlatformTotal', () => {
 
 describe('findCheapestPlatform', () => {
   it('returns platform with lowest total', () => {
-    const totals: PlatformTotals = { uber_eats: 1759, deliveroo: 1459, takeaway: 1139 }
+    const totals: PlatformTotals = { uber_eats: 1759, deliveroo: 1459, takeaway: 1139, direct: null }
     expect(findCheapestPlatform(totals)).toBe('takeaway')
   })
 
   it('returns null when all totals are null', () => {
-    expect(findCheapestPlatform({ uber_eats: null, deliveroo: null, takeaway: null })).toBeNull()
+    expect(findCheapestPlatform({ uber_eats: null, deliveroo: null, takeaway: null, direct: null })).toBeNull()
   })
 
   it('ignores null platforms when comparing', () => {
-    const totals: PlatformTotals = { uber_eats: null, deliveroo: 1459, takeaway: null }
+    const totals: PlatformTotals = { uber_eats: null, deliveroo: 1459, takeaway: null, direct: null }
     expect(findCheapestPlatform(totals)).toBe('deliveroo')
   })
 })

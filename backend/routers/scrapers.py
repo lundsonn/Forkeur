@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 from models import RunTriggerOut, ScraperStatusOut, ScraperConfig, RunTriggerIn
 import db
 import ws as ws_mod
-from scrapers import ubereats, deliveroo, takeaway, fees
+from scrapers import ubereats, deliveroo, takeaway, fees, direct
 from scrapers.base import CloudflareBlockedError
 
 router = APIRouter(prefix="/scrapers", tags=["scrapers"])
@@ -13,6 +13,7 @@ SCRAPERS = {
     "ubereats": ubereats.run,
     "deliveroo": deliveroo.run,
     "takeaway": takeaway.run,
+    "direct": direct.run,
 }
 
 # Track currently running platforms
@@ -68,7 +69,7 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
 async def get_status():
     last_runs = db.get_last_run_per_platform()
     result = []
-    for platform in ("ubereats", "deliveroo", "takeaway"):
+    for platform in ("ubereats", "deliveroo", "takeaway", "direct"):
         last = last_runs.get(platform)
         status = "running" if platform in _running else (last["status"] if last else "idle")
         result.append(ScraperStatusOut(

@@ -9,7 +9,7 @@ const item: MenuItemWithPrices = {
   description: 'San Marzano, fior di latte',
   category: 'Pizza',
   image_url: null,
-  prices: { uber_eats: 950, deliveroo: 940, takeaway: 960 },
+  prices: { uber_eats: 950, deliveroo: 940, takeaway: 960, direct: null },
 }
 
 describe('PlatformPriceRow', () => {

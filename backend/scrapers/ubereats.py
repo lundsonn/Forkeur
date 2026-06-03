@@ -365,9 +365,15 @@ def _parse_promotions(store: dict) -> list[dict]:
         _add(title, override)
 
     fare = store.get("fareInfo") or {}
-    deal_label = (fare.get("serviceFeeDeal") or {}).get("label") or (fare.get("serviceFeeDeal") or {}).get("title") or ""
+    deal = fare.get("serviceFeeDeal") or {}
+    deal_label = deal.get("label") or deal.get("title") or ""
     if deal_label:
-        _add(deal_label)
+        # Extract numeric threshold from serviceFeeDeal if available
+        threshold_cents = deal.get("minOrderSubtotal") or deal.get("minSubtotal") or deal.get("minOrder")
+        override_fee: dict = {}
+        if threshold_cents is not None:
+            override_fee["min_order"] = round(float(threshold_cents) / 100, 2)
+        _add(deal_label, override_fee or None)
 
     return promos
 
