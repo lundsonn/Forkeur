@@ -59,6 +59,29 @@ export default function BasketSimulator({ menuItems, listings, phone }: Props) {
     return result
   }, [listings])
 
+  /**
+   * Fee-savings signal: direct listing exists but has no menu items scraped yet.
+   * Shows ~€X.XX de frais de plateforme économisés using cheapest non-direct fee.
+   */
+  const directFeeSavingsCents = useMemo<number | null>(() => {
+    const hasDirectListing = listings.some((l) => l.platform === 'direct')
+    if (!hasDirectListing) return null
+
+    const hasDirectMenuItems = menuItems.some((item) => item.prices.direct !== null)
+    if (hasDirectMenuItems) return null
+
+    // Find cheapest delivery_fee_cents among non-direct platforms
+    let cheapestFee: number | null = null
+    for (const l of listings) {
+      if (l.platform === 'direct') continue
+      if (l.delivery_fee_cents === null) continue
+      if (cheapestFee === null || l.delivery_fee_cents < cheapestFee) {
+        cheapestFee = l.delivery_fee_cents
+      }
+    }
+    return cheapestFee
+  }, [listings, menuItems])
+
   const totals = useMemo(() => calculateAllTotals(basket, fees), [basket, fees])
   const cheapestPlatform = useMemo(() => findCheapestPlatform(totals), [totals])
 
@@ -134,17 +157,29 @@ export default function BasketSimulator({ menuItems, listings, phone }: Props) {
   // Build per-platform fee info for the header bar
   const platformFeeRows = listings.map((l) => {
     const colors = PLATFORM_COLORS[l.platform]
-    const feeText = l.delivery_fee_cents === null
+    const isDirectSavings = l.platform === 'direct' && directFeeSavingsCents !== null
+    const feeText = isDirectSavings
       ? null
-      : l.delivery_fee_cents === 0
-        ? tBasket('free_delivery')
-        : tBasket('delivery', { fee: centsToEuro(l.delivery_fee_cents) })
-    const minText = l.min_order_label ?? null
+      : l.delivery_fee_cents === null
+        ? null
+        : l.delivery_fee_cents === 0
+          ? tBasket('free_delivery')
+          : tBasket('delivery', { fee: centsToEuro(l.delivery_fee_cents) })
+    const minText = isDirectSavings ? null : (l.min_order_label ?? null)
     const isPhone = l.platform === 'direct' && !l.platform_url
     const href = l.platform === 'direct' && phone
       ? `tel:${phone}`
       : l.platform_url ?? null
-    return { platform: l.platform, colors, feeText, minText, href, isPhone, label: PLATFORM_LABELS[l.platform] }
+    return {
+      platform: l.platform,
+      colors,
+      feeText,
+      minText,
+      href,
+      isPhone,
+      label: PLATFORM_LABELS[l.platform],
+      isDirectSavings,
+    }
   })
 
   return (
@@ -152,7 +187,7 @@ export default function BasketSimulator({ menuItems, listings, phone }: Props) {
       {/* Platform delivery fee bar */}
       {platformFeeRows.length > 0 && (
         <div className="mb-5 -mx-5 px-5 py-3 bg-stone-50 border-y border-stone-100 flex flex-wrap gap-x-5 gap-y-2">
-          {platformFeeRows.map(({ platform, colors, feeText, minText, href, label }) => (
+          {platformFeeRows.map(({ platform, colors, feeText, minText, href, label, isDirectSavings }) => (
             <div key={platform} className="flex items-start gap-1.5 min-w-[120px]">
               <span className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${colors.dot}`} />
               <div>
@@ -168,6 +203,21 @@ export default function BasketSimulator({ menuItems, listings, phone }: Props) {
                 {minText && <p className="text-[11px] text-stone-400">{minText}</p>}
                 {platform === 'direct' && phone && !href?.startsWith('http') && (
                   <p className="text-[11px] text-stone-500">{phone}</p>
+                )}
+                {isDirectSavings && directFeeSavingsCents !== null && (
+                  <div data-testid="direct-fee-savings">
+                    <p className="text-[11px] font-semibold text-orange-600">
+                      {tBasket('direct_savings', { fee: centsToEuro(directFeeSavingsCents) })}
+                    </p>
+                    <p className="text-[11px] text-stone-500 mt-0.5">
+                      {href ? (
+                        <a href={href} target={platform !== 'direct' ? '_blank' : undefined}
+                           rel="noopener noreferrer" className="underline underline-offset-2">
+                          {tBasket('direct_order_cta')}
+                        </a>
+                      ) : tBasket('direct_order_cta')}
+                    </p>
+                  </div>
                 )}
               </div>
             </div>

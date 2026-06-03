@@ -36,7 +36,9 @@
     "free_delivery": "Gratis bezorging",
     "delivery": "Bezorging {fee}",
     "items": "{count, plural, one {# artikel} other {# artikelen}}",
-    "best": "Beste:"
+    "best": "Beste:",
+    "direct_savings": "~{fee} aan platformkosten bespaard",
+    "direct_order_cta": "Direct bestellen →"
   },
   "compare": {
     "best_now": "Beste aanbieding",

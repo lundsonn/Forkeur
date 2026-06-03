@@ -36,7 +36,9 @@
     "free_delivery": "Free delivery",
     "delivery": "Delivery {fee}",
     "items": "{count, plural, one {# item} other {# items}}",
-    "best": "Best:"
+    "best": "Best:",
+    "direct_savings": "~{fee} in platform fees saved",
+    "direct_order_cta": "Order directly →"
   },
   "compare": {
     "best_now": "Best right now",
