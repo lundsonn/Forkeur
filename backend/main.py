@@ -17,12 +17,13 @@ from routers import scrapers, runs, schedule, data
 from routers.auth_router import router as auth_router
 
 _PUBLIC_PATHS = {"/api/auth/login"}
+_PUBLIC_PREFIXES = ("/dashboard/",)
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
-        if path in _PUBLIC_PATHS:
+        if path in _PUBLIC_PATHS or any(path.startswith(p) for p in _PUBLIC_PREFIXES):
             return await call_next(request)
 
         # WebSocket: token comes as ?token= query param (browsers can't send headers)
