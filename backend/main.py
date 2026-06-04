@@ -44,7 +44,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     import db
-    cleaned = db.orphan_stale_runs(max_age_hours=2)
+    # On a fresh process start, any run still marked 'running' is orphaned —
+    # the previous process was killed and those runs will never finish.
+    cleaned = db.orphan_stale_runs(max_age_hours=0)
     if cleaned:
         import logging
         logging.getLogger(__name__).warning("Startup: marked %d orphaned runs as failed", cleaned)
