@@ -11,6 +11,7 @@ import re
 from typing import Callable
 from models import ScraperResult
 from scrapers.base import new_browser, new_page, noop_log
+from scrapers.direct_classify import classify_url
 import db
 
 # ── Belgian phone regex (mobile + landline) ───────────────────────────────────
@@ -203,6 +204,7 @@ async def _enrich_existing(page, log: Callable) -> int:
             'restaurant_id': r['id'],
             'platform': 'direct',
             'url': order_url,
+            'url_type': classify_url(order_url, analysis['phone']),
             'is_available': True,
         }
 
@@ -343,10 +345,12 @@ async def _discover_maps(page, log: Callable) -> int:
                 .execute()
             ).data
 
+            website_url = stub.get('website')
             row = {
                 'restaurant_id': rest_id,
                 'platform': 'direct',
-                'url': stub.get('website'),
+                'url': website_url,
+                'url_type': classify_url(website_url, stub.get('phone')),
                 'is_available': True,
             }
 
