@@ -1,9 +1,18 @@
 'use client'
 import { useState } from 'react'
+import Script from 'next/script'
 import { useTranslations } from 'next-intl'
 import { useSearchParams } from 'next/navigation'
 
 type InquiryType = 'add_url' | 'new_listing' | 'remove'
+
+const SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY ?? ''
+
+declare global {
+  interface Window {
+    grecaptcha: { execute: (key: string, opts: { action: string }) => Promise<string> }
+  }
+}
 
 export default function OwnerContactForm() {
   const t = useTranslations('owners')
@@ -18,6 +27,11 @@ export default function OwnerContactForm() {
     e.preventDefault()
     setState('loading')
     try {
+      let recaptchaToken: string | undefined
+      if (SITE_KEY && window.grecaptcha) {
+        recaptchaToken = await window.grecaptcha.execute(SITE_KEY, { action: 'submit_claim' })
+      }
+
       const res = await fetch('/api/claims', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -26,6 +40,7 @@ export default function OwnerContactForm() {
           owner_email: email,
           restaurant_name_free: name,
           direct_order_url: inquiryType === 'add_url' && url ? url : undefined,
+          recaptcha_token: recaptchaToken,
         }),
       })
       if (!res.ok) throw new Error(await res.text())
@@ -44,6 +59,13 @@ export default function OwnerContactForm() {
   }
 
   return (
+    <>
+      {SITE_KEY && (
+        <Script
+          src={`https://www.google.com/recaptcha/api.js?render=${SITE_KEY}`}
+          strategy="lazyOnload"
+        />
+      )}
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <p className="text-sm font-semibold text-stone-900">{t('form_heading')}</p>
 
@@ -120,5 +142,6 @@ export default function OwnerContactForm() {
         {state === 'loading' ? t('sending') : t('submit')}
       </button>
     </form>
+    </>
   )
 }
