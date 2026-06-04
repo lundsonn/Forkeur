@@ -73,11 +73,14 @@ async def trigger_fees():
             db.finish_run(run_id, "success", records_saved=total)
             await ws_mod.send_done(run_id, total)
         except asyncio.TimeoutError:
-            db.finish_run(run_id, "failed", error_msg="timed out after 120 min")
-            await ws_mod.send_error(run_id, "timed out after 120 min")
+            msg = "timed out after 120 min"
+            db.finish_run(run_id, "failed", error_msg=msg)
+            await ws_mod.send_error(run_id, msg)
+            alerting.send_failure_alert("fees", msg, run_id)
         except Exception as e:
             db.finish_run(run_id, "failed", error_msg=str(e))
             await ws_mod.send_error(run_id, str(e))
+            alerting.send_failure_alert("fees", str(e), run_id)
         finally:
             _fees_running = False
 
@@ -143,12 +146,15 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
             msg = f"timed out after {timeout // 60} min"
             db.finish_run(run_id, "failed", error_msg=msg)
             await ws_mod.send_error(run_id, msg)
+            alerting.send_failure_alert(platform, msg, run_id)
         except CloudflareBlockedError as e:
             db.finish_run(run_id, "blocked", error_msg=str(e))
             await ws_mod.send_error(run_id, str(e))
+            alerting.send_failure_alert(platform, str(e), run_id)
         except Exception as e:
             db.finish_run(run_id, "failed", error_msg=str(e))
             await ws_mod.send_error(run_id, str(e))
+            alerting.send_failure_alert(platform, str(e), run_id)
         except BaseException as e:
             db.finish_run(run_id, "failed", error_msg=f"Process killed: {type(e).__name__}")
             raise
