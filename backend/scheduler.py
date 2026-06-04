@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from models import ScraperConfig, ScheduleConfigIn, ScheduleConfigOut
