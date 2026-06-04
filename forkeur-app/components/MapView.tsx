@@ -47,14 +47,18 @@ export default function MapView({ restaurants, height }: Props) {
             <Marker
               key={r.id}
               anchor={[r.lat, r.lng]}
-              onClick={(e) => {
-                e.event?.stopPropagation?.()
-                setSelectedId(isActive ? null : r.id)
-              }}
             >
               <div
-                className="relative flex flex-col items-center cursor-pointer select-none"
-                onClick={(e) => e.stopPropagation()}
+                className="relative flex items-center justify-center cursor-pointer select-none w-11 h-11"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setSelectedId(isActive ? null : r.id)
+                }}
+                onTouchEnd={(e) => {
+                  e.stopPropagation()
+                  e.preventDefault()
+                  setSelectedId(isActive ? null : r.id)
+                }}
               >
                 {/* Pin dot */}
                 <div
