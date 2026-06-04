@@ -7,7 +7,8 @@
   },
   "hero": {
     "heading_line1": "Où commandez-vous",
-    "heading_line2": "votre repas ?"
+    "heading_line2": "votre repas ?",
+    "subtitle": "Comparez les frais de livraison et les prix des menus sur UberEats, Deliveroo et Takeaway — et voyez quand commander directement vous fait économiser."
   },
   "search": {
     "placeholder": "Rechercher un restaurant"
@@ -89,6 +90,7 @@
   },
   "detail": {
     "platform_fees": "Frais de livraison",
+    "cheapest_signal": "{platform} est €{amount} moins cher que {other}",
     "just_now": "À l'instant",
     "hours": "Mis à jour il y a {hours}h",
     "days": "Mis à jour il y a {days}j"

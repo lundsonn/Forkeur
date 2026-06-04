@@ -7,7 +7,8 @@
   },
   "hero": {
     "heading_line1": "Waar bestelt u",
-    "heading_line2": "uw maaltijd?"
+    "heading_line2": "uw maaltijd?",
+    "subtitle": "Vergelijk leveringskosten en menuprijzen op UberEats, Deliveroo en Takeaway — en ontdek wanneer rechtstreeks bestellen voordeliger is."
   },
   "search": {
     "placeholder": "Zoek een restaurant"
@@ -89,6 +90,7 @@
   },
   "detail": {
     "platform_fees": "Bezorgkosten",
+    "cheapest_signal": "{platform} is €{amount} goedkoper dan {other}",
     "just_now": "Zojuist bijgewerkt",
     "hours": "{hours}u geleden bijgewerkt",
     "days": "{days}d geleden bijgewerkt"

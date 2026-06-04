@@ -136,9 +136,12 @@ export default function HomepageClient({
       </div>
 
       {/* Hero */}
-      <h1 className="text-[1.65rem] font-bold text-stone-900 leading-tight mb-4">
+      <h1 className="text-[1.65rem] font-bold text-stone-900 leading-tight mb-2">
         {tHero('heading_line1')}<br />{tHero('heading_line2')}
       </h1>
+      <p className="text-sm text-stone-500 mb-4 leading-relaxed">
+        {tHero('subtitle')}
+      </p>
 
       {/* Search */}
       <div className="flex items-center gap-2.5 border border-stone-200 rounded-xl px-4 py-3 mb-5">

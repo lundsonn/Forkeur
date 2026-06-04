@@ -7,7 +7,8 @@
   },
   "hero": {
     "heading_line1": "Where are you",
-    "heading_line2": "ordering from?"
+    "heading_line2": "ordering from?",
+    "subtitle": "Compare delivery fees and menu prices across UberEats, Deliveroo and Takeaway — and see when ordering directly saves you more."
   },
   "search": {
     "placeholder": "Search a restaurant"
@@ -89,6 +90,7 @@
   },
   "detail": {
     "platform_fees": "Delivery fees",
+    "cheapest_signal": "{platform} is €{amount} cheaper than {other}",
     "just_now": "Just updated",
     "hours": "Updated {hours}h ago",
     "days": "Updated {days}d ago"
