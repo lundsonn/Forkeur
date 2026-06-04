@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import re
 from typing import Callable
+import httpx
 from models import ScraperResult
 from scrapers.base import new_browser, new_page, noop_log
 from scrapers.direct_classify import classify_url, is_junk_url
@@ -306,6 +307,7 @@ async def _discover_maps(page, log: Callable) -> int:
             for s in stubs:
                 if s['name'] not in seen_names:
                     seen_names.add(s['name'])
+                    s['neighborhood'] = area  # tag with the search area for upsert below
                     all_stubs.append(s)
             await asyncio.sleep(2)
 
@@ -325,7 +327,7 @@ async def _discover_maps(page, log: Callable) -> int:
                 'name': name,
                 'slug': _make_slug(name),
                 'website': stub.get('website'),
-                'neighborhood': 'Bruxelles',
+                'neighborhood': stub.get('neighborhood', 'Bruxelles'),
             })
 
             if stub.get('phone'):
@@ -370,11 +372,60 @@ async def _discover_maps(page, log: Callable) -> int:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Phase 3 — reverse-geocode missing neighborhoods via Nominatim
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _clean_commune(name: str | None) -> str | None:
+    """Strip Dutch half from bilingual Brussels commune names (e.g. 'Ixelles - Elsene' → 'Ixelles')."""
+    if not name:
+        return None
+    return name.split(' - ')[0].strip()
+
+
+async def _enrich_neighborhoods(log: Callable) -> None:
+    """Reverse-geocode restaurants with null neighborhood using Nominatim (max 1 req/s)."""
+    supabase = db.get_client()
+    rows = (
+        supabase.table('restaurants')
+        .select('id, lat, lng')
+        .is_('neighborhood', 'null')
+        .not_.is_('lat', 'null')
+        .execute()
+    ).data
+
+    log(f"Phase 3: {len(rows)} restaurants to geocode")
+    updated = 0
+
+    async with httpx.AsyncClient(
+        headers={'User-Agent': 'Forkeur/1.0 (geraud.marion@gmail.com)'},
+        timeout=10,
+    ) as client:
+        for row in rows:
+            try:
+                r = await client.get(
+                    'https://nominatim.openstreetmap.org/reverse',
+                    params={'lat': row['lat'], 'lon': row['lng'], 'format': 'json', 'accept-language': 'fr'},
+                )
+                addr = r.json().get('address', {})
+                hood = _clean_commune(
+                    addr.get('city_district') or addr.get('suburb') or addr.get('municipality')
+                )
+                if hood:
+                    supabase.table('restaurants').update({'neighborhood': hood}).eq('id', row['id']).execute()
+                    updated += 1
+            except Exception:
+                pass
+            await asyncio.sleep(1.1)  # Nominatim rate limit: max 1 req/s
+
+    log(f"  geocoded {updated} neighborhoods")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Entry point
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def run(config=None, log: Callable = noop_log) -> ScraperResult:
-    """Run both enrichment and discovery phases."""
+    """Run all three phases: enrich existing, discover new, geocode neighborhoods."""
     browser = await new_browser(headed=False)
     page = await new_page(browser)
     saved = 0
@@ -384,6 +435,8 @@ async def run(config=None, log: Callable = noop_log) -> ScraperResult:
         saved += await _discover_maps(page, log)
     finally:
         await browser.close()
+
+    await _enrich_neighborhoods(log)
 
     log(f"\nDone — {saved} new direct listings saved")
     return ScraperResult(records_saved=saved)

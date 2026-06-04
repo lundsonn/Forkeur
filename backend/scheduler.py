@@ -54,11 +54,11 @@ async def _run_scraper(platform: str) -> None:
         return
 
     from routers.scrapers import _browser_sem, _PLAYWRIGHT_SCRAPERS
-    run_id = db.create_run(platform)
     sem = _browser_sem if platform in _PLAYWRIGHT_SCRAPERS else None
+    if sem:
+        await sem.acquire()
+    run_id = db.create_run(platform)
     try:
-        if sem:
-            await sem.acquire()
         result = await SCRAPERS[platform](ScraperConfig(), _noop)
         db.finish_run(run_id, "success", records_saved=result.records_saved)
     except CloudflareBlockedError as e:
