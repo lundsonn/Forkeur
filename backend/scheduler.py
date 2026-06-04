@@ -53,10 +53,8 @@ async def _run_scraper(platform: str) -> None:
     if platform not in SCRAPERS:
         return
 
-    from routers.scrapers import _browser_sem, _PLAYWRIGHT_SCRAPERS
-    sem = _browser_sem if platform in _PLAYWRIGHT_SCRAPERS else None
-    if sem:
-        await sem.acquire()
+    # No semaphore — all scrapers share one Chromium via base.browser_session();
+    # their asyncio waits interleave so concurrent runs are safe.
     run_id = db.create_run(platform)
     try:
         result = await SCRAPERS[platform](ScraperConfig(), _noop)
@@ -67,9 +65,6 @@ async def _run_scraper(platform: str) -> None:
     except Exception as e:
         db.finish_run(run_id, "failed", error_msg=str(e))
         import alerting; alerting.send_failure_alert(platform, str(e), run_id)
-    finally:
-        if sem:
-            sem.release()
 
 
 def _persist_schedule(config: ScheduleConfigIn) -> None:
