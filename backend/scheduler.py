@@ -8,9 +8,15 @@ import db
 _scheduler = AsyncIOScheduler()
 _schedules: dict[str, ScheduleConfigIn] = {}
 
-# Fee refresh: runs 45 min after each main scraper batch (06:45, 12:15, 18:15, 23:45 UTC)
+# Fee refresh: 45 min after each main scraper batch window
 _FEE_JOB_ID = "fee_refresh"
 _FEE_CRON = "45 6,12,18,23 * * *"
+
+_CLEANUP_JOB_ID = "daily_cleanup"
+_CLEANUP_CRON = "0 4 * * *"   # 04:00 UTC daily
+
+_DIGEST_JOB_ID = "daily_digest"
+_DIGEST_CRON = "0 19 * * *"   # 19:00 UTC = 21:00 Brussels (CEST)
 
 
 def _noop(line: str) -> None:
@@ -18,15 +24,14 @@ def _noop(line: str) -> None:
 
 
 async def _run_scraper(platform: str) -> None:
+    # Skip if the same platform is already running (triggered manually via API).
+    from routers.scrapers import _running
+    if platform in _running:
+        _noop(f"Scheduler: {platform} already running, skipping")
+        return
+
     from scrapers import ubereats, deliveroo, takeaway, direct, direct_menu
     from scrapers import dom_menu
-    SCRAPERS = {
-        "ubereats": ubereats.run,
-        "deliveroo": deliveroo.run,
-        "takeaway": takeaway.run,
-        "direct": direct.run,
-        "dom_menu": dom_menu.run,
-    }
 
     if platform == "direct_menu":
         run_id = db.create_run(platform)
@@ -35,6 +40,17 @@ async def _run_scraper(platform: str) -> None:
             db.finish_run(run_id, "success", records_saved=result.get("total_scraped", 0))
         except Exception as e:
             db.finish_run(run_id, "failed", error_msg=str(e))
+            import alerting; alerting.send_failure_alert(platform, str(e), run_id)
+        return
+
+    SCRAPERS = {
+        "ubereats":  ubereats.run,
+        "deliveroo": deliveroo.run,
+        "takeaway":  takeaway.run,
+        "direct":    direct.run,
+        "dom_menu":  dom_menu.run,
+    }
+    if platform not in SCRAPERS:
         return
 
     run_id = db.create_run(platform)
@@ -43,8 +59,10 @@ async def _run_scraper(platform: str) -> None:
         db.finish_run(run_id, "success", records_saved=result.records_saved)
     except CloudflareBlockedError as e:
         db.finish_run(run_id, "blocked", error_msg=str(e))
+        import alerting; alerting.send_failure_alert(platform, str(e), run_id)
     except Exception as e:
         db.finish_run(run_id, "failed", error_msg=str(e))
+        import alerting; alerting.send_failure_alert(platform, str(e), run_id)
 
 
 def _persist_schedule(config: ScheduleConfigIn) -> None:
@@ -112,11 +130,29 @@ def list_schedules() -> list[ScheduleConfigOut]:
 
 async def _run_fee_refresh() -> None:
     from scrapers import fees
+    from routers.scrapers import _fees_running
+    if _fees_running:
+        _noop("Scheduler: fee refresh already running, skipping")
+        return
+    run_id = db.create_run("fees")
     try:
         counts = await fees.run(_noop)
-        _noop(f"Fee refresh done: {counts}")
+        total = sum(counts.values())
+        db.finish_run(run_id, "success", records_saved=total)
     except Exception as e:
-        _noop(f"Fee refresh failed: {e}")
+        db.finish_run(run_id, "failed", error_msg=str(e))
+        import alerting; alerting.send_failure_alert("fees", str(e), run_id)
+
+
+async def _run_daily_cleanup() -> None:
+    pruned = db.prune_stale_menu_items(days=30)
+    if pruned:
+        _noop(f"Daily cleanup: pruned {pruned} stale menu items")
+
+
+async def _run_daily_digest() -> None:
+    import alerting
+    alerting.send_daily_digest()
 
 
 def start() -> None:
@@ -124,6 +160,18 @@ def start() -> None:
         _run_fee_refresh,
         CronTrigger.from_crontab(_FEE_CRON),
         id=_FEE_JOB_ID,
+        replace_existing=True,
+    )
+    _scheduler.add_job(
+        _run_daily_cleanup,
+        CronTrigger.from_crontab(_CLEANUP_CRON),
+        id=_CLEANUP_JOB_ID,
+        replace_existing=True,
+    )
+    _scheduler.add_job(
+        _run_daily_digest,
+        CronTrigger.from_crontab(_DIGEST_CRON),
+        id=_DIGEST_JOB_ID,
         replace_existing=True,
     )
     for config in _load_persisted_schedules():

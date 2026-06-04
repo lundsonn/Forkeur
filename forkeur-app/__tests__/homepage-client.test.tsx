@@ -22,8 +22,6 @@ function renderWithIntl(ui: React.ReactElement) {
 }
 
 const makeRestaurant = (overrides: Partial<RestaurantSummary> & { id: string; name: string }): RestaurantSummary => ({
-  id: overrides.id,
-  name: overrides.name,
   cuisine: overrides.cuisine ?? [],
   neighborhood: null,
   lat: null,

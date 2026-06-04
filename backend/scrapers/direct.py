@@ -53,6 +53,27 @@ _BRUSSELS_AREAS = [
 _CUISINE_SEARCHES = ['restaurant', 'pizza', 'sushi', 'burger', 'indien', 'thaï']
 
 
+def _validate_order_url(url: str) -> bool:
+    """Return False for ordering-platform URLs that lack a restaurant-specific identifier.
+
+    Prevents generic SPA base paths (e.g. sq-menu.com/ordering/restaurant/menu
+    without a code) from being stored — they look like ordering links but
+    contain no restaurant identity and can never be scraped.
+    """
+    from urllib.parse import urlparse
+    lower = url.lower()
+    parts = [p for p in urlparse(url).path.split('/') if p]
+
+    if 'sq-menu.com' in lower or 'foodbooking.com' in lower:
+        return len(parts) >= 3 and parts[0] == 'api'
+
+    if 'odoo.com' in lower and 'pos-self' in lower:
+        pos_i = next((i for i, p in enumerate(parts) if p == 'pos-self'), -1)
+        return pos_i >= 0 and pos_i + 1 < len(parts) and parts[pos_i + 1].isdigit()
+
+    return True
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
@@ -121,7 +142,7 @@ async def _check_website(page, url: str, log: Callable) -> dict:
     for link in links:
         if _AGGREGATOR_RE.search(link):
             continue
-        if _ORDER_PLATFORM_RE.search(link):
+        if _ORDER_PLATFORM_RE.search(link) and _validate_order_url(link):
             out['order_url'] = link
             out['has_delivery'] = True
             return out
@@ -135,8 +156,9 @@ async def _check_website(page, url: str, log: Callable) -> dict:
                 continue
             lw = link.lower()
             if any(kw in lw for kw in ['order', 'commande', 'bestel', 'livraison', 'delivery']):
-                out['order_url'] = link
-                break
+                if _validate_order_url(link):
+                    out['order_url'] = link
+                    break
 
     return out
 

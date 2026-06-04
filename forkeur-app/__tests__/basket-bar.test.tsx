@@ -15,7 +15,7 @@ function renderWithIntl(ui: React.ReactElement) {
 }
 
 const L = (overrides: Partial<PlatformListing>): PlatformListing => ({
-  id: '1', platform: 'uber_eats', platform_url: null,
+  id: '1', platform: 'uber_eats', platform_url: null, url_type: null,
   delivery_fee_cents: 299, delivery_fee_label: '€2.99',
   min_order_cents: null, min_order_label: null,
   eta_label: '18 min', rating: null,

@@ -7,6 +7,14 @@ import MapView from './MapView'
 import { useTranslations } from 'next-intl'
 import LangToggle from './LangToggle'
 
+type SortBy = 'best' | 'cheapest' | 'fastest'
+
+const SORT_LABELS: Record<SortBy, string> = {
+  best: 'Best match',
+  cheapest: 'Cheapest',
+  fastest: 'Fastest',
+}
+
 export default function HomepageClient({
   restaurants,
   cuisines,
@@ -16,6 +24,9 @@ export default function HomepageClient({
 }) {
   const [search, setSearch] = useState('')
   const [selectedCuisine, setSelectedCuisine] = useState<string | null>(null)
+  const [selectedNeighborhood, setSelectedNeighborhood] = useState<string | null>(null)
+  const [neighborhoodSheetOpen, setNeighborhoodSheetOpen] = useState(false)
+  const [sortBy, setSortBy] = useState<SortBy>('best')
   const [view, setView] = useState<'list' | 'map'>('list')
 
   const tNav = useTranslations('nav')
@@ -26,17 +37,65 @@ export default function HomepageClient({
   const tDirect = useTranslations('direct')
   const tCard = useTranslations('card')
 
-  const filtered = useMemo(
-    () =>
-      restaurants.filter((r) => {
-        const matchSearch = r.name.toLowerCase().includes(search.toLowerCase())
-        const matchCuisine =
-          !selectedCuisine ||
-          r.cuisine.some((c) => c.toLowerCase().includes(selectedCuisine.toLowerCase()))
-        return matchSearch && matchCuisine
-      }),
-    [restaurants, search, selectedCuisine]
-  )
+  const neighborhoods = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const r of restaurants) {
+      if (r.neighborhood) {
+        counts.set(r.neighborhood, (counts.get(r.neighborhood) ?? 0) + 1)
+      }
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({ name, count }))
+  }, [restaurants])
+
+  const metrics = useMemo(() => {
+    const map = new Map<string, { minFee: number | null; minEta: number | null; platformCount: number; savings: number }>()
+    for (const r of restaurants) {
+      const available = r.listings.filter((l) => l.delivery_fee_cents !== null)
+      const fees = available.map((l) => l.delivery_fee_cents!)
+      const etas = r.listings.map((l) => l.eta_min).filter((e): e is number => e !== null)
+      const minFee = fees.length > 0 ? Math.min(...fees) : null
+      const maxFee = fees.length > 1 ? Math.max(...fees) : null
+      const minEta = etas.length > 0 ? Math.min(...etas) : null
+      const savings = maxFee !== null && minFee !== null ? maxFee - minFee : 0
+      map.set(r.id, { minFee, minEta, platformCount: available.length, savings })
+    }
+    return map
+  }, [restaurants])
+
+  const filtered = useMemo(() => {
+    const base = restaurants.filter((r) => {
+      const matchSearch = r.name.toLowerCase().includes(search.toLowerCase())
+      const matchCuisine =
+        !selectedCuisine ||
+        r.cuisine.some((c) => c.toLowerCase().includes(selectedCuisine.toLowerCase()))
+      const matchNeighborhood = !selectedNeighborhood || r.neighborhood === selectedNeighborhood
+      return matchSearch && matchCuisine && matchNeighborhood
+    })
+
+    return [...base].sort((a, b) => {
+      const ma = metrics.get(a.id)!
+      const mb = metrics.get(b.id)!
+      if (sortBy === 'best') {
+        if (mb.platformCount !== ma.platformCount) return mb.platformCount - ma.platformCount
+        return mb.savings - ma.savings
+      }
+      if (sortBy === 'cheapest') {
+        if (ma.minFee === null && mb.minFee === null) return 0
+        if (ma.minFee === null) return 1
+        if (mb.minFee === null) return -1
+        return ma.minFee - mb.minFee
+      }
+      // fastest
+      if (ma.minEta === null && mb.minEta === null) return 0
+      if (ma.minEta === null) return 1
+      if (mb.minEta === null) return -1
+      return ma.minEta - mb.minEta
+    })
+  }, [restaurants, search, selectedCuisine, selectedNeighborhood, sortBy, metrics])
+
+  const hasFilter = !!(search || selectedCuisine || selectedNeighborhood)
 
   return (
     <div className="max-w-md mx-auto px-5">
@@ -57,6 +116,7 @@ export default function HomepageClient({
             {tNav('deals')}
           </Link>
           <button
+            type="button"
             onClick={() => setView('list')}
             className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
               view === 'list'
@@ -67,6 +127,7 @@ export default function HomepageClient({
             {tNav('list')}
           </button>
           <button
+            type="button"
             onClick={() => setView('map')}
             className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
               view === 'map'
@@ -94,13 +155,14 @@ export default function HomepageClient({
           onChange={(e) => setSearch(e.target.value)}
         />
         {search && (
-          <button onClick={() => setSearch('')} className="text-stone-300 text-xs">✕</button>
+          <button type="button" onClick={() => setSearch('')} className="text-stone-300 text-xs">✕</button>
         )}
       </div>
 
-      {/* Cuisine filters — dynamic */}
-      <div className="flex gap-2 overflow-x-auto pb-1 mb-4">
+      {/* Cuisine filters */}
+      <div className="flex gap-2 overflow-x-auto pb-1 mb-3">
         <button
+          type="button"
           onClick={() => setSelectedCuisine(null)}
           className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
             !selectedCuisine ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600'
@@ -108,6 +170,7 @@ export default function HomepageClient({
         >{tFilters('all')}</button>
         {cuisines.map((c) => (
           <button
+            type="button"
             key={c}
             onClick={() => setSelectedCuisine(selectedCuisine === c ? null : c)}
             className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
@@ -115,6 +178,57 @@ export default function HomepageClient({
             }`}
           >{c}</button>
         ))}
+      </div>
+
+      {/* Toolbar: area filter + sort */}
+      <div className="flex items-center justify-between py-2 mb-1">
+        {/* Area filter button */}
+        <div className="flex items-center">
+          {selectedNeighborhood ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setNeighborhoodSheetOpen(true)}
+                className="flex items-center rounded-l-full border border-r-0 border-[#1A1A1A] bg-white px-3 py-1 text-xs font-medium text-[#1A1A1A]"
+              >
+                {selectedNeighborhood}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedNeighborhood(null)}
+                className="flex items-center rounded-r-full border border-[#1A1A1A] bg-white px-2 py-1 text-xs text-[#888780]"
+              >
+                ✕
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setNeighborhoodSheetOpen(true)}
+              className="flex items-center gap-1 rounded-full bg-[#EDEDEA] px-3 py-1 text-xs font-medium text-[#888780]"
+            >
+              All areas ▾
+            </button>
+          )}
+        </div>
+
+        {/* Sort pills */}
+        <div className="flex gap-3">
+          {(['best', 'cheapest', 'fastest'] as SortBy[]).map((s) => (
+            <button
+              type="button"
+              key={s}
+              onClick={() => setSortBy(s)}
+              className={`min-[360px]:text-sm text-xs pb-1 transition-colors ${
+                sortBy === s
+                  ? 'font-medium text-[#1A1A1A] border-b-2 border-[#1A1A1A]'
+                  : 'text-[#888780]'
+              }`}
+            >
+              {SORT_LABELS[s]}
+            </button>
+          ))}
+        </div>
       </div>
 
       {view === 'map' ? (
@@ -126,35 +240,88 @@ export default function HomepageClient({
         <>
           {/* List label */}
           <p className="text-[10px] font-semibold tracking-widest text-stone-400 uppercase mb-3">
-            {search || selectedCuisine ? tResults('count', { count: filtered.length }) : tResults('restaurants')}
+            {hasFilter ? tResults('count', { count: filtered.length }) : tResults('restaurants')}
           </p>
 
           {/* Restaurant list */}
           <div>
-            {filtered.map((r, i) => (
-              <Link key={r.id} href={`/restaurant/${r.id}`}>
-                <RestaurantCard
-                  restaurant={r}
-                  isLast={i === filtered.length - 1}
-                  directBadge={
-                    r.direct_url_type === 'ordering'
-                      ? tCard('direct_cta_ordering')
-                      : r.direct_url_type === 'menu'
-                        ? tCard('direct_cta_menu')
-                        : r.direct_url_type === 'website'
-                          ? tCard('direct_cta_website')
-                          : r.direct_url_type === 'phone'
-                            ? tCard('direct_cta_phone')
-                            : tDirect('badge')
-                  }
-                />
-              </Link>
-            ))}
+            {filtered.map((r, i) => {
+              const m = metrics.get(r.id)
+              return (
+                <Link key={r.id} href={`/restaurant/${r.id}`}>
+                  <RestaurantCard
+                    restaurant={r}
+                    isLast={i === filtered.length - 1}
+                    savings={m?.savings}
+                    directBadge={
+                      r.direct_url_type === 'ordering'
+                        ? tCard('direct_cta_ordering')
+                        : r.direct_url_type === 'menu'
+                          ? tCard('direct_cta_menu')
+                          : r.direct_url_type === 'website'
+                            ? tCard('direct_cta_website')
+                            : r.direct_url_type === 'phone'
+                              ? tCard('direct_cta_phone')
+                              : tDirect('badge')
+                    }
+                  />
+                </Link>
+              )
+            })}
             {filtered.length === 0 && (
               <p className="text-center text-stone-400 text-sm py-16">{tResults('none')}</p>
             )}
           </div>
         </>
+      )}
+
+      {/* Neighborhood bottom sheet */}
+      {neighborhoodSheetOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex flex-col justify-end"
+          onClick={() => setNeighborhoodSheetOpen(false)}
+        >
+          <div
+            className="bg-white rounded-t-2xl max-h-[60vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#EDEDEA] sticky top-0 bg-white">
+              <span className="font-semibold text-sm text-[#1A1A1A]">Filter by area</span>
+              <button
+                type="button"
+                onClick={() => setNeighborhoodSheetOpen(false)}
+                className="text-[#888780] text-sm px-1"
+              >
+                ✕
+              </button>
+            </div>
+            <div>
+              <button
+                type="button"
+                className="w-full flex items-center justify-between px-5 py-3 border-b border-[#EDEDEA] text-left"
+                onClick={() => { setSelectedNeighborhood(null); setNeighborhoodSheetOpen(false) }}
+              >
+                <span className={`text-sm ${!selectedNeighborhood ? 'font-semibold text-[#1A1A1A]' : 'text-[#888780]'}`}>
+                  All areas
+                </span>
+                <span className="text-xs text-[#888780]">{restaurants.length}</span>
+              </button>
+              {neighborhoods.map(({ name, count }) => (
+                <button
+                  type="button"
+                  key={name}
+                  className="w-full flex items-center justify-between px-5 py-3 border-b border-[#EDEDEA] text-left"
+                  onClick={() => { setSelectedNeighborhood(name); setNeighborhoodSheetOpen(false) }}
+                >
+                  <span className={`text-sm ${selectedNeighborhood === name ? 'font-semibold text-[#1A1A1A]' : 'text-[#888780]'}`}>
+                    {name}
+                  </span>
+                  <span className="text-xs text-[#888780]">{count}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

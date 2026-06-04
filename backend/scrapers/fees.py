@@ -249,13 +249,106 @@ async def run_deliveroo(log_fn: Callable[[str], None] = noop_log) -> int:
         await browser.close()
 
 
+# ── Takeaway ─────────────────────────────────────────────────────────────────
+
+_DOM_TAKEAWAY_SCRIPT = r"""() => {
+    let fee = null, minOrder = null;
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+        const t = node.textContent.trim();
+        if (!t || t.length > 120) continue;
+
+        if (!fee) {
+            const hasDeliveryWord = /livraison|delivery|bezorging|frais/i.test(t);
+            const hasFreeWord = /gratuit|gratis|free|offert/i.test(t);
+            const hasPrice = /\d[,.]\d/.test(t);
+            if (hasDeliveryWord && (hasPrice || hasFreeWord)) fee = t;
+        }
+        if (!minOrder && /minimum|min\./i.test(t) && /\d[,.]\d/.test(t)) minOrder = t;
+
+        if (fee && minOrder) break;
+    }
+    return [fee, minOrder];
+}"""
+
+
+async def run_takeaway(log_fn: Callable[[str], None] = noop_log) -> int:
+    """Visit each Takeaway menu URL to update delivery_fee + min_order. Returns update count."""
+    listings = db.get_listings_with_urls("takeaway")
+    log_fn(f"Fees/Takeaway: {len(listings)} listings to check")
+    if not listings:
+        return 0
+
+    browser = await new_browser(lang="fr-BE")
+    updated = 0
+    n = len(listings)
+
+    try:
+        page = await new_page(browser, lang="fr-BE")
+
+        for i, listing in enumerate(listings):
+            url = listing.get("url")
+            if not url:
+                continue
+            log_fn(f"Fees/Takeaway: {i + 1}/{n} — {url[:70]}")
+            try:
+                try:
+                    await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                except Exception:
+                    pass
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=12000)
+                except Exception:
+                    pass
+                await asyncio.sleep(1.5)
+
+                # Accept cookie banner if present
+                try:
+                    await page.click(
+                        'button:has-text("Accept"), button:has-text("Accepter"), '
+                        'button[data-testid*="accept"]',
+                        timeout=3000,
+                    )
+                    await asyncio.sleep(0.5)
+                except Exception:
+                    pass
+
+                fee_text, min_text = await page.evaluate(_DOM_TAKEAWAY_SCRIPT)
+
+                updates: dict = {}
+                fee = _parse_money(fee_text)
+                if fee is not None:
+                    updates["delivery_fee"] = fee
+                min_val = _parse_money(min_text)
+                if min_val is not None:
+                    updates["min_order"] = min_val
+
+                if updates:
+                    db.patch_listing(listing["id"], updates)
+                    updated += 1
+                    log_fn(f"  → fee={updates.get('delivery_fee')} min={updates.get('min_order')}")
+                else:
+                    log_fn("  → no fee data found")
+
+            except Exception as exc:
+                log_fn(f"  → error: {exc}")
+
+        log_fn(f"Fees/Takeaway: updated {updated} listings")
+        return updated
+
+    finally:
+        await browser.close()
+
+
 # ── Combined entry point ─────────────────────────────────────────────────────
 
 async def run(log_fn: Callable[[str], None] = noop_log) -> dict[str, int]:
     """Run fee refresh for all platforms. Returns {platform: updated_count}."""
     ue = await run_ubereats(log_fn)
     dr = await run_deliveroo(log_fn)
-    return {"uber_eats": ue, "deliveroo": dr}
+    tw = await run_takeaway(log_fn)
+    return {"uber_eats": ue, "deliveroo": dr, "takeaway": tw}
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────

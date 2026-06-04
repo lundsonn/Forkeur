@@ -43,6 +43,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import db
+    cleaned = db.orphan_stale_runs(max_age_hours=2)
+    if cleaned:
+        import logging
+        logging.getLogger(__name__).warning("Startup: marked %d orphaned runs as failed", cleaned)
     sched.start()
     yield
     sched.shutdown()

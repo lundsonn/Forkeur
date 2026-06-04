@@ -6,15 +6,15 @@ import type { DealItem } from '@/lib/deals'
 export type RestaurantSummary = {
   id: string
   name: string
-  cuisine: string[]
   neighborhood: string | null
+  cuisine: string[]
   lat: number | null
   lng: number | null
   order_url: string | null
   image_url: string | null
   rating: number | null
   direct_url_type: string | null
-  listings: { platform: Platform; delivery_fee_cents: number | null }[]
+  listings: { platform: Platform; delivery_fee_cents: number | null; eta_min: number | null }[]
   cheapest: {
     platform: Platform
     fee_label: string
@@ -83,7 +83,7 @@ export async function getRestaurants(): Promise<{
     .from('restaurants')
     .select(`
       id, name, cuisine, neighborhood, lat, lng, order_url, image_url,
-      platform_listings ( platform, delivery_fee, rating, url_type )
+      platform_listings ( platform, delivery_fee, eta_min, rating, url_type )
     `)
 
   if (error) throw new Error(`getRestaurants: ${error.message}`)
@@ -93,6 +93,7 @@ export async function getRestaurants(): Promise<{
       const rawListings = (r.platform_listings ?? []) as {
         platform: string
         delivery_fee: number | null
+        eta_min: number | null
         rating: number | null
         url_type: string | null
       }[]
@@ -100,6 +101,7 @@ export async function getRestaurants(): Promise<{
       const listings = rawListings.map((l) => ({
         platform: l.platform as Platform,
         delivery_fee_cents: feeCents(l.delivery_fee),
+        eta_min: l.eta_min ?? null,
       }))
 
       const directListing = rawListings.find((l) => l.platform === 'direct') ?? null
@@ -123,8 +125,8 @@ export async function getRestaurants(): Promise<{
         return {
           id: r.id,
           name: r.name,
-          cuisine: r.cuisine ? [r.cuisine] : [],
           neighborhood,
+          cuisine: r.cuisine ? [r.cuisine] : [],
           lat,
           lng,
           order_url,
@@ -145,8 +147,8 @@ export async function getRestaurants(): Promise<{
       return {
         id: r.id,
         name: r.name,
-        cuisine: r.cuisine ? [r.cuisine] : [],
         neighborhood,
+        cuisine: r.cuisine ? [r.cuisine] : [],
         lat,
         lng,
         order_url,
@@ -228,10 +230,8 @@ export async function getDeals(): Promise<DealItem[]> {
 
 export function normalizeTitle(title: string): string {
   return title
+    .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '')
     .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9\s]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
 }
@@ -277,9 +277,9 @@ export async function getRestaurantWithListings(
       const key = normalizeTitle(item.title)
       if (!itemMap.has(key)) {
         itemMap.set(key, {
-          name: item.title,
+          name: item.title.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim(),
           description: item.description ?? null,
-          category: item.catalog_name ?? null,
+          category: item.catalog_name?.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim() ?? null,
           image_url: item.image_url ?? null,
           prices: { uber_eats: null, deliveroo: null, takeaway: null, direct: null },
         })

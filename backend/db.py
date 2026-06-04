@@ -209,9 +209,15 @@ def delete_menu_items(listing_id: str) -> None:
 
 
 def insert_menu_items(listing_id: str, items: list[dict]) -> int:
-    """Delete existing items for listing, insert new ones. Returns count."""
+    """Delete existing items for listing, insert new ones. Returns count.
+
+    Also bumps last_scraped_at on the listing so the frontend can show staleness.
+    """
+    from datetime import datetime, timezone
     client = get_client()
     client.table("menu_items").delete().eq("listing_id", listing_id).execute()
+    now = datetime.now(timezone.utc).isoformat()
+    client.table("platform_listings").update({"last_scraped_at": now}).eq("id", listing_id).execute()
     if not items:
         return 0
     rows = [{**item, "listing_id": listing_id} for item in items]
@@ -268,7 +274,7 @@ def get_last_run_per_platform() -> dict[str, dict]:
     """Returns {platform: run_row} for the most recent run of each platform."""
     client = get_client()
     result = {}
-    for platform in ("ubereats", "deliveroo", "takeaway"):
+    for platform in ("ubereats", "deliveroo", "takeaway", "fees", "direct", "direct_menu", "dom_menu"):
         res = (
             client.table("scraper_runs")
             .select("*")
@@ -280,6 +286,68 @@ def get_last_run_per_platform() -> dict[str, dict]:
         if res.data:
             result[platform] = res.data[0]
     return result
+
+
+def get_last_successful_run(platform: str) -> dict | None:
+    """Return the most recent successful run for a platform, or None."""
+    res = (
+        get_client()
+        .table("scraper_runs")
+        .select("*")
+        .eq("platform", platform)
+        .eq("status", "success")
+        .order("started_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    return res.data[0] if res.data else None
+
+
+def prune_stale_menu_items(days: int = 30) -> int:
+    """Delete menu_items for listings not scraped in the last N days.
+
+    Only touches listings where last_scraped_at IS NOT NULL — avoids removing
+    data from listings that have never been through a scraper (e.g. manual imports).
+    """
+    from datetime import datetime, timezone, timedelta
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    client = get_client()
+    stale = (
+        client.table("platform_listings")
+        .select("id")
+        .not_.is_("last_scraped_at", "null")
+        .lt("last_scraped_at", cutoff)
+        .execute()
+    ).data
+    deleted = 0
+    for row in stale:
+        res = client.table("menu_items").delete().eq("listing_id", row["id"]).execute()
+        deleted += len(res.data)
+    return deleted
+
+
+def orphan_stale_runs(max_age_hours: int = 2) -> int:
+    """Mark any 'running' rows older than max_age_hours as failed/orphaned.
+
+    Called on backend startup to clean up runs that were interrupted by a
+    previous restart and will never finish.
+    """
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+    cutoff = (now - timedelta(hours=max_age_hours)).isoformat()
+    res = (
+        get_client()
+        .table("scraper_runs")
+        .update({
+            "status": "failed",
+            "finished_at": now.isoformat(),
+            "error_msg": "orphaned — backend restarted",
+        })
+        .eq("status", "running")
+        .lt("started_at", cutoff)
+        .execute()
+    )
+    return len(res.data)
 
 
 def get_restaurants(

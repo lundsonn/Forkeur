@@ -1,7 +1,9 @@
 from __future__ import annotations
 import asyncio
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, HTTPException
 from models import RunTriggerOut, ScraperStatusOut, ScraperConfig, RunTriggerIn, ScraperResult
+import alerting
 import db
 import ws as ws_mod
 from scrapers import ubereats, deliveroo, takeaway, fees, direct, direct_menu
@@ -10,26 +12,46 @@ from scrapers.base import CloudflareBlockedError
 
 router = APIRouter(prefix="/scrapers", tags=["scrapers"])
 
+# Maximum wall-clock seconds each scraper is allowed to run before being killed.
+_TIMEOUTS: dict[str, int] = {
+    "ubereats":    90 * 60,
+    "deliveroo":   60 * 60,
+    "takeaway":    30 * 60,
+    "direct":      30 * 60,
+    "direct_menu": 15 * 60,
+    "dom_menu":    60 * 60,
+}
+
 
 async def _direct_menu_adapter(config: ScraperConfig, log_fn) -> ScraperResult:
-    """Adapter to run direct_menu.run() via the standard (config, log_fn) interface."""
+    """Adapter to run direct_menu.run() (sync) via the standard async interface."""
     result = direct_menu.run(max_items=config.max_items)
     return ScraperResult(records_saved=result.get("total_scraped", 0))
 
 
 SCRAPERS = {
-    "ubereats": ubereats.run,
-    "deliveroo": deliveroo.run,
-    "takeaway": takeaway.run,
-    "direct": direct.run,
+    "ubereats":    ubereats.run,
+    "deliveroo":   deliveroo.run,
+    "takeaway":    takeaway.run,
+    "direct":      direct.run,
     "direct_menu": _direct_menu_adapter,
-    "dom_menu": dom_menu.run,
+    "dom_menu":    dom_menu.run,
 }
 
-# Track currently running platforms
+# Track currently running platforms (also read by scheduler to skip duplicates).
 _running: set[str] = set()
 _tasks: dict[str, asyncio.Task] = {}
 _fees_running: bool = False
+
+
+def _is_transient_error(e: Exception) -> bool:
+    msg = str(e).lower()
+    return (
+        "row-level security" in msg
+        or "42501" in msg
+        or "connection" in msg
+        or "econnreset" in msg
+    )
 
 
 @router.post("/fees/run")
@@ -46,10 +68,13 @@ async def trigger_fees():
         _fees_running = True
         log_fn = ws_mod.make_log_fn(run_id)
         try:
-            counts = await fees.run(log_fn)
+            counts = await asyncio.wait_for(fees.run(log_fn), timeout=120 * 60)
             total = sum(counts.values())
             db.finish_run(run_id, "success", records_saved=total)
             await ws_mod.send_done(run_id, total)
+        except asyncio.TimeoutError:
+            db.finish_run(run_id, "failed", error_msg="timed out after 120 min")
+            await ws_mod.send_error(run_id, "timed out after 120 min")
         except Exception as e:
             db.finish_run(run_id, "failed", error_msg=str(e))
             await ws_mod.send_error(run_id, str(e))
@@ -76,12 +101,12 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
     if platform in _running:
         raise HTTPException(409, f"{platform} scraper already running")
 
-    # Use defaults if no body provided
     if body is None:
         body = RunTriggerIn()
 
     run_id = db.create_run(platform)
     log_fn = ws_mod.make_log_fn(run_id)
+    timeout = _TIMEOUTS.get(platform, 60 * 60)
 
     async def _run():
         _running.add(platform)
@@ -91,9 +116,33 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
                 max_menus=body.max_menus,
                 max_items=10 if body.test_mode else None,
             )
-            result = await SCRAPERS[platform](config, log_fn)
+            # One automatic retry for transient DB/network errors.
+            last_exc: Exception | None = None
+            for attempt in range(2):
+                try:
+                    result = await asyncio.wait_for(
+                        SCRAPERS[platform](config, log_fn),
+                        timeout=timeout,
+                    )
+                    break
+                except asyncio.TimeoutError:
+                    raise
+                except Exception as e:
+                    last_exc = e
+                    if attempt == 0 and _is_transient_error(e):
+                        log_fn(f"  transient error ({e}), retrying in 60s...")
+                        await asyncio.sleep(60)
+                    else:
+                        raise
+            else:
+                raise last_exc  # both attempts failed
+
             db.finish_run(run_id, "success", records_saved=result.records_saved)
             await ws_mod.send_done(run_id, result.records_saved)
+        except asyncio.TimeoutError:
+            msg = f"timed out after {timeout // 60} min"
+            db.finish_run(run_id, "failed", error_msg=msg)
+            await ws_mod.send_error(run_id, msg)
         except CloudflareBlockedError as e:
             db.finish_run(run_id, "blocked", error_msg=str(e))
             await ws_mod.send_error(run_id, str(e))
@@ -101,11 +150,11 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
             db.finish_run(run_id, "failed", error_msg=str(e))
             await ws_mod.send_error(run_id, str(e))
         except BaseException as e:
-            # asyncio.CancelledError and other non-Exception BaseExceptions
             db.finish_run(run_id, "failed", error_msg=f"Process killed: {type(e).__name__}")
             raise
         finally:
             _running.discard(platform)
+            _tasks.pop(platform, None)
 
     task = asyncio.create_task(_run())
     _tasks[platform] = task
@@ -127,6 +176,24 @@ async def get_status():
     return result
 
 
+@router.get("/health")
+async def health_check():
+    """Returns degraded if any core platform hasn't had a successful run in 25 hours."""
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=25)
+    statuses: dict[str, str] = {}
+    for platform in ("ubereats", "deliveroo", "takeaway"):
+        run = db.get_last_successful_run(platform)
+        if run is None:
+            statuses[platform] = "never_run"
+        else:
+            finished = run.get("finished_at") or run.get("started_at")
+            ts = datetime.fromisoformat(finished.replace("Z", "+00:00"))
+            statuses[platform] = "ok" if ts >= cutoff else "stale"
+
+    overall = "ok" if all(v == "ok" for v in statuses.values()) else "degraded"
+    return {"status": overall, "platforms": statuses}
+
+
 @router.post("/{platform}/stop")
 async def stop_scraper(platform: str):
     if platform not in SCRAPERS:
@@ -134,15 +201,14 @@ async def stop_scraper(platform: str):
     if platform not in _running:
         raise HTTPException(400, f"{platform} scraper not running")
 
-    # Cancel the task
-    if platform in _tasks:
-        task = _tasks[platform]
+    task = _tasks.get(platform)
+    if task:
         task.cancel()
         try:
             await task
-        except asyncio.CancelledError:
+        except (asyncio.CancelledError, Exception):
             pass
-        del _tasks[platform]
 
     _running.discard(platform)
+    _tasks.pop(platform, None)
     return {"status": "stopped", "platform": platform}

@@ -6,8 +6,8 @@ import type { RestaurantSummary } from '../lib/queries'
 const threeListings: RestaurantSummary = {
   id: '1',
   name: "McDonald's",
-  cuisine: ['Burgers'],
   neighborhood: null,
+  cuisine: ['Burgers'],
   lat: null,
   lng: null,
   order_url: null,
@@ -15,9 +15,9 @@ const threeListings: RestaurantSummary = {
   rating: null,
   direct_url_type: null,
   listings: [
-    { platform: 'uber_eats', delivery_fee_cents: 49 },
-    { platform: 'deliveroo', delivery_fee_cents: 149 },
-    { platform: 'takeaway', delivery_fee_cents: 199 },
+    { platform: 'uber_eats', delivery_fee_cents: 49, eta_min: null },
+    { platform: 'deliveroo', delivery_fee_cents: 149, eta_min: null },
+    { platform: 'takeaway', delivery_fee_cents: 199, eta_min: null },
   ],
   cheapest: { platform: 'uber_eats', fee_label: '€0.49', savings_cents: 150 },
 }
@@ -25,8 +25,8 @@ const threeListings: RestaurantSummary = {
 const nullFees: RestaurantSummary = {
   id: '3',
   name: 'Sushi Place',
-  cuisine: ['Asian'],
   neighborhood: null,
+  cuisine: ['Asian'],
   lat: null,
   lng: null,
   order_url: null,
@@ -34,8 +34,8 @@ const nullFees: RestaurantSummary = {
   rating: null,
   direct_url_type: null,
   listings: [
-    { platform: 'uber_eats', delivery_fee_cents: null },
-    { platform: 'deliveroo', delivery_fee_cents: 299 },
+    { platform: 'uber_eats', delivery_fee_cents: null, eta_min: null },
+    { platform: 'deliveroo', delivery_fee_cents: 299, eta_min: null },
   ],
   cheapest: { platform: 'deliveroo', fee_label: '€2.99', savings_cents: 0 },
 }
@@ -43,8 +43,8 @@ const nullFees: RestaurantSummary = {
 const freeListing: RestaurantSummary = {
   id: '4',
   name: 'Burger King',
-  cuisine: ['Fast food'],
   neighborhood: null,
+  cuisine: ['Fast food'],
   lat: null,
   lng: null,
   order_url: null,
@@ -52,9 +52,9 @@ const freeListing: RestaurantSummary = {
   rating: null,
   direct_url_type: null,
   listings: [
-    { platform: 'uber_eats', delivery_fee_cents: 0 },
-    { platform: 'deliveroo', delivery_fee_cents: 99 },
-    { platform: 'takeaway', delivery_fee_cents: 149 },
+    { platform: 'uber_eats', delivery_fee_cents: 0, eta_min: null },
+    { platform: 'deliveroo', delivery_fee_cents: 99, eta_min: null },
+    { platform: 'takeaway', delivery_fee_cents: 149, eta_min: null },
   ],
   cheapest: { platform: 'uber_eats', fee_label: 'Free', savings_cents: 149 },
 }
@@ -71,8 +71,8 @@ const withDirectOrdering: RestaurantSummary = {
   rating: null,
   direct_url_type: 'ordering',
   listings: [
-    { platform: 'uber_eats', delivery_fee_cents: 299 },
-    { platform: 'deliveroo', delivery_fee_cents: 199 },
+    { platform: 'uber_eats', delivery_fee_cents: 299, eta_min: null },
+    { platform: 'deliveroo', delivery_fee_cents: 199, eta_min: null },
   ],
   cheapest: { platform: 'deliveroo', fee_label: '€1.99', savings_cents: 100 },
 }
@@ -89,7 +89,7 @@ const withDirectMenu: RestaurantSummary = {
   rating: null,
   direct_url_type: 'menu',
   listings: [
-    { platform: 'uber_eats', delivery_fee_cents: 299 },
+    { platform: 'uber_eats', delivery_fee_cents: 299, eta_min: null },
   ],
   cheapest: { platform: 'uber_eats', fee_label: '€2.99', savings_cents: 0 },
 }
@@ -106,7 +106,7 @@ const withNullUrlType: RestaurantSummary = {
   rating: null,
   direct_url_type: null,
   listings: [
-    { platform: 'uber_eats', delivery_fee_cents: 199 },
+    { platform: 'uber_eats', delivery_fee_cents: 199, eta_min: null },
   ],
   cheapest: { platform: 'uber_eats', fee_label: '€1.99', savings_cents: 0 },
 }
