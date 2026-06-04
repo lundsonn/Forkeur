@@ -280,20 +280,15 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 count = db.insert_menu_items(lid, items)
                 menu_items_saved += count
                 # getStoreV1 often has richer promotion detail — overwrite feed promos
-                store_obj = (store_data.get("data") or {}).get("storeInfo") or {}
+                # API shape changed: hours/promos now live directly under data, not data.storeInfo
+                store_obj = store_data.get("data") or {}
                 if store_obj:
                     rich_promos = _parse_promotions(store_obj)
                     if rich_promos:
                         db.upsert_promotions(lid, rich_promos)
-                    rich_hours = _parse_regular_hours(store_obj)
+                    rich_hours = _parse_section_hours(store_obj) or _parse_regular_hours(store_obj)
                     if rich_hours:
                         db.patch_listing(lid, {"opening_hours": rich_hours})
-                    else:
-                        # DEBUG: log keys to diagnose hours field name
-                        hour_candidates = {k: type(v).__name__ for k, v in store_obj.items() if "hour" in k.lower() or "schedule" in k.lower() or "time" in k.lower()}
-                        msg = f"DEBUG hours keys for {name}: {hour_candidates or list(store_obj.keys())[:15]}"
-                        log_fn(msg)
-                        print(msg, flush=True)
                 log_fn(f"Menu: {i+1}/{n} — {name} — {count} items saved")
             except Exception as exc:
                 log_fn(f"Menu: {i+1}/{n} — {name} — parse/save error: {exc}")
@@ -310,6 +305,69 @@ _DAY_MAP = {
     "MONDAY": "mon", "TUESDAY": "tue", "WEDNESDAY": "wed",
     "THURSDAY": "thu", "FRIDAY": "fri", "SATURDAY": "sat", "SUNDAY": "sun",
 }
+
+# Localized day names used in getStoreV1 data.hours (locale follows server IP, not browser lang)
+_LOCALIZED_DAY_MAP: dict[str, str] = {
+    # English
+    **_DAY_MAP,
+    # German (VPS in Nuremberg → localeCode=de)
+    "MONTAG": "mon", "DIENSTAG": "tue", "MITTWOCH": "wed",
+    "DONNERSTAG": "thu", "FREITAG": "fri", "SAMSTAG": "sat", "SONNTAG": "sun",
+    # French
+    "LUNDI": "mon", "MARDI": "tue", "MERCREDI": "wed",
+    "JEUDI": "thu", "VENDREDI": "fri", "SAMEDI": "sat", "DIMANCHE": "sun",
+    # Dutch
+    "MAANDAG": "mon", "DINSDAG": "tue", "WOENSDAG": "wed",
+    "DONDERDAG": "thu", "VRIJDAG": "fri", "ZATERDAG": "sat", "ZONDAG": "sun",
+}
+_DAY_ORDER = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"]
+
+
+def _minutes_to_hhmm(minutes: int) -> str:
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+
+
+def _parse_section_hours(store: dict) -> dict | None:
+    """Parse hours from the current getStoreV1 format (data.hours).
+
+    Format: [{"dayRange": "Montag - Mittwoch", "sectionHours": [{"startTime": 510, "endTime": 1170}]}]
+    startTime/endTime are minutes since midnight. dayRange is localized.
+    Returns {"mon": ["08:30", "19:30"], ...} or None.
+    """
+    hours_list = store.get("hours")
+    if not hours_list or not isinstance(hours_list, list):
+        return None
+    result: dict[str, list[str]] = {}
+    for entry in hours_list:
+        if not isinstance(entry, dict):
+            continue
+        day_range = entry.get("dayRange", "")
+        slots = entry.get("sectionHours") or []
+        if not slots:
+            continue
+        slot = slots[0]
+        start_min = slot.get("startTime")
+        end_min = slot.get("endTime")
+        if start_min is None or end_min is None:
+            continue
+        start = _minutes_to_hhmm(start_min)
+        end = _minutes_to_hhmm(end_min)
+        # dayRange is either "Montag" or "Montag - Mittwoch"
+        parts = [p.strip() for p in day_range.split(" - ")]
+        if len(parts) == 1:
+            day = _LOCALIZED_DAY_MAP.get(parts[0].upper())
+            if day:
+                result[day] = [start, end]
+        elif len(parts) == 2:
+            start_day = _LOCALIZED_DAY_MAP.get(parts[0].upper())
+            end_day = _LOCALIZED_DAY_MAP.get(parts[1].upper())
+            if start_day and end_day:
+                si = _DAY_ORDER.index(start_day)
+                ei = _DAY_ORDER.index(end_day)
+                idxs = range(si, ei + 1) if ei >= si else list(range(si, 7)) + list(range(0, ei + 1))
+                for i in idxs:
+                    result[_DAY_ORDER[i]] = [start, end]
+    return result or None
 
 def _parse_regular_hours(store: dict) -> dict | None:
     """Extract weekly opening hours from a UberEats store/storeInfo object.

@@ -1,5 +1,48 @@
 import pytest
 from scrapers import ubereats
+from scrapers.ubereats import _parse_section_hours, _minutes_to_hhmm
+
+
+def test_minutes_to_hhmm():
+    assert _minutes_to_hhmm(510) == "08:30"
+    assert _minutes_to_hhmm(1170) == "19:30"
+    assert _minutes_to_hhmm(0) == "00:00"
+    assert _minutes_to_hhmm(1439) == "23:59"
+
+
+def test_parse_section_hours_german():
+    data = {
+        "hours": [
+            {"dayRange": "Sonntag", "sectionHours": [{"startTime": 510, "endTime": 690}]},
+            {"dayRange": "Montag - Mittwoch", "sectionHours": [{"startTime": 510, "endTime": 1170}]},
+            {"dayRange": "Donnerstag", "sectionHours": [{"startTime": 510, "endTime": 1140}]},
+            {"dayRange": "Freitag - Samstag", "sectionHours": [{"startTime": 510, "endTime": 1170}]},
+        ]
+    }
+    result = _parse_section_hours(data)
+    assert result is not None
+    assert result["sun"] == ["08:30", "11:30"]
+    assert result["mon"] == ["08:30", "19:30"]
+    assert result["tue"] == ["08:30", "19:30"]
+    assert result["wed"] == ["08:30", "19:30"]
+    assert result["thu"] == ["08:30", "19:00"]
+    assert result["fri"] == ["08:30", "19:30"]
+    assert result["sat"] == ["08:30", "19:30"]
+
+
+def test_parse_section_hours_none_when_missing():
+    assert _parse_section_hours({}) is None
+    assert _parse_section_hours({"hours": []}) is None
+
+
+def test_parse_section_hours_wrap_around():
+    # e.g. "Vendredi - Dimanche" (Fri - Sun wraps around the week)
+    data = {"hours": [{"dayRange": "Vendredi - Dimanche", "sectionHours": [{"startTime": 600, "endTime": 1200}]}]}
+    result = _parse_section_hours(data)
+    assert result is not None
+    assert "fri" in result
+    assert "sat" in result
+    assert "sun" in result
 
 
 def test_parse_ue_menu_from_getsectionfeedv1():
