@@ -17,7 +17,7 @@ _TIMEOUTS: dict[str, int] = {
     "ubereats":    90 * 60,
     "deliveroo":   60 * 60,
     "takeaway":    60 * 60,
-    "direct":      30 * 60,
+    "direct":      60 * 60,
     "direct_menu": 15 * 60,
     "dom_menu":    60 * 60,
 }

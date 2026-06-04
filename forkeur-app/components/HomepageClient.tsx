@@ -40,6 +40,16 @@ export default function HomepageClient({
   const tSort = useTranslations('sort')
   const tOwners = useTranslations('owners')
 
+  const cuisineCounts = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const c of cuisines) {
+      map.set(c, restaurants.filter(r =>
+        r.cuisine.some(rc => rc.toLowerCase().includes(c.toLowerCase()))
+      ).length)
+    }
+    return map
+  }, [cuisines, restaurants])
+
   const neighborhoods = useMemo(() => {
     const counts = new Map<string, number>()
     for (const r of restaurants) {
@@ -53,7 +63,7 @@ export default function HomepageClient({
   }, [restaurants])
 
   const metrics = useMemo(() => {
-    const map = new Map<string, { minFee: number | null; minEta: number | null; platformCount: number; savings: number }>()
+    const map = new Map<string, { minFee: number | null; minEta: number | null; platformCount: number; savings: number; maxFee: number | null }>()
     for (const r of restaurants) {
       const available = r.listings.filter((l) => l.delivery_fee_cents !== null)
       const fees = available.map((l) => l.delivery_fee_cents!)
@@ -62,7 +72,7 @@ export default function HomepageClient({
       const maxFee = fees.length > 1 ? Math.max(...fees) : null
       const minEta = etas.length > 0 ? Math.min(...etas) : null
       const savings = maxFee !== null && minFee !== null ? maxFee - minFee : 0
-      map.set(r.id, { minFee, minEta, platformCount: available.length, savings })
+      map.set(r.id, { minFee, minEta, platformCount: available.length, savings, maxFee })
     }
     return map
   }, [restaurants])
@@ -104,14 +114,20 @@ export default function HomepageClient({
     <div className="max-w-md mx-auto px-5">
       {/* Nav */}
       <div className="flex items-center justify-between pt-5 pb-4">
-        <div className="flex items-center gap-1.5">
+        <Link href="/" className="flex items-center gap-1.5">
           <span className="text-stone-700 text-base">⑂</span>
           <span className="font-bold text-base tracking-tight">
             fork<span className="text-orange-500">eur</span>
           </span>
-        </div>
+        </Link>
         <div className="flex items-center gap-1">
           <LangToggle />
+          <Link
+            href="/owners"
+            className="px-2.5 py-1 rounded-lg text-xs font-medium text-stone-400 hover:text-stone-600 transition-colors"
+          >
+            {tOwners('nav_link')}
+          </Link>
           <Link
             href="/deals"
             className="px-2.5 py-1 rounded-lg text-xs font-medium text-orange-500 hover:text-orange-600 transition-colors"
@@ -179,10 +195,17 @@ export default function HomepageClient({
             type="button"
             key={c}
             onClick={() => resetAndSet(setSelectedCuisine)(selectedCuisine === c ? null : c)}
-            className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+            className={`shrink-0 flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
               selectedCuisine === c ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600'
             }`}
-          >{c}</button>
+          >
+            {c}
+            {(cuisineCounts.get(c) ?? 0) > 0 && (
+              <span className={`text-[10px] ${selectedCuisine === c ? 'text-stone-300' : 'text-stone-400'}`}>
+                {cuisineCounts.get(c)}
+              </span>
+            )}
+          </button>
         ))}
       </div>
 
@@ -258,7 +281,7 @@ export default function HomepageClient({
                   <RestaurantCard
                     restaurant={r}
                     isLast={i === Math.min(visibleCount, filtered.length) - 1}
-                    savings={m?.savings}
+                    maxFee={m?.maxFee}
                     directBadge={
                       r.direct_url_type === 'ordering'
                         ? tCard('direct_cta_ordering')
@@ -288,12 +311,6 @@ export default function HomepageClient({
             )}
           </div>
 
-          {/* Footer */}
-          <div className="py-8 text-center">
-            <Link href="/owners" className="text-xs text-stone-400 hover:text-stone-600 underline underline-offset-2 transition-colors">
-              {tOwners('nav_link')}
-            </Link>
-          </div>
         </>
       )}
 

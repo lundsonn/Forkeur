@@ -1,7 +1,17 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import { NextIntlClientProvider } from 'next-intl'
 import RestaurantCard from '../components/RestaurantCard'
 import type { RestaurantSummary } from '../lib/queries'
+import en from '../messages/en.json'
+
+function renderCard(props: React.ComponentProps<typeof RestaurantCard>) {
+  return render(
+    <NextIntlClientProvider locale="en" messages={en}>
+      <RestaurantCard {...props} />
+    </NextIntlClientProvider>
+  )
+}
 
 const threeListings: RestaurantSummary = {
   id: '1',
@@ -113,47 +123,47 @@ const withNullUrlType: RestaurantSummary = {
 
 describe('RestaurantCard', () => {
   it('shows all 3 platform fees when 3 listings exist', () => {
-    render(<RestaurantCard restaurant={threeListings} directBadge="Commander directement · sans frais" />)
+    renderCard({ restaurant: threeListings, directBadge: "Commander directement · sans frais" })
     expect(screen.getByText('€0.49')).toBeInTheDocument()
     expect(screen.getByText('€1.49')).toBeInTheDocument()
     expect(screen.getByText('€1.99')).toBeInTheDocument()
   })
 
   it('marks cheapest tile with data-cheapest attribute', () => {
-    render(<RestaurantCard restaurant={threeListings} directBadge="Commander directement · sans frais" />)
+    renderCard({ restaurant: threeListings, directBadge: "Commander directement · sans frais" })
     const tile = screen.getByTestId('fee-tile-uber_eats')
     expect(tile).toHaveAttribute('data-cheapest', 'true')
   })
 
   it('non-cheapest tiles do not have data-cheapest=true', () => {
-    render(<RestaurantCard restaurant={threeListings} directBadge="Commander directement · sans frais" />)
+    renderCard({ restaurant: threeListings, directBadge: "Commander directement · sans frais" })
     expect(screen.getByTestId('fee-tile-deliveroo')).not.toHaveAttribute('data-cheapest', 'true')
     expect(screen.getByTestId('fee-tile-takeaway')).not.toHaveAttribute('data-cheapest', 'true')
   })
 
   it('shows restaurant name', () => {
-    render(<RestaurantCard restaurant={threeListings} directBadge="Commander directement · sans frais" />)
+    renderCard({ restaurant: threeListings, directBadge: "Commander directement · sans frais" })
     expect(screen.getByText("McDonald's")).toBeInTheDocument()
   })
 
   it('skips platforms with null delivery fee', () => {
-    render(<RestaurantCard restaurant={nullFees} directBadge="Commander directement · sans frais" />)
+    renderCard({ restaurant: nullFees, directBadge: "Commander directement · sans frais" })
     expect(screen.getByText('€2.99')).toBeInTheDocument()
     expect(screen.queryByTestId('fee-tile-uber_eats')).toBeNull()
   })
 
   it('shows Free for zero-cent delivery fee', () => {
-    render(<RestaurantCard restaurant={freeListing} directBadge="Commander directement · sans frais" />)
+    renderCard({ restaurant: freeListing, directBadge: "Commander directement · sans frais" })
     expect(screen.getByText('Free')).toBeInTheDocument()
   })
 
   it('shows ordering badge when url_type is ordering', () => {
-    render(<RestaurantCard restaurant={withDirectOrdering} directBadge="Order directly · no fees" />)
+    renderCard({ restaurant: withDirectOrdering, directBadge: "Order directly · no fees" })
     expect(screen.getByRole('link', { name: 'Order directly · no fees' })).toBeInTheDocument()
   })
 
   it('shows menu badge when url_type is menu', () => {
-    render(<RestaurantCard restaurant={withDirectMenu} directBadge="View menu" />)
+    renderCard({ restaurant: withDirectMenu, directBadge: "View menu" })
     expect(screen.getByRole('link', { name: 'View menu' })).toBeInTheDocument()
   })
 
@@ -163,12 +173,12 @@ describe('RestaurantCard', () => {
       id: '7',
       direct_url_type: 'website',
     }
-    render(<RestaurantCard restaurant={withWebsite} directBadge="Restaurant website" />)
+    renderCard({ restaurant: withWebsite, directBadge: "Restaurant website" })
     expect(screen.getByRole('link', { name: 'Restaurant website' })).toBeInTheDocument()
   })
 
   it('does not render direct pill when direct_url_type is null even if order_url is set', () => {
-    render(<RestaurantCard restaurant={withNullUrlType} directBadge="Should not appear" />)
+    renderCard({ restaurant: withNullUrlType, directBadge: "Should not appear" })
     expect(screen.queryByRole('link', { name: 'Should not appear' })).toBeNull()
   })
 })

@@ -125,9 +125,9 @@ export default async function Page({
       {/* Nav */}
       <div className="flex items-center px-5 pt-5 pb-3">
         <Link href="/" className="text-stone-500 hover:text-stone-800 text-lg mr-auto">‹</Link>
-        <span className="font-bold text-sm tracking-tight absolute left-1/2 -translate-x-1/2">
+        <Link href="/" className="font-bold text-sm tracking-tight absolute left-1/2 -translate-x-1/2">
           fork<span className="text-orange-500">eur</span>
-        </span>
+        </Link>
       </div>
 
       {/* Hero image */}

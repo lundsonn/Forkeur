@@ -45,7 +45,9 @@
     "direct_order_cta": "Commander directement →",
     "direct_savings_banner": "Commander directement vous économise {amount}",
     "direct_savings_subtitle": "Mêmes plats · sans frais de plateforme",
-    "direct_order_btn": "Commander →"
+    "direct_order_btn": "Commander →",
+    "dish_prices": "Prix",
+    "dish_add": "Ajouter au panier"
   },
   "compare": {
     "best_now": "Meilleur prix",

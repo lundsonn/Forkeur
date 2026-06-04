@@ -207,6 +207,13 @@ export default function DealsClient({ deals }: { deals: DealItem[] }) {
                     {tDeals('order_on', { platform: plat.name })}
                   </a>
                 )}
+                {/* Compare link */}
+                <Link
+                  href={`/restaurant/${d.restaurant_id}`}
+                  className="mt-2 flex items-center justify-center w-full py-2 rounded-xl text-xs font-medium text-stone-600 bg-stone-50 hover:bg-stone-100 transition-colors"
+                >
+                  Compare →
+                </Link>
               </div>
             )
           })}

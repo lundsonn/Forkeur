@@ -45,7 +45,9 @@
     "direct_order_cta": "Order directly →",
     "direct_savings_banner": "Ordering directly saves you {amount}",
     "direct_savings_subtitle": "Same dishes · no platform fees",
-    "direct_order_btn": "Order →"
+    "direct_order_btn": "Order →",
+    "dish_prices": "Prices",
+    "dish_add": "Add to basket"
   },
   "compare": {
     "best_now": "Best right now",

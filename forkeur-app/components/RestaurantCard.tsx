@@ -13,16 +13,19 @@ type Props = {
   restaurant: RestaurantSummary
   isLast?: boolean
   directBadge: string
-  savings?: number // in cents
+  maxFee?: number | null
 }
 
-export default function RestaurantCard({ restaurant, isLast, directBadge, savings }: Props) {
+export default function RestaurantCard({ restaurant, isLast, directBadge, maxFee }: Props) {
   const { name, cuisine, listings, cheapest, order_url, direct_url_type, image_url } = restaurant
 
   const tiles = listings.filter((l) => l.delivery_fee_cents !== null)
-  const savingsLabel = savings && savings > 0 && cheapest
-    ? `${PLATFORM_SHORT[cheapest.platform]} · Save €${(savings / 100).toFixed(2)}`
+
+  const cheapestFeeCents = cheapest
+    ? listings.find(l => l.platform === cheapest.platform)?.delivery_fee_cents ?? null
     : null
+
+  const showStrikethrough = maxFee != null && cheapestFeeCents != null && (maxFee - cheapestFeeCents) >= 50
 
   return (
     <div className={`py-4 ${!isLast ? 'border-b border-stone-100' : ''}`}>
@@ -43,10 +46,20 @@ export default function RestaurantCard({ restaurant, isLast, directBadge, saving
               <p className="text-xs text-stone-400 mt-0.5">{cuisine.join(' · ')}</p>
             </div>
             <div className="flex items-center gap-2 ml-4 shrink-0 mt-0.5">
-              {savingsLabel && (
-                <span className="bg-[#1E8A5A] text-white rounded-full text-xs px-2 py-0.5 font-medium">
-                  {savingsLabel}
-                </span>
+              {cheapestFeeCents != null && (
+                <div className="flex items-baseline gap-1">
+                  <span className="text-xs text-stone-500">
+                    from <span className="font-semibold text-stone-900">€{(cheapestFeeCents / 100).toFixed(2)}</span>
+                  </span>
+                  {showStrikethrough && (
+                    <span
+                      className="text-xs text-stone-400 line-through"
+                      aria-label={`€${(maxFee! / 100).toFixed(2)} on other platforms`}
+                    >
+                      €{(maxFee! / 100).toFixed(2)}
+                    </span>
+                  )}
+                </div>
               )}
               <span aria-hidden="true" className="text-stone-300 text-xs">›</span>
             </div>

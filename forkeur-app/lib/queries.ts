@@ -19,6 +19,7 @@ export type RestaurantSummary = {
     platform: Platform
     fee_label: string
     savings_cents: number
+    delivery_fee_cents: number | null
   } | null
 }
 
@@ -179,6 +180,7 @@ export async function getRestaurants(): Promise<{
           savings_cents:
             (mostExpensive.delivery_fee_cents ?? 0) -
             (cheapest.delivery_fee_cents ?? 0),
+          delivery_fee_cents: cheapest.delivery_fee_cents,
         },
       }
     })

@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
 import Image from 'next/image'
 import {
@@ -17,6 +17,151 @@ import {
 } from '@/lib/basket'
 import { MenuItemWithPrices, PlatformListing } from '@/lib/queries'
 import CompareSheet from './CompareSheet'
+
+function DishModal({
+  item,
+  qty,
+  onAdd,
+  onRemove,
+  onClose,
+}: {
+  item: MenuItemWithPrices
+  qty: number
+  onAdd: () => void
+  onRemove: () => void
+  onClose: () => void
+}) {
+  const tBasket = useTranslations('basket')
+  const cheapest = (() => {
+    let best: Platform | null = null
+    let min = Infinity
+    for (const p of PLATFORMS) {
+      const price = item.prices[p]
+      if (price !== null && price < min) { min = price; best = p }
+    }
+    return best
+  })()
+
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [])
+
+  const platformsWithPrice = PLATFORMS.filter((p) => item.prices[p] !== null)
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center"
+      onClick={onClose}
+    >
+      {/* backdrop */}
+      <div className="absolute inset-0 bg-black/60" />
+
+      {/* sheet */}
+      <div
+        className="relative w-full max-w-md max-h-[90vh] overflow-y-auto bg-white rounded-t-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* image */}
+        {item.image_url ? (
+          <div className="relative w-full h-56">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={item.image_url}
+              alt={item.name}
+              className="w-full h-full object-cover"
+            />
+            <button
+              onClick={onClose}
+              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90 flex items-center justify-center text-stone-700 text-base font-bold shadow"
+              aria-label="Close"
+            >
+              ×
+            </button>
+          </div>
+        ) : (
+          <div className="flex justify-end px-4 pt-4">
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-stone-600 text-base font-bold"
+              aria-label="Close"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        <div className="px-5 pt-4 pb-8">
+          <h2 className="text-xl font-bold text-stone-900">{item.name}</h2>
+          {item.description && (
+            <p className="text-sm text-stone-500 mt-1 leading-relaxed">{item.description}</p>
+          )}
+
+          {platformsWithPrice.length > 0 && (
+            <div className="mt-4">
+              <p className="text-[10px] font-semibold tracking-widest text-stone-400 uppercase mb-2">
+                {tBasket('dish_prices')}
+              </p>
+              <div className="flex flex-col gap-1">
+                {PLATFORMS.filter((p) => item.prices[p] !== null).map((p) => {
+                  const price = item.prices[p]!
+                  const isCheapest = p === cheapest
+                  const isDirectCheapest = p === 'direct' && isCheapest
+                  return (
+                    <div
+                      key={p}
+                      className={`flex items-center justify-between px-3 py-2 rounded-xl ${
+                        isCheapest ? 'bg-orange-50 border border-orange-200' : 'bg-stone-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full ${PLATFORM_COLORS[p].dot}`} />
+                        <span className={`text-sm font-medium ${PLATFORM_COLORS[p].label}`}>
+                          {PLATFORM_LABELS[p]}
+                        </span>
+                      </div>
+                      <span className={`text-sm font-bold ${isDirectCheapest ? 'text-orange-500' : isCheapest ? 'text-green-600' : 'text-stone-700'}`}>
+                        {centsToEuro(price)}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* qty + add */}
+          <div className="mt-5 flex items-center gap-3">
+            {qty > 0 && (
+              <div className="flex items-center gap-2 bg-stone-100 rounded-full px-3 py-2">
+                <button
+                  onClick={onRemove}
+                  className="w-6 h-6 flex items-center justify-center text-stone-600 text-lg leading-none"
+                  aria-label="Remove one"
+                >−</button>
+                <span className="text-sm font-bold text-stone-900 min-w-[16px] text-center">{qty}</span>
+                <button
+                  onClick={onAdd}
+                  className="w-6 h-6 flex items-center justify-center text-stone-700 text-lg leading-none"
+                  aria-label="Add one"
+                >+</button>
+              </div>
+            )}
+            <button
+              onClick={() => { onAdd(); if (qty === 0) onClose() }}
+              className="flex-1 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-semibold text-sm transition-colors"
+            >
+              {qty === 0
+                ? tBasket('dish_add')
+                : `${tBasket('dish_add')} (+1)`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const PLATFORM_SHORT: Record<Platform, string> = {
   uber_eats: 'UE',
@@ -44,6 +189,7 @@ type Props = {
 export default function BasketSimulator({ menuItems, listings, phone }: Props) {
   const [basket, setBasket] = useState<BasketItem[]>([])
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [selectedItem, setSelectedItem] = useState<MenuItemWithPrices | null>(null)
 
   const tBasket = useTranslations('basket')
 
@@ -216,7 +362,7 @@ export default function BasketSimulator({ menuItems, listings, phone }: Props) {
               <div>
                 <p className={`text-xs font-semibold ${colors.label}`}>
                   {href ? (
-                    <a href={href} target={platform !== 'direct' ? '_blank' : undefined}
+                    <a href={href} target={href?.startsWith('http') ? '_blank' : undefined}
                        rel="noopener noreferrer" className="underline underline-offset-2">
                       {label}
                     </a>
@@ -234,7 +380,7 @@ export default function BasketSimulator({ menuItems, listings, phone }: Props) {
                     </p>
                     <p className="text-[11px] text-stone-500 mt-0.5">
                       {href ? (
-                        <a href={href} target={platform !== 'direct' ? '_blank' : undefined}
+                        <a href={href} target={href?.startsWith('http') ? '_blank' : undefined}
                            rel="noopener noreferrer" className="underline underline-offset-2">
                           {tBasket('direct_order_cta')}
                         </a>
@@ -279,14 +425,17 @@ export default function BasketSimulator({ menuItems, listings, phone }: Props) {
                     return (
                       <tr key={item.name} className="border-b border-stone-100 last:border-0">
                         <td className="py-3 pr-2 max-w-[160px]">
-                          <div className="flex items-center gap-2">
+                          <button
+                            className="flex items-center gap-2 text-left w-full"
+                            onClick={() => setSelectedItem(item)}
+                          >
                             {item.image_url && (
                               <Image
                                 src={item.image_url}
                                 alt=""
-                                width={32}
-                                height={32}
-                                className="rounded shrink-0 object-cover"
+                                width={36}
+                                height={36}
+                                className="rounded-lg shrink-0 object-cover"
                                 unoptimized
                               />
                             )}
@@ -298,7 +447,7 @@ export default function BasketSimulator({ menuItems, listings, phone }: Props) {
                                 <p className="text-xs text-stone-400 truncate">{item.description}</p>
                               )}
                             </div>
-                          </div>
+                          </button>
                         </td>
                         {PLATFORMS.map((platform) => {
                           const price = item.prices[platform]
@@ -428,6 +577,17 @@ export default function BasketSimulator({ menuItems, listings, phone }: Props) {
           platformUrl={platformUrls[cheapestPlatform] ?? null}
           sortedByTotal={sortedByTotal}
           onClose={() => setSheetOpen(false)}
+        />
+      )}
+
+      {/* Dish detail modal */}
+      {selectedItem && (
+        <DishModal
+          item={selectedItem}
+          qty={getQty(selectedItem.name)}
+          onAdd={() => addItem(selectedItem)}
+          onRemove={() => removeItem(selectedItem)}
+          onClose={() => setSelectedItem(null)}
         />
       )}
     </div>
