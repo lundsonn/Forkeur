@@ -173,6 +173,9 @@ async def _run_batch_all() -> None:
     # Fees run after all scrapers complete, no need for a separate cron.
     await _run_fee_refresh()
 
+    # Reconcile cross-platform duplicates after all data is fresh.
+    await _run_match()
+
 
 async def _run_fee_refresh() -> None:
     from scrapers import fees
@@ -188,6 +191,17 @@ async def _run_fee_refresh() -> None:
     except Exception as e:
         db.finish_run(run_id, "failed", error_msg=str(e))
         import alerting; alerting.send_failure_alert("fees", str(e), run_id)
+
+
+async def _run_match() -> None:
+    from scrapers import match as _match
+    run_id = db.create_run("match")
+    try:
+        result = await asyncio.to_thread(_match.run_sync, dry_run=False, log_fn=_noop)
+        db.finish_run(run_id, "success", records_saved=result["auto_merge"])
+    except Exception as e:
+        db.finish_run(run_id, "failed", error_msg=str(e))
+        import alerting; alerting.send_failure_alert("match", str(e), run_id)
 
 
 async def _run_daily_cleanup() -> None:

@@ -126,7 +126,11 @@
   "hours": {
     "closed": "Fermé",
     "closes_at": "Ferme à {time}",
-    "unavailable": "Indisponible"
+    "unavailable": "Indisponible",
+    "opens_at": "Ouvre à {time}",
+    "opens_tomorrow": "Ouvre demain à {time}",
+    "not_checked": "Horaires non vérifiés",
+    "not_checked_tooltip": "Les horaires en temps réel arrivent bientôt"
   },
   "meta": {
     "home_title": "Forkeur — Comparez les prix des restos à Bruxelles",

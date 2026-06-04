@@ -478,7 +478,7 @@ async function check5(): Promise<{ passed: number; total: number; failures: stri
     // winning platform actually has lowest price on claimed items
     const wins: Record<string, number> = { uber_eats: 0, deliveroo: 0, takeaway: 0 }
     for (const item of comparable) {
-      const prices = AGGREGATOR_PLATFORMS.map(p => ({ p, v: item.prices[p] })).filter((x): x is { p: string; v: number } => x.v !== null)
+      const prices = AGGREGATOR_PLATFORMS.map(p => ({ p, v: item.prices[p] })).filter((x): x is { p: typeof AGGREGATOR_PLATFORMS[number]; v: number } => x.v !== null)
       if (prices.length < 2) continue
       const min = Math.min(...prices.map(x => x.v))
       const max = Math.max(...prices.map(x => x.v))
@@ -492,7 +492,7 @@ async function check5(): Promise<{ passed: number; total: number; failures: stri
 
     // No item has same platform as both cheapest and most expensive
     for (const item of comparable) {
-      const prices = AGGREGATOR_PLATFORMS.map(p => ({ p, v: item.prices[p] })).filter((x): x is { p: string; v: number } => x.v !== null)
+      const prices = AGGREGATOR_PLATFORMS.map(p => ({ p, v: item.prices[p] })).filter((x): x is { p: typeof AGGREGATOR_PLATFORMS[number]; v: number } => x.v !== null)
       if (prices.length < 2) continue
       const min = Math.min(...prices.map(x => x.v))
       const max = Math.max(...prices.map(x => x.v))

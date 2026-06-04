@@ -149,6 +149,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                     "lat": r.get("lat"),
                     "lng": r.get("lng"),
                     "image_url": r.get("image_url"),
+                    "geo_source": "uber_eats",
                 })
             except ValueError:
                 continue  # junk entry filtered by db._is_junk

@@ -126,7 +126,11 @@
   "hours": {
     "closed": "Gesloten",
     "closes_at": "Sluit om {time}",
-    "unavailable": "Niet beschikbaar"
+    "unavailable": "Niet beschikbaar",
+    "opens_at": "Opent om {time}",
+    "opens_tomorrow": "Opent morgen om {time}",
+    "not_checked": "Openingstijden niet geverifieerd",
+    "not_checked_tooltip": "Live openingstijden komen binnenkort"
   },
   "meta": {
     "home_title": "Forkeur — Vergelijk voedselprijzen in Brussel",

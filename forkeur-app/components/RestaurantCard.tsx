@@ -1,6 +1,7 @@
 import { ExternalLink, List, Globe, Phone } from 'lucide-react'
 import { RestaurantSummary } from '@/lib/queries'
 import { centsToEuro, PLATFORM_COLORS, type Platform } from '@/lib/basket'
+import { getOpenStatus } from '@/lib/hours'
 import OpenStatusBadge from './OpenStatusBadge'
 import PlatformLogo from './ui/PlatformLogo'
 
@@ -98,7 +99,7 @@ export default function RestaurantCard({ restaurant, isLast, directBadge, maxFee
                 data-cheapest={isCheapest ? 'true' : undefined}
                 className={`rounded-lg px-2 py-2 text-center transition-opacity bg-stone-50 ${
                   isCheapest ? '' : 'opacity-40'
-                }`}
+                } ${getOpenStatus(l.opening_hours).status === 'closed' ? 'grayscale opacity-30' : ''}`}
               >
                 <div className="flex justify-center mb-0.5">
                   <PlatformLogo platform={l.platform} size={18} />

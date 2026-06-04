@@ -126,7 +126,11 @@
   "hours": {
     "closed": "Closed",
     "closes_at": "Closes {time}",
-    "unavailable": "Unavailable"
+    "unavailable": "Unavailable",
+    "opens_at": "Opens {time}",
+    "opens_tomorrow": "Opens tomorrow {time}",
+    "not_checked": "Hours not verified",
+    "not_checked_tooltip": "We're working on live opening hours — coming soon"
   },
   "meta": {
     "home_title": "Forkeur — Compare food prices in Brussels",

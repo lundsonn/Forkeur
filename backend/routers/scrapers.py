@@ -6,7 +6,7 @@ from models import RunTriggerOut, ScraperStatusOut, ScraperConfig, RunTriggerIn,
 import alerting
 import db
 import ws as ws_mod
-from scrapers import ubereats, deliveroo, takeaway, fees, direct, direct_menu
+from scrapers import ubereats, deliveroo, takeaway, fees, direct, direct_menu, match
 from scrapers import dom_menu
 from scrapers.base import CloudflareBlockedError
 
@@ -20,6 +20,7 @@ _TIMEOUTS: dict[str, int] = {
     "direct":      60 * 60,
     "direct_menu": 15 * 60,
     "dom_menu":    60 * 60,
+    "match":       15 * 60,
 }
 
 
@@ -36,6 +37,7 @@ SCRAPERS = {
     "direct":      direct.run,
     "direct_menu": _direct_menu_adapter,
     "dom_menu":    dom_menu.run,
+    "match":       match.run,
 }
 
 # Track currently running platforms (also read by scheduler to skip duplicates).
