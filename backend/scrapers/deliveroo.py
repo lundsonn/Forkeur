@@ -281,7 +281,14 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
         all_by_slug: dict[str, dict] = {}
         for zone_address in zones:
             log_fn(f"Zone: {zone_address}")
-            zone_restaurants = await _scrape_zone_listings(browser, zone_address, log_fn)
+            try:
+                zone_restaurants = await asyncio.wait_for(
+                    _scrape_zone_listings(browser, zone_address, log_fn),
+                    timeout=180,
+                )
+            except asyncio.TimeoutError:
+                log_fn(f"  ⚠ zone timed out after 180s, skipping")
+                continue
             new_count = 0
             for r in zone_restaurants:
                 if r["slug"] not in all_by_slug:
