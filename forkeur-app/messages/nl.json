@@ -46,13 +46,15 @@
     "delivery": "Bezorging {fee}",
     "items": "{count, plural, one {# artikel} other {# artikelen}}",
     "best": "Beste:",
+    "compare_platforms": "Platforms vergelijken",
     "direct_savings": "~{fee} aan platformkosten bespaard",
     "direct_order_cta": "Direct bestellen →",
     "direct_savings_banner": "Direct bestellen bespaart u {amount}",
     "direct_savings_subtitle": "Dezelfde gerechten · zonder platformkosten",
     "direct_order_btn": "Bestellen →",
     "dish_prices": "Prijzen",
-    "dish_add": "Toevoegen aan winkelwagen"
+    "dish_add": "Toevoegen aan winkelwagen",
+    "cheapest_delivery_subline": "Goedkoopste bezorging in uw buurt"
   },
   "compare": {
     "best_now": "Beste aanbieding",
@@ -64,7 +66,13 @@
     "live_prices": "Live prijzen",
     "best_badge": "Beste",
     "why": "Waarom {platform}? Laagste totaal inclusief alle kosten.",
-    "order_on": "Bestellen bij {platform}"
+    "order_on": "Bestellen bij {platform}",
+    "no_winner_heading": "Prijzen variëren per platform",
+    "no_winner_subline": "Niet alle artikelen zijn geprijsd op elk platform — vergelijk hieronder",
+    "partial_coverage": "· {priced} van {total} artikelen",
+    "compare_cta": "Platforms vergelijken →",
+    "subtitle_fees": "Goedkoopste bezorging in uw buurt.",
+    "why_fees": "Waarom {platform}? Laagste bezorgkosten."
   },
   "direct": {
     "badge": "Direct bestellen · zonder platformkosten",
@@ -111,7 +119,9 @@
     "prices_updating_sub": "We controleren prijzen meerdere keren per dag.",
     "basket_section_title": "Vergelijk je exacte bestelling",
     "basket_section_subtitle": "Zie welk platform het goedkoopst is voor wat je bestelt.",
-    "basket_single_platform": "Prijzen alleen beschikbaar op {platform}"
+    "basket_single_platform": "Prijzen alleen beschikbaar op {platform}",
+    "partial_match_disclaimer": "Prijzen vergeleken voor {priced} van {total} gerechten · sommige gerechten staan maar op één platform",
+    "no_match_neutral": "Menuprijzen variëren per platform · onvoldoende gegevens om te vergelijken"
   },
   "hours": {
     "closed": "Gesloten",
@@ -150,5 +160,16 @@
     "sending": "Verzenden…",
     "success": "Aanvraag ontvangen — wij nemen binnen enkele dagen contact met u op.",
     "error": "Er is iets misgegaan. Probeer het opnieuw."
+  },
+  "menuPrices": {
+    "section_label": "Menuprijzen",
+    "winner": "{platform} wint op {x} van {y} artikelen",
+    "avg_savings": "goedkoper per artikel gemiddeld",
+    "same_prices": "Dezelfde prijzen op alle platforms",
+    "one_item_compared": "1 artikel vergeleken",
+    "disclaimer": "Prijzen vergeleken voor {x} van {y} menu-artikelen · sommige artikelen staan alleen op één platform",
+    "expand": "Bekijk alle {count} artikelen",
+    "show_more": "Toon {count} meer artikelen",
+    "showing_count": "Weergave van {shown} van {total} artikelen · gesorteerd op grootste besparing"
   }
 }

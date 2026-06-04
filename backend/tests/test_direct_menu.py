@@ -612,6 +612,9 @@ class TestRun:
         assert deleted_ids == ["listing-sq", "listing-odoo", "listing-piki"]
 
     def test_run_continues_after_per_listing_error(self, mock_listings):
+        sq_fixture = _load_fixture("sq_menu_response.json")
+        piki_fixture = _load_fixture("piki_app_response.json")
+
         db_client_mock = MagicMock()
         db_client_mock.table.return_value.select.return_value \
             .eq.return_value.eq.return_value.execute.return_value.data = mock_listings
@@ -622,12 +625,16 @@ class TestRun:
             patch("scrapers.direct_menu.db.insert_menu_items") as mock_insert,
             patch("httpx.Client") as mock_http_cls,
         ):
-            # First listing raises on delete, second/third succeed
+            # listing-sq: delete raises (error); listing-odoo/piki: delete+insert succeed
             mock_delete.side_effect = [RuntimeError("DB error"), None, None]
             mock_insert.side_effect = [5, 6]
             http_instance = MagicMock()
             mock_http_cls.return_value.__enter__.return_value = http_instance
-            http_instance.get.return_value = _mock_response(404)
+            # sq_menu uses GET; piki uses GET (first template succeeds)
+            http_instance.get.side_effect = [
+                _mock_response(200, sq_fixture),   # sq_menu /api/menu/{code}
+                _mock_response(200, piki_fixture), # piki first template
+            ]
             http_instance.post.return_value = _mock_response(200, _load_fixture("odoo_pos_response.json"))
 
             result = run()

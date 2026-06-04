@@ -10,6 +10,7 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@next/third-parties": "^16.2.7",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.106.2",
     "lucide-react": "^1.17.0",

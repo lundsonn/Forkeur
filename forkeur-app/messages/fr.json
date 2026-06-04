@@ -46,13 +46,15 @@
     "delivery": "Livraison {fee}",
     "items": "{count, plural, one {# article} other {# articles}}",
     "best": "Meilleur :",
+    "compare_platforms": "Comparer les plateformes",
     "direct_savings": "~{fee} de frais de plateforme économisés",
     "direct_order_cta": "Commander directement →",
     "direct_savings_banner": "Commander directement vous économise {amount}",
     "direct_savings_subtitle": "Mêmes plats · sans frais de plateforme",
     "direct_order_btn": "Commander →",
     "dish_prices": "Prix",
-    "dish_add": "Ajouter au panier"
+    "dish_add": "Ajouter au panier",
+    "cheapest_delivery_subline": "Livraison la moins chère de votre zone"
   },
   "compare": {
     "best_now": "Meilleur prix",
@@ -64,7 +66,13 @@
     "live_prices": "Prix en direct",
     "best_badge": "Meilleur",
     "why": "Pourquoi {platform} ? Total le plus bas frais inclus.",
-    "order_on": "Commander sur {platform}"
+    "order_on": "Commander sur {platform}",
+    "no_winner_heading": "Les prix varient selon la plateforme",
+    "no_winner_subline": "Tous les articles ne sont pas disponibles sur chaque plateforme — comparez ci-dessous",
+    "partial_coverage": "· {priced} sur {total} articles",
+    "compare_cta": "Comparer les plateformes →",
+    "subtitle_fees": "Livraison la moins chère dans votre zone.",
+    "why_fees": "Pourquoi {platform} ? Frais de livraison les plus bas."
   },
   "direct": {
     "badge": "Commander directement · sans frais",
@@ -111,7 +119,9 @@
     "prices_updating_sub": "Nous vérifions les prix plusieurs fois par jour.",
     "basket_section_title": "Comparez votre commande exacte",
     "basket_section_subtitle": "Voyez quelle plateforme est la moins chère pour ce que vous commandez.",
-    "basket_single_platform": "Prix disponibles sur {platform} uniquement"
+    "basket_single_platform": "Prix disponibles sur {platform} uniquement",
+    "partial_match_disclaimer": "Prix comparés pour {priced} plats sur {total} · certains plats uniquement sur une plateforme",
+    "no_match_neutral": "Les prix varient selon la plateforme · données insuffisantes pour comparer"
   },
   "hours": {
     "closed": "Fermé",
@@ -150,5 +160,16 @@
     "sending": "Envoi…",
     "success": "Demande reçue — nous vous répondrons sous quelques jours.",
     "error": "Une erreur est survenue. Veuillez réessayer."
+  },
+  "menuPrices": {
+    "section_label": "Prix des menus",
+    "winner": "{platform} est moins cher sur {x} des {y} articles",
+    "avg_savings": "moins cher par article en moyenne",
+    "same_prices": "Mêmes prix sur toutes les plateformes",
+    "one_item_compared": "1 article comparé",
+    "disclaimer": "Prix comparés pour {x} des {y} articles du menu · certains articles disponibles sur une seule plateforme",
+    "expand": "Voir les {count} articles",
+    "show_more": "Afficher {count} articles de plus",
+    "showing_count": "Affichage de {shown} sur {total} articles · triés par économies"
   }
 }

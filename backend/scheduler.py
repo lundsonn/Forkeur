@@ -158,7 +158,16 @@ async def _run_batch_all() -> None:
             db.finish_run(run_id, "failed", error_msg=str(e))
             import alerting; alerting.send_failure_alert("direct_menu", str(e), run_id)
 
-    tasks = [_run_scraper(p) for p in to_run] + [_run_direct_menu_threaded()]
+    # Cap concurrency at 4 scrapers — full 6-way overlap pushed batch RAM near OOM
+    # (dom_menu's pages + ube/del parallel menu workers). 4-at-a-time keeps a safe
+    # headroom on 4vCPU/8GB; the rest queue and start as slots free.
+    sem = asyncio.Semaphore(4)
+
+    async def _capped(coro):
+        async with sem:
+            await coro
+
+    tasks = [_capped(_run_scraper(p)) for p in to_run] + [_capped(_run_direct_menu_threaded())]
     await asyncio.gather(*tasks, return_exceptions=True)
 
     # Fees run after all scrapers complete, no need for a separate cron.

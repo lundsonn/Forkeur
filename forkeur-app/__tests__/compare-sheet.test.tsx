@@ -14,6 +14,13 @@ function renderWithIntl(ui: React.ReactElement) {
   )
 }
 
+const fullCoverages = {
+  uber_eats: { priced: 3, total: 3, complete: true },
+  deliveroo: { priced: 3, total: 3, complete: true },
+  takeaway: { priced: 3, total: 3, complete: true },
+  direct: null,
+}
+
 const baseProps = {
   cheapestPlatform: 'uber_eats' as Platform,
   total: 648,
@@ -25,6 +32,7 @@ const baseProps = {
     { platform: 'takeaway' as Platform, total: 767, eta: '25 min' },
     { platform: 'deliveroo' as Platform, total: 789, eta: '22 min' },
   ],
+  coverages: fullCoverages,
   onClose: vi.fn(),
 }
 

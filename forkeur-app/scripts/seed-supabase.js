@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable @typescript-eslint/no-require-imports */
 // scripts/seed-supabase.js
 // Match scraped platform JSON → Supabase (restaurants + platform_listings + menu_items).
 // Usage: node scripts/seed-supabase.js

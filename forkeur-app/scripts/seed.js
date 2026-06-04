@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 // scripts/seed.js
 // Seeds Supabase from scraper output files.
 // Prerequisites: run scrapers first, then: node scripts/seed.js

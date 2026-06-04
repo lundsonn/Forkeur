@@ -164,6 +164,43 @@ def upsert_restaurant(data: dict) -> str:
             if cand_norm in (norm, norm_canonical) or cand_norm_can in (norm, norm_canonical):
                 return _found(cand["id"])
 
+    # 6. Token-subset match: catches "Boulangerie Balkan" ↔ "Boulangerie Balkan Bakkerij".
+    #    All tokens of the shorter name must be in the longer name AND Jaccard ≥ 0.7.
+    _TOKEN_STOP = {"le","la","les","au","aux","un","une","de","du","des","the","a","an","en","van","het","and","et","restaurant","brasserie","cafe","snack"}
+
+    def _tok(s: str) -> frozenset[str]:
+        import unicodedata as _ud
+        t = _ud.normalize("NFD", s.lower())
+        t = "".join(c for c in t if _ud.category(c) != "Mn")
+        t = re.sub(r"[^\w\s]", " ", t)
+        return frozenset(w for w in t.split() if w not in _TOKEN_STOP and len(w) >= 2 and not w.isdigit())
+
+    def _jaccard(a: frozenset, b: frozenset) -> float:
+        return len(a & b) / len(a | b) if (a or b) else 0.0
+
+    new_toks = _tok(name)
+    if len(new_toks) >= 2:
+        # Build prefix from first significant token for a focused DB lookup
+        sorted_toks = sorted(new_toks)
+        for pivot in sorted_toks[:2]:
+            if len(pivot) < 3:
+                continue
+            cands = (
+                client.table("restaurants")
+                .select("id, name")
+                .ilike("name", f"%{pivot}%")
+                .limit(50)
+                .execute()
+            )
+            for cand in cands.data:
+                cand_toks = _tok(cand["name"])
+                if not cand_toks:
+                    continue
+                shorter, longer = (new_toks, cand_toks) if len(new_toks) <= len(cand_toks) else (cand_toks, new_toks)
+                if len(shorter) >= 2 and shorter.issubset(longer) and _jaccard(new_toks, cand_toks) >= 0.7:
+                    return _found(cand["id"])
+            break  # one pivot is enough
+
     # Not found — insert new row
     res = client.table("restaurants").upsert(data, on_conflict="slug").execute()
     return res.data[0]["id"]

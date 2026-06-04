@@ -41,6 +41,7 @@ def test_approve_claim_updates_restaurant_and_listing():
     claim = {
         "id": "c1", "restaurant_id": "rest-1",
         "direct_order_url": "https://myrest.com/order", "verified": False,
+        "inquiry_type": "add_url",
     }
     with patch("db.get_client") as mock_get, \
          patch("db.upsert_listing") as mock_upsert:

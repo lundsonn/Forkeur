@@ -1,0 +1,220 @@
+{
+  "generated_at": "2026-06-04T19:59:01.624Z",
+  "note": "Comparison runs old and new normalizer on identical live data.",
+  "aggregate": {
+    "restaurants_compared": 191,
+    "total_unique_keys_new_normalizer": 17862,
+    "old_matched": 4882,
+    "new_matched": 5160,
+    "old_overall_rate": 0.27331765759713356,
+    "new_overall_rate": 0.28888142425260327,
+    "delta_matched": 278,
+    "delta_rate": 0.015563766655469713,
+    "old_mean_rate": 0.3221086648028373,
+    "new_mean_rate": 0.33440570200217823,
+    "old_median_rate": 0.20512820512820512,
+    "new_median_rate": 0.23684210526315788
+  },
+  "newly_matched_sample": [
+    {
+      "restaurant_id": "d938fc1f-7aa2-4c80-8896-8d42f930974c",
+      "old_key_a": "oasis 33cl",
+      "old_key_b": "oasis",
+      "new_key": "oasis",
+      "title_a": "Oasis 33cl",
+      "title_b": "Oasis",
+      "platform_a": "takeaway",
+      "platform_b": "deliveroo"
+    },
+    {
+      "restaurant_id": "a44713ec-b7b1-452c-bb6a-0b1d78249c29",
+      "old_key_a": "faya bowl",
+      "old_key_b": "faya bowl large",
+      "new_key": "bowl faya",
+      "title_a": "Faya Bowl",
+      "title_b": "Faya Bowl (LARGE)",
+      "platform_a": "uber_eats",
+      "platform_b": "takeaway"
+    },
+    {
+      "restaurant_id": "c8b9a238-38e6-4e31-8b45-e8594c0125d0",
+      "old_key_a": "shami kabab",
+      "old_key_b": "21 shami kabab",
+      "new_key": "kabab shami",
+      "title_a": "Shami kabab",
+      "title_b": "21. Shami Kabab",
+      "platform_a": "uber_eats",
+      "platform_b": "deliveroo"
+    },
+    {
+      "restaurant_id": "86d53c60-ffcc-43d2-9114-d600c317e696",
+      "old_key_a": "29 poulet au curry",
+      "old_key_b": "poulet au curry",
+      "new_key": "au curry poulet",
+      "title_a": "29- Poulet au curry",
+      "title_b": "Poulet au Curry",
+      "platform_a": "uber_eats",
+      "platform_b": "deliveroo"
+    },
+    {
+      "restaurant_id": "86d53c60-ffcc-43d2-9114-d600c317e696",
+      "old_key_a": "31 poulet sauce barbecue",
+      "old_key_b": "poulet sauce barbecue",
+      "new_key": "barbecue poulet sauce",
+      "title_a": "31- Poulet sauce barbecue",
+      "title_b": "Poulet Sauce Barbecue",
+      "platform_a": "uber_eats",
+      "platform_b": "deliveroo"
+    },
+    {
+      "restaurant_id": "10ecda2d-00f3-424a-bb87-8913f315c583",
+      "old_key_a": "schweppes mojito",
+      "old_key_b": "schweppes mojito 33cl",
+      "new_key": "mojito schweppes",
+      "title_a": "Schweppes mojito",
+      "title_b": "Schweppes Mojito 33cl",
+      "platform_a": "uber_eats",
+      "platform_b": "deliveroo"
+    },
+    {
+      "restaurant_id": "10ecda2d-00f3-424a-bb87-8913f315c583",
+      "old_key_a": "maes",
+      "old_key_b": "maes 33cl canette",
+      "new_key": "maes",
+      "title_a": "Maes",
+      "title_b": "Maes 33cl (canette)",
+      "platform_a": "uber_eats",
+      "platform_b": "deliveroo"
+    },
+    {
+      "restaurant_id": "86d53c60-ffcc-43d2-9114-d600c317e696",
+      "old_key_a": "61 poisson sauce aigre douce",
+      "old_key_b": "poisson sauce aigre douce",
+      "new_key": "aigre douce poisson sauce",
+      "title_a": "61- Poisson sauce aigre-douce",
+      "title_b": "Poisson Sauce Aigre-Douce",
+      "platform_a": "uber_eats",
+      "platform_b": "deliveroo"
+    },
+    {
+      "restaurant_id": "10ecda2d-00f3-424a-bb87-8913f315c583",
+      "old_key_a": "agneau vindaloo spicy",
+      "old_key_b": "agneau vindaloo",
+      "new_key": "agneau vindaloo",
+      "title_a": "Agneau vindaloo(spicy)",
+      "title_b": "Agneau vindaloo",
+      "platform_a": "uber_eats",
+      "platform_b": "deliveroo"
+    },
+    {
+      "restaurant_id": "5cdeec7a-076b-45e0-8bb2-f0bb151375c7",
+      "old_key_a": "asahi 33cl",
+      "old_key_b": "asahi",
+      "new_key": "asahi",
+      "title_a": "Asahi (33cl)",
+      "title_b": "Asahi",
+      "platform_a": "takeaway",
+      "platform_b": "deliveroo"
+    },
+    {
+      "restaurant_id": "c8b9a238-38e6-4e31-8b45-e8594c0125d0",
+      "old_key_a": "chicken madras",
+      "old_key_b": "46 chicken madras",
+      "new_key": "chicken madras",
+      "title_a": "Chicken madras",
+      "title_b": "46. Chicken Madras",
+      "platform_a": "uber_eats",
+      "platform_b": "deliveroo"
+    },
+    {
+      "restaurant_id": "86d53c60-ffcc-43d2-9114-d600c317e696",
+      "old_key_a": "fanta 33cl",
+      "old_key_b": "fanta",
+      "new_key": "fanta",
+      "title_a": "Fanta 33cl",
+      "title_b": "Fanta",
+      "platform_a": "uber_eats",
+      "platform_b": "deliveroo"
+    },
+    {
+      "restaurant_id": "d938fc1f-7aa2-4c80-8896-8d42f930974c",
+      "old_key_a": "coca cola zero 33cl",
+      "old_key_b": "coca cola zero",
+      "new_key": "coca cola zero",
+      "title_a": "Coca-Cola Zero 33cl",
+      "title_b": "Coca-cola zéro",
+      "platform_a": "takeaway",
+      "platform_b": "deliveroo"
+    },
+    {
+      "restaurant_id": "86d53c60-ffcc-43d2-9114-d600c317e696",
+      "old_key_a": "20 beignets de crevettes",
+      "old_key_b": "beignets de crevettes",
+      "new_key": "beignets crevettes",
+      "title_a": "20- Beignets de crevettes",
+      "title_b": "Beignets de Crevettes",
+      "platform_a": "uber_eats",
+      "platform_b": "deliveroo"
+    },
+    {
+      "restaurant_id": "10ecda2d-00f3-424a-bb87-8913f315c583",
+      "old_key_a": "ice tea peche",
+      "old_key_b": "ice tea peche 50cl",
+      "new_key": "ice peche tea",
+      "title_a": "Ice Tea pêche",
+      "title_b": "Ice Tea Pêche 50cl",
+      "platform_a": "uber_eats",
+      "platform_b": "deliveroo"
+    },
+    {
+      "restaurant_id": "86d53c60-ffcc-43d2-9114-d600c317e696",
+      "old_key_a": "ice tea 33cl",
+      "old_key_b": "ice tea",
+      "new_key": "ice tea",
+      "title_a": "Ice-Tea 33cl",
+      "title_b": "Ice-Tea",
+      "platform_a": "uber_eats",
+      "platform_b": "deliveroo"
+    },
+    {
+      "restaurant_id": "482c25d8-c543-49d8-8f0f-aa518fc592c0",
+      "old_key_a": "83 veggie box",
+      "old_key_b": "veggie box 2 people",
+      "new_key": "box veggie",
+      "title_a": "83. Veggie box",
+      "title_b": "Veggie box (2 people)",
+      "platform_a": "uber_eats",
+      "platform_b": "takeaway"
+    },
+    {
+      "restaurant_id": "d938fc1f-7aa2-4c80-8896-8d42f930974c",
+      "old_key_a": "ayran 33cl",
+      "old_key_b": "ayran",
+      "new_key": "ayran",
+      "title_a": "Ayran 33cl",
+      "title_b": "Ayran",
+      "platform_a": "takeaway",
+      "platform_b": "deliveroo"
+    },
+    {
+      "restaurant_id": "7a471382-0eb0-45aa-a65d-07ba7b6878bf",
+      "old_key_a": "loubia haricots blancs",
+      "old_key_b": "loubia",
+      "new_key": "loubia",
+      "title_a": "💚  Loubia (haricots blancs)",
+      "title_b": "Loubia",
+      "platform_a": "uber_eats",
+      "platform_b": "takeaway"
+    },
+    {
+      "restaurant_id": "35027c6e-b360-4c38-9f5d-c3f666f61362",
+      "old_key_a": "twins burger",
+      "old_key_b": "menu twins burger",
+      "new_key": "burger twins",
+      "title_a": "Twins burger",
+      "title_b": "Menu Twins burger",
+      "platform_a": "takeaway",
+      "platform_b": "uber_eats"
+    }
+  ]
+}
