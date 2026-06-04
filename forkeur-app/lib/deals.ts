@@ -12,6 +12,7 @@ export type DealItem = {
   restaurant_id: string
   restaurant_name: string
   platform: Platform
+  platform_url: string | null
   cuisine: string[]
   area: string | null
   rating: number | null

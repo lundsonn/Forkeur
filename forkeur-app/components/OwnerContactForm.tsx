@@ -1,13 +1,15 @@
 'use client'
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
+import { useSearchParams } from 'next/navigation'
 
 type InquiryType = 'add_url' | 'new_listing' | 'remove'
 
 export default function OwnerContactForm() {
   const t = useTranslations('owners')
+  const params = useSearchParams()
   const [inquiryType, setInquiryType] = useState<InquiryType>('add_url')
-  const [name, setName] = useState('')
+  const [name, setName] = useState(params.get('name') ?? '')
   const [email, setEmail] = useState('')
   const [url, setUrl] = useState('')
   const [state, setState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')

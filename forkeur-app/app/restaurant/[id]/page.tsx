@@ -5,7 +5,6 @@ import { getTranslations } from 'next-intl/server'
 import { getRestaurantWithListings, type PromoItem } from '@/lib/queries'
 import { PLATFORM_LABELS, PLATFORM_COLORS } from '@/lib/basket'
 import BasketSimulator from '@/components/BasketSimulator'
-import ClaimForm from '@/components/ClaimForm'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function promoBadgeText(tBadge: any, promo: PromoItem): string {
@@ -35,8 +34,27 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { id } = await params
   const data = await getRestaurantWithListings(id)
+  if (!data) return { title: 'Restaurant — Forkeur' }
+
+  const t = await getTranslations('detail')
+  const cuisine = data.cuisine.join(', ')
+  const description = t('meta_description', { name: data.name, cuisine: cuisine || 'Brussels' })
+  const title = `${data.name} — Forkeur`
+
   return {
-    title: data?.name ?? "Restaurant",
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      ...(data.image_url ? { images: [{ url: data.image_url }] } : {}),
+    },
+    twitter: {
+      card: data.image_url ? 'summary_large_image' : 'summary',
+      title,
+      description,
+      ...(data.image_url ? { images: [data.image_url] } : {}),
+    },
   }
 }
 
@@ -50,6 +68,8 @@ export default async function Page({
   const tDirect = await getTranslations('direct')
   const tDetail = await getTranslations('detail')
   const tBadge = await getTranslations('badge')
+  const tOwners = await getTranslations('owners')
+  const tPlatform = PLATFORM_LABELS
 
   if (!data) notFound()
 
@@ -79,6 +99,23 @@ export default async function Page({
     feeListings.length >= 2 && cheapestFee && mostExpensiveFee && cheapestFee !== mostExpensiveFee
       ? (mostExpensiveFee.delivery_fee_cents ?? 0) - (cheapestFee.delivery_fee_cents ?? 0)
       : 0
+
+  // Price insights: items with a ≥5% gap across platforms, sorted by gap desc, top 5
+  type PriceInsight = { name: string; cheapPlatform: string; cheapCents: number; gapPct: number }
+  const priceInsights: PriceInsight[] = data.menuItems
+    .flatMap((item) => {
+      const entries = (Object.entries(item.prices) as [string, number | null][])
+        .filter(([p, v]) => v !== null && p !== 'direct') as [string, number][]
+      if (entries.length < 2) return []
+      entries.sort((a, b) => a[1] - b[1])
+      const [cheapPlatform, cheapCents] = entries[0]
+      const maxCents = entries[entries.length - 1][1]
+      const gapPct = Math.round(((maxCents - cheapCents) / maxCents) * 100)
+      if (gapPct < 5) return []
+      return [{ name: item.name, cheapPlatform, cheapCents, gapPct }]
+    })
+    .sort((a, b) => b.gapPct - a.gapPct)
+    .slice(0, 5)
 
   return (
     <div className="max-w-md mx-auto">
@@ -189,9 +226,41 @@ export default async function Page({
         </div>
       )}
 
+      {/* Menu price insights */}
+      {priceInsights.length > 0 && (
+        <div className="px-5 mb-2 mt-4">
+          <p className="text-[10px] font-semibold tracking-widest text-stone-400 uppercase mb-2">
+            {tDetail('price_compare')}
+          </p>
+          <div className="flex flex-col divide-y divide-stone-100">
+            {priceInsights.map((insight) => (
+              <div key={insight.name} className="flex items-center justify-between py-2.5">
+                <span className="text-sm text-stone-700 truncate pr-3">{insight.name}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-sm font-semibold text-stone-900">
+                    €{(insight.cheapCents / 100).toFixed(2)}
+                  </span>
+                  <span className="text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5 whitespace-nowrap">
+                    {tDetail('cheaper_on', {
+                      pct: insight.gapPct,
+                      platform: tPlatform[insight.cheapPlatform as keyof typeof tPlatform] ?? insight.cheapPlatform,
+                    })}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <BasketSimulator menuItems={data.menuItems} listings={data.listings} phone={data.phone} />
       <div className="px-5 pb-8">
-        <ClaimForm restaurantId={data.id} restaurantName={data.name} />
+        <Link
+          href={`/owners?name=${encodeURIComponent(data.name)}`}
+          className="text-xs text-stone-400 hover:text-stone-600 underline underline-offset-2 transition-colors"
+        >
+          {tOwners('detail_link')}
+        </Link>
       </div>
     </div>
   )

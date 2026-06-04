@@ -131,52 +131,65 @@ export default function DealsClient({ deals }: { deals: DealItem[] }) {
             }
             const meta = [d.cuisine.join(' · '), d.area].filter(Boolean).join(' · ')
             return (
-              <Link
+              <div
                 key={d.id}
-                href={`/restaurant/${d.restaurant_id}`}
-                className="block border border-stone-100 rounded-2xl p-4 hover:border-stone-300 hover:shadow-sm transition-all"
+                className="border border-stone-100 rounded-2xl p-4 hover:border-stone-300 hover:shadow-sm transition-all"
               >
-                {/* Top row: name + platform */}
-                <div className="flex items-start justify-between gap-3 mb-1">
-                  <span className="font-semibold text-sm leading-snug" style={{ color: '#1A1A1A' }}>
-                    {d.restaurant_name}
-                  </span>
-                  <span className={`flex-shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${plat.color}`}>
-                    {plat.name}
-                  </span>
-                </div>
+                <Link href={`/restaurant/${d.restaurant_id}`} className="block">
+                  {/* Top row: name + platform */}
+                  <div className="flex items-start justify-between gap-3 mb-1">
+                    <span className="font-semibold text-sm leading-snug" style={{ color: '#1A1A1A' }}>
+                      {d.restaurant_name}
+                    </span>
+                    <span className={`flex-shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${plat.color}`}>
+                      {plat.name}
+                    </span>
+                  </div>
 
-                {/* Cuisine · area */}
-                {meta && (
-                  <p className="text-xs mb-2.5" style={{ color: '#888780' }}>
-                    {meta}
-                  </p>
-                )}
+                  {/* Cuisine · area */}
+                  {meta && (
+                    <p className="text-xs mb-2.5" style={{ color: '#888780' }}>
+                      {meta}
+                    </p>
+                  )}
 
-                {/* Deal badge + min order + rating */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span
-                    className="inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full text-white"
-                    style={{ backgroundColor: '#1E8A5A' }}
+                  {/* Deal badge + min order + rating */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span
+                      className="inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full text-white"
+                      style={{ backgroundColor: '#1E8A5A' }}
+                    >
+                      {localizedBadge(d)}
+                    </span>
+                    {d.min_order != null && (
+                      <span className="text-xs" style={{ color: '#888780' }}>
+                        {tDeals('min_order', { amount: d.min_order })}
+                      </span>
+                    )}
+                    {d.rating != null && (
+                      <span className="ml-auto text-xs font-medium flex items-center gap-0.5" style={{ color: '#1A1A1A' }}>
+                        <span className="text-amber-400">★</span>
+                        {d.rating.toFixed(1)}
+                        {d.review_count != null && (
+                          <span className="text-stone-400 font-normal">({d.review_count})</span>
+                        )}
+                      </span>
+                    )}
+                  </div>
+                </Link>
+
+                {/* Order CTA */}
+                {d.platform_url && (
+                  <a
+                    href={d.platform_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 flex items-center justify-center w-full py-2 rounded-xl text-xs font-semibold text-white bg-stone-900 hover:bg-stone-700 transition-colors"
                   >
-                    {localizedBadge(d)}
-                  </span>
-                  {d.min_order != null && (
-                    <span className="text-xs" style={{ color: '#888780' }}>
-                      {tDeals('min_order', { amount: d.min_order })}
-                    </span>
-                  )}
-                  {d.rating != null && (
-                    <span className="ml-auto text-xs font-medium flex items-center gap-0.5" style={{ color: '#1A1A1A' }}>
-                      <span className="text-amber-400">★</span>
-                      {d.rating.toFixed(1)}
-                      {d.review_count != null && (
-                        <span className="text-stone-400 font-normal">({d.review_count})</span>
-                      )}
-                    </span>
-                  )}
-                </div>
-              </Link>
+                    {tDeals('order_on', { platform: plat.name })}
+                  </a>
+                )}
+              </div>
             )
           })}
         </div>

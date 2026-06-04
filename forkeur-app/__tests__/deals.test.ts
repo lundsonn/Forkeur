@@ -20,6 +20,7 @@ function deal(overrides: Partial<DealItem>): DealItem {
     restaurant_id: 'r',
     restaurant_name: 'Test',
     platform: 'uber_eats',
+    platform_url: null,
     cuisine: [],
     area: null,
     rating: null,

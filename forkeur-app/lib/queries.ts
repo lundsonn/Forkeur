@@ -206,7 +206,7 @@ export async function getDeals(): Promise<DealItem[]> {
     .select(`
       id, promo_type, label, value, min_order,
       platform_listings (
-        platform, rating, review_count,
+        platform, url, rating, review_count,
         restaurants ( id, name, cuisine, neighborhood )
       )
     `)
@@ -229,6 +229,7 @@ export async function getDeals(): Promise<DealItem[]> {
       area: restaurant.neighborhood ?? null,
       rating: listing.rating != null ? Number(listing.rating) : null,
       review_count: listing.review_count != null ? Number(listing.review_count) : null,
+      platform_url: typeof listing.url === 'string' ? listing.url : null,
       promo_type: p.promo_type,
       label: p.label,
       value: p.value != null ? Number(p.value) : null,

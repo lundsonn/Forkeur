@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { Suspense } from 'react'
 import { getTranslations } from 'next-intl/server'
 import OwnerContactForm from '@/components/OwnerContactForm'
 
@@ -40,7 +41,9 @@ export default async function OwnersPage() {
 
       {/* Contact form */}
       <div className="border border-stone-200 rounded-2xl p-5">
-        <OwnerContactForm />
+        <Suspense>
+          <OwnerContactForm />
+        </Suspense>
       </div>
     </div>
   )

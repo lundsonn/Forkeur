@@ -29,7 +29,8 @@
     "heading": "Best deals",
     "subtitle": "{count} live offers across UberEats, Deliveroo & Takeaway",
     "none": "No deals in this category right now.",
-    "min_order": "Min. €{amount}"
+    "min_order": "Min. €{amount}",
+    "order_on": "Order on {platform} →"
   },
   "basket": {
     "no_menu": "No menu data available yet.",
@@ -108,6 +109,7 @@
   },
   "owners": {
     "nav_link": "Restaurant owner?",
+    "detail_link": "Owner of this restaurant? Add your direct ordering link →",
     "heading": "For restaurant owners",
     "intro": "Forkeur compares delivery fees and menu prices across UberEats, Deliveroo and Takeaway in Brussels. We list restaurants automatically from public data.",
     "section_add": "Add your direct ordering link",
