@@ -17,6 +17,7 @@ from rapidfuzz.distance import JaroWinkler
 
 # --- Tunable thresholds -------------------------------------------------------
 HIGH_NAME_SIM = 0.92       # Jaro-Winkler on normalized names
+NAME_SIM_WEBSITE_AUTO = 0.97  # website-only auto-merge needs near-identical names
 GEO_CONFIRM_M = 75.0       # <= confirms same venue
 GEO_VETO_M = 300.0         # > vetoes merge (chain branches)
 VENUE_GRADE_SOURCES = {"uber_eats", "direct"}
@@ -163,12 +164,18 @@ def decide(f: MatchFeatures) -> Decision:
     if f.name_sim < HIGH_NAME_SIM:
         return Decision.SEPARATE
 
-    confirming = (
-        f.website_match
-        or f.phone_match
+    # Strong confirmation = same physical place. Phone and close geo prove it.
+    # A shared website does NOT by itself — Belgian chains run every branch off
+    # one corporate domain, so "Late Night Pizza Ixelles" and "...Saint-Gilles"
+    # share a domain yet are distinct venues. Website only auto-confirms when the
+    # names are near-identical (no distinguishing location suffix); otherwise the
+    # pair goes to human review.
+    strong_confirm = (
+        f.phone_match
         or (f.geo_dist is not None and f.geo_dist <= GEO_CONFIRM_M)
+        or (f.website_match and f.name_sim >= NAME_SIM_WEBSITE_AUTO)
     )
-    if confirming:
+    if strong_confirm:
         return Decision.AUTO_MERGE
 
     return Decision.QUEUE

@@ -87,10 +87,25 @@ def test_score_pair_phone_match():
     assert f.phone_match is True
 
 
-def test_decide_strong_signal_auto_merges():
-    f = matching.MatchFeatures(name_sim=0.95, website_match=True,
+def test_decide_website_plus_near_identical_name_auto_merges():
+    # website + near-identical name (no location suffix) → same venue
+    f = matching.MatchFeatures(name_sim=0.98, website_match=True,
                                phone_match=False, geo_dist=None, cuisine_match=False)
     assert matching.decide(f) == matching.Decision.AUTO_MERGE
+
+
+def test_decide_phone_signal_auto_merges():
+    f = matching.MatchFeatures(name_sim=0.95, website_match=False,
+                               phone_match=True, geo_dist=None, cuisine_match=False)
+    assert matching.decide(f) == matching.Decision.AUTO_MERGE
+
+
+def test_decide_website_with_location_suffix_queues_not_merges():
+    # shared chain domain + distinguishing location suffix (mid name_sim) →
+    # do NOT auto-merge two branches; send to review.
+    f = matching.MatchFeatures(name_sim=0.93, website_match=True,
+                               phone_match=False, geo_dist=None, cuisine_match=False)
+    assert matching.decide(f) == matching.Decision.QUEUE
 
 
 def test_decide_close_geo_auto_merges():
