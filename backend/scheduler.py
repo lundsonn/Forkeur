@@ -18,6 +18,10 @@ _CLEANUP_CRON = "0 4 * * *"   # 04:00 UTC daily
 _DIGEST_JOB_ID = "daily_digest"
 _DIGEST_CRON = "0 19 * * *"   # 19:00 UTC = 21:00 Brussels (CEST)
 
+# Batch: all scrapers concurrently, fees auto-triggered after
+_BATCH_JOB_ID = "batch_all"
+_BATCH_CRON = "0 5,11 * * *"  # 05:00 + 11:00 UTC (off-peak + lunch prep)
+
 
 def _noop(line: str) -> None:
     pass
@@ -132,6 +136,34 @@ def list_schedules() -> list[ScheduleConfigOut]:
     return result
 
 
+async def _run_batch_all() -> None:
+    """Run all scrapers concurrently; asyncio sleeps interleave on shared browser.
+    Takeaway (headed) gets its own browser automatically — fully parallel.
+    direct_menu (sync httpx) runs in a thread to avoid blocking the event loop.
+    Fees are triggered automatically after all scrapers finish.
+    """
+    from routers.scrapers import _running
+
+    PLATFORMS = ["ubereats", "deliveroo", "takeaway", "direct", "dom_menu"]
+    to_run = [p for p in PLATFORMS if p not in _running]
+
+    async def _run_direct_menu_threaded():
+        from scrapers import direct_menu as _dm
+        run_id = db.create_run("direct_menu")
+        try:
+            result = await asyncio.to_thread(_dm.run)
+            db.finish_run(run_id, "success", records_saved=result.get("total_scraped", 0))
+        except Exception as e:
+            db.finish_run(run_id, "failed", error_msg=str(e))
+            import alerting; alerting.send_failure_alert("direct_menu", str(e), run_id)
+
+    tasks = [_run_scraper(p) for p in to_run] + [_run_direct_menu_threaded()]
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Fees run after all scrapers complete, no need for a separate cron.
+    await _run_fee_refresh()
+
+
 async def _run_fee_refresh() -> None:
     from scrapers import fees
     from routers.scrapers import _fees_running
@@ -160,6 +192,12 @@ async def _run_daily_digest() -> None:
 
 
 def start() -> None:
+    _scheduler.add_job(
+        _run_batch_all,
+        CronTrigger.from_crontab(_BATCH_CRON),
+        id=_BATCH_JOB_ID,
+        replace_existing=True,
+    )
     _scheduler.add_job(
         _run_fee_refresh,
         CronTrigger.from_crontab(_FEE_CRON),

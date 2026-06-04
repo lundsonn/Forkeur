@@ -91,6 +91,14 @@ async def trigger_fees():
     return RunTriggerOut(run_id=run_id)
 
 
+@router.post("/batch/run")
+async def trigger_batch():
+    """Trigger all scrapers concurrently (same as the scheduled batch job)."""
+    import scheduler as _sched
+    asyncio.create_task(_sched._run_batch_all())
+    return {"status": "started"}
+
+
 @router.get("/fees/status")
 async def fees_status():
     import scheduler
