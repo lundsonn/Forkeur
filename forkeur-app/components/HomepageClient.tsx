@@ -31,6 +31,7 @@ export default function HomepageClient({
   const tDirect = useTranslations('direct')
   const tCard = useTranslations('card')
   const tSort = useTranslations('sort')
+  const tOwners = useTranslations('owners')
 
   const neighborhoods = useMemo(() => {
     const counts = new Map<string, number>()
@@ -269,6 +270,13 @@ export default function HomepageClient({
             {filtered.length === 0 && (
               <p className="text-center text-stone-400 text-sm py-16">{tResults('none')}</p>
             )}
+          </div>
+
+          {/* Footer */}
+          <div className="py-8 text-center">
+            <Link href="/owners" className="text-xs text-stone-400 hover:text-stone-600 underline underline-offset-2 transition-colors">
+              {tOwners('nav_link')}
+            </Link>
           </div>
         </>
       )}

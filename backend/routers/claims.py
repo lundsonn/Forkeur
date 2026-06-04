@@ -1,26 +1,41 @@
 from __future__ import annotations
 
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, EmailStr, HttpUrl
+from pydantic import BaseModel, EmailStr, HttpUrl, model_validator
 
 import db
 
 router = APIRouter(prefix="/claims", tags=["claims"])
 
+InquiryType = Literal["add_url", "new_listing", "remove"]
+
 
 class ClaimIn(BaseModel):
-    restaurant_id: UUID
+    inquiry_type: InquiryType = "add_url"
     owner_email: EmailStr
-    direct_order_url: HttpUrl
+    restaurant_id: UUID | None = None
+    direct_order_url: HttpUrl | None = None
+    restaurant_name_free: str | None = None
+
+    @model_validator(mode="after")
+    def check_fields(self) -> "ClaimIn":
+        if self.inquiry_type == "add_url" and not self.direct_order_url:
+            raise ValueError("direct_order_url is required for add_url inquiries")
+        if self.inquiry_type == "new_listing" and not self.restaurant_name_free:
+            raise ValueError("restaurant_name_free is required for new_listing inquiries")
+        return self
 
 
 class ClaimOut(BaseModel):
     id: str
-    restaurant_id: str
+    restaurant_id: str | None = None
     owner_email: str
-    direct_order_url: str
+    direct_order_url: str | None = None
+    inquiry_type: str = "add_url"
+    restaurant_name_free: str | None = None
     verified: bool
     claimed_at: str | None = None
     restaurants: dict | None = None
@@ -29,9 +44,11 @@ class ClaimOut(BaseModel):
 @router.post("", status_code=201)
 async def submit_claim(body: ClaimIn):
     claim_id = db.insert_claim(
-        restaurant_id=str(body.restaurant_id),
         owner_email=body.owner_email,
-        direct_order_url=str(body.direct_order_url),
+        inquiry_type=body.inquiry_type,
+        restaurant_id=str(body.restaurant_id) if body.restaurant_id else None,
+        direct_order_url=str(body.direct_order_url) if body.direct_order_url else None,
+        restaurant_name_free=body.restaurant_name_free,
     )
     return {"claim_id": claim_id}
 

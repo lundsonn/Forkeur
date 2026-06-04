@@ -90,9 +90,11 @@ export async function getMenuItems(listingId: string): Promise<MenuItem[]> {
 
 export interface Claim {
   id: string
-  restaurant_id: string
+  restaurant_id: string | null
   owner_email: string
-  direct_order_url: string
+  direct_order_url: string | null
+  inquiry_type: 'add_url' | 'new_listing' | 'remove'
+  restaurant_name_free: string | null
   verified: boolean
   claimed_at: string
   restaurants?: { name: string } | null

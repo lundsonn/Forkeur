@@ -93,12 +93,41 @@
     "cheapest_signal": "{platform} is €{amount} cheaper than {other}",
     "just_now": "Just updated",
     "hours": "Updated {hours}h ago",
-    "days": "Updated {days}d ago"
+    "days": "Updated {days}d ago",
+    "price_compare": "Menu price differences",
+    "cheaper_on": "{pct}% cheaper on {platform}",
+    "meta_description": "{name} · {cuisine} · Compare delivery fees on UberEats, Deliveroo & Takeaway in Brussels."
   },
   "meta": {
     "home_title": "Forkeur — Compare food prices in Brussels",
     "home_description": "Compare restaurant prices across UberEats, Deliveroo, and Takeaway in Brussels.",
     "deals_title": "Best deals",
-    "deals_description": "Best restaurant deals and promotions across UberEats, Deliveroo & Takeaway in Brussels."
+    "deals_description": "Best restaurant deals and promotions across UberEats, Deliveroo & Takeaway in Brussels.",
+    "owners_title": "For restaurant owners — Forkeur",
+    "owners_description": "Add your direct ordering link to Forkeur or request removal of your listing."
+  },
+  "owners": {
+    "nav_link": "Restaurant owner?",
+    "heading": "For restaurant owners",
+    "intro": "Forkeur compares delivery fees and menu prices across UberEats, Deliveroo and Takeaway in Brussels. We list restaurants automatically from public data.",
+    "section_add": "Add your direct ordering link",
+    "section_add_body": "If your restaurant accepts orders directly on your website, we can show it alongside delivery platform prices — helping customers choose you and avoid platform fees. Use the form below.",
+    "section_remove": "Request removal",
+    "section_remove_body": "You can ask us to remove your restaurant from Forkeur at any time. Select \"Remove my listing\" in the form and we will process it within a few days.",
+    "form_heading": "Contact us",
+    "type_label": "Request type",
+    "type_add_url": "Add / update my direct ordering link",
+    "type_new_listing": "Add my restaurant (not yet listed)",
+    "type_remove": "Remove my restaurant",
+    "name_label": "Restaurant name",
+    "name_placeholder": "Your restaurant name",
+    "email_label": "Your email",
+    "email_placeholder": "you@yourrestaurant.com",
+    "url_label": "Direct ordering URL",
+    "url_placeholder": "https://yourrestaurant.com/order",
+    "submit": "Send request",
+    "sending": "Sending…",
+    "success": "Request received — we will get back to you within a few days.",
+    "error": "Something went wrong. Please try again."
   }
 }

@@ -99,6 +99,32 @@
     "home_title": "Forkeur — Vergelijk voedselprijzen in Brussel",
     "home_description": "Vergelijk restaurantprijzen op UberEats, Deliveroo en Takeaway in Brussel.",
     "deals_title": "Beste aanbiedingen",
-    "deals_description": "Beste restaurantaanbiedingen op UberEats, Deliveroo & Takeaway in Brussel."
+    "deals_description": "Beste restaurantaanbiedingen op UberEats, Deliveroo & Takeaway in Brussel.",
+    "owners_title": "Voor restauranthouders — Forkeur",
+    "owners_description": "Voeg uw directe bestelLink toe aan Forkeur of vraag verwijdering van uw vermelding aan."
+  },
+  "owners": {
+    "nav_link": "Restauranthouder?",
+    "heading": "Voor restauranthouders",
+    "intro": "Forkeur vergelijkt bezorgkosten en menuprijzen op UberEats, Deliveroo en Takeaway in Brussel. Wij vermelden restaurants automatisch op basis van openbare gegevens.",
+    "section_add": "Voeg uw directe bestelLink toe",
+    "section_add_body": "Als uw restaurant bestellingen accepteert via uw eigen website, kunnen wij dit naast de platformprijzen tonen — zodat klanten u kunnen kiezen zonder platformkosten. Gebruik het formulier hieronder.",
+    "section_remove": "Verwijdering aanvragen",
+    "section_remove_body": "U kunt op elk moment vragen om uw restaurant van Forkeur te verwijderen. Selecteer \"Mijn vermelding verwijderen\" in het formulier en wij verwerken dit binnen enkele dagen.",
+    "form_heading": "Neem contact op",
+    "type_label": "Type aanvraag",
+    "type_add_url": "Directe bestelLink toevoegen / bijwerken",
+    "type_new_listing": "Mijn restaurant toevoegen (nog niet vermeld)",
+    "type_remove": "Mijn restaurant verwijderen",
+    "name_label": "Restaurantnaam",
+    "name_placeholder": "Naam van uw restaurant",
+    "email_label": "Uw e-mailadres",
+    "email_placeholder": "u@uwrestaurant.com",
+    "url_label": "Directe bestel-URL",
+    "url_placeholder": "https://uwrestaurant.com/bestellen",
+    "submit": "Aanvraag verzenden",
+    "sending": "Verzenden…",
+    "success": "Aanvraag ontvangen — wij nemen binnen enkele dagen contact met u op.",
+    "error": "Er is iets misgegaan. Probeer het opnieuw."
   }
 }

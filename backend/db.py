@@ -402,13 +402,21 @@ def mark_restaurant_searched(restaurant_id: str) -> None:
     }).eq("id", restaurant_id).execute()
 
 
-def insert_claim(restaurant_id: str, owner_email: str, direct_order_url: str) -> str:
-    """Insert a restaurant claim (verified=False). Returns claim id."""
+def insert_claim(
+    owner_email: str,
+    inquiry_type: str = "add_url",
+    restaurant_id: str | None = None,
+    direct_order_url: str | None = None,
+    restaurant_name_free: str | None = None,
+) -> str:
+    """Insert an owner inquiry (verified=False). Returns claim id."""
     client = get_client()
     res = client.table("restaurant_claims").insert({
         "restaurant_id": restaurant_id,
         "owner_email": owner_email,
         "direct_order_url": direct_order_url,
+        "inquiry_type": inquiry_type,
+        "restaurant_name_free": restaurant_name_free,
         "verified": False,
     }).execute()
     return res.data[0]["id"]
@@ -418,8 +426,8 @@ def get_claims(verified: bool | None = None) -> list[dict]:
     """Return claims, optionally filtered by verified status."""
     client = get_client()
     q = client.table("restaurant_claims").select(
-        "id, restaurant_id, owner_email, direct_order_url, verified, claimed_at, "
-        "restaurants(name)"
+        "id, restaurant_id, owner_email, direct_order_url, inquiry_type, "
+        "restaurant_name_free, verified, claimed_at, restaurants(name)"
     )
     if verified is not None:
         q = q.eq("verified", verified)
@@ -427,29 +435,30 @@ def get_claims(verified: bool | None = None) -> list[dict]:
 
 
 def approve_claim(claim_id: str) -> None:
-    """Approve a claim: set verified=True, update restaurants.order_url, upsert direct listing."""
+    """Approve a claim: for add_url type, update restaurants.order_url and upsert direct listing."""
     client = get_client()
     rows = client.table("restaurant_claims").select(
-        "id, restaurant_id, direct_order_url"
+        "id, restaurant_id, direct_order_url, inquiry_type"
     ).eq("id", claim_id).execute().data
     if not rows:
         raise ValueError(f"Claim not found: {claim_id!r}")
     claim = rows[0]
 
-    client.table("restaurants").update(
-        {"order_url": claim["direct_order_url"]}
-    ).eq("id", claim["restaurant_id"]).execute()
+    if claim.get("inquiry_type") == "add_url" and claim.get("restaurant_id") and claim.get("direct_order_url"):
+        client.table("restaurants").update(
+            {"order_url": claim["direct_order_url"]}
+        ).eq("id", claim["restaurant_id"]).execute()
+
+        upsert_listing({
+            "restaurant_id": claim["restaurant_id"],
+            "platform": "direct",
+            "url": claim["direct_order_url"],
+            "is_available": True,
+        })
 
     client.table("restaurant_claims").update(
         {"verified": True}
     ).eq("id", claim_id).execute()
-
-    upsert_listing({
-        "restaurant_id": claim["restaurant_id"],
-        "platform": "direct",
-        "url": claim["direct_order_url"],
-        "is_available": True,
-    })
 
 
 def reject_claim(claim_id: str) -> None:

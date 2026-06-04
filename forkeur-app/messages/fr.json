@@ -99,6 +99,32 @@
     "home_title": "Forkeur — Comparez les prix des restos à Bruxelles",
     "home_description": "Comparez les prix des restaurants sur UberEats, Deliveroo et Takeaway à Bruxelles.",
     "deals_title": "Meilleures promos",
-    "deals_description": "Meilleures offres et promotions sur UberEats, Deliveroo & Takeaway à Bruxelles."
+    "deals_description": "Meilleures offres et promotions sur UberEats, Deliveroo & Takeaway à Bruxelles.",
+    "owners_title": "Pour les restaurateurs — Forkeur",
+    "owners_description": "Ajoutez votre lien de commande directe sur Forkeur ou demandez la suppression de votre fiche."
+  },
+  "owners": {
+    "nav_link": "Vous êtes restaurateur ?",
+    "heading": "Pour les restaurateurs",
+    "intro": "Forkeur compare les frais de livraison et les prix des menus sur UberEats, Deliveroo et Takeaway à Bruxelles. Nous référençons les restaurants automatiquement à partir de données publiques.",
+    "section_add": "Ajoutez votre lien de commande directe",
+    "section_add_body": "Si votre restaurant accepte les commandes directement sur votre site, nous pouvons l'afficher à côté des prix des plateformes — permettant aux clients de vous choisir sans frais de plateforme. Utilisez le formulaire ci-dessous.",
+    "section_remove": "Demande de suppression",
+    "section_remove_body": "Vous pouvez demander la suppression de votre restaurant de Forkeur à tout moment. Sélectionnez « Supprimer ma fiche » dans le formulaire et nous le traiterons sous quelques jours.",
+    "form_heading": "Nous contacter",
+    "type_label": "Type de demande",
+    "type_add_url": "Ajouter / mettre à jour mon lien de commande directe",
+    "type_new_listing": "Référencer mon restaurant (pas encore listé)",
+    "type_remove": "Supprimer mon restaurant",
+    "name_label": "Nom du restaurant",
+    "name_placeholder": "Nom de votre restaurant",
+    "email_label": "Votre email",
+    "email_placeholder": "vous@votrerestaurant.com",
+    "url_label": "URL de commande directe",
+    "url_placeholder": "https://votrerestaurant.com/commander",
+    "submit": "Envoyer la demande",
+    "sending": "Envoi…",
+    "success": "Demande reçue — nous vous répondrons sous quelques jours.",
+    "error": "Une erreur est survenue. Veuillez réessayer."
   }
 }
