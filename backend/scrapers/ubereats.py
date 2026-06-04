@@ -370,8 +370,10 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                     except Exception:
                         pass
 
-        # 4 parallel workers; round-robin split keeps slices balanced.
-        WORKERS = 4
+        # 3 parallel workers; round-robin split keeps slices balanced.
+        # 3 (not 4) keeps batch peak RAM well clear of the 8GB ceiling — at 4-each
+        # for ube+del, full-batch peak hit 6.6GB / 1.15GB free (too tight).
+        WORKERS = 3
         slices = [saved_listings[w::WORKERS] for w in range(WORKERS)]
         log_fn(f"Phase 2: {n} menus across {WORKERS} parallel workers")
         await asyncio.gather(

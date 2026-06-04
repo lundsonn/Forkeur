@@ -651,7 +651,8 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 except Exception:
                     pass
 
-        WORKERS = 4
+        # 3 workers (not 4) — keeps full-batch peak RAM clear of the 8GB ceiling.
+        WORKERS = 3
         slices = [saved[w::WORKERS] for w in range(WORKERS)]
         log_fn(f"Phase 2: {n} menus across {WORKERS} parallel workers")
         await asyncio.gather(
