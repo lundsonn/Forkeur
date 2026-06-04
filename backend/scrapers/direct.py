@@ -52,7 +52,11 @@ _BRUSSELS_AREAS = [
     'Molenbeek', 'Uccle', 'Anderlecht', 'Forest',
 ]
 
-_CUISINE_SEARCHES = ['restaurant', 'pizza', 'sushi', 'burger', 'indien', 'thaï']
+_CUISINE_SEARCHES = [
+    'restaurant livraison', 'pizza livraison', 'sushi livraison',
+    'burger livraison', 'indien livraison', 'thaï livraison',
+    'japonais livraison', 'chinois livraison', 'mexicain livraison',
+]
 
 
 def _validate_order_url(url: str) -> bool:
@@ -300,8 +304,8 @@ async def _discover_maps(page, log: Callable) -> int:
     seen_names: set[str] = set()
 
     for area in _BRUSSELS_AREAS:
-        for cuisine in _CUISINE_SEARCHES[:3]:  # limit queries per run
-            query = f"{cuisine} livraison {area}"
+        for cuisine in _CUISINE_SEARCHES:
+            query = f"{cuisine} {area}"
             log(f"  Maps: {query}")
             stubs = await _maps_search(page, query, log)
             for s in stubs:
@@ -315,7 +319,7 @@ async def _discover_maps(page, log: Callable) -> int:
 
     saved = 0
     # Only fetch details for the first 150 to keep run time reasonable
-    for stub in all_stubs[:150]:
+    for stub in all_stubs[:300]:
         if stub.get('maps_url'):
             details = await _get_place_details(page, stub['maps_url'])
             stub.update(details)
