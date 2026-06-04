@@ -32,6 +32,7 @@
     "none": "No deals in this category right now.",
     "min_order": "Min. €{amount}",
     "order_on": "Order on {platform} →",
+    "compare_and_order": "Compare & order on {platform} →",
     "search_placeholder": "Search a restaurant"
   },
   "basket": {
@@ -89,9 +90,9 @@
     "best": "Best match",
     "cheapest": "Cheapest",
     "fastest": "Fastest",
-    "all_areas": "All areas ▾",
-    "all_areas_option": "All areas",
-    "filter_by_area": "Filter by area"
+    "all_areas": "All communes ▾",
+    "all_areas_option": "All communes",
+    "filter_by_area": "Filter by commune"
   },
   "detail": {
     "platform_fees": "Delivery fees",
@@ -101,7 +102,9 @@
     "days": "Updated {days}d ago",
     "price_compare": "Menu price differences",
     "cheaper_on": "{pct}% cheaper on {platform}",
-    "meta_description": "{name} · {cuisine} · Compare delivery fees on UberEats, Deliveroo & Takeaway in Brussels."
+    "meta_description": "{name} · {cuisine} · Compare delivery fees on UberEats, Deliveroo & Takeaway in Brussels.",
+    "prices_updating": "Prices being updated — check back soon.",
+    "prices_updating_sub": "We check prices multiple times daily."
   },
   "hours": {
     "closed": "Closed",
