@@ -23,7 +23,8 @@
   "results": {
     "restaurants": "Restaurants",
     "count": "{count, plural, one {# résultat} other {# résultats}}",
-    "none": "Aucun restaurant trouvé"
+    "none": "Aucun restaurant trouvé",
+    "load_more": "Afficher {remaining, plural, one {# restaurant de plus} other {# restaurants de plus}}"
   },
   "deals": {
     "heading": "Meilleures promos",

@@ -23,7 +23,8 @@
   "results": {
     "restaurants": "Restaurants",
     "count": "{count, plural, one {# resultaat} other {# resultaten}}",
-    "none": "Geen restaurants gevonden"
+    "none": "Geen restaurants gevonden",
+    "load_more": "Toon {remaining, plural, one {# restaurant meer} other {# restaurants meer}}"
   },
   "deals": {
     "heading": "Beste aanbiedingen",

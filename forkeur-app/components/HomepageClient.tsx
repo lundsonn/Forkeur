@@ -16,12 +16,19 @@ export default function HomepageClient({
   restaurants: RestaurantSummary[]
   cuisines: string[]
 }) {
+  const PAGE_SIZE = 20
+
   const [search, setSearch] = useState('')
   const [selectedCuisine, setSelectedCuisine] = useState<string | null>(null)
   const [selectedNeighborhood, setSelectedNeighborhood] = useState<string | null>(null)
   const [neighborhoodSheetOpen, setNeighborhoodSheetOpen] = useState(false)
   const [sortBy, setSortBy] = useState<SortBy>('best')
   const [view, setView] = useState<'list' | 'map'>('list')
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+
+  function resetAndSet<T>(setter: (v: T) => void) {
+    return (v: T) => { setter(v); setVisibleCount(PAGE_SIZE) }
+  }
 
   const tNav = useTranslations('nav')
   const tHero = useTranslations('hero')
@@ -151,10 +158,10 @@ export default function HomepageClient({
           className="flex-1 text-sm outline-none placeholder:text-stone-400"
           placeholder={tSearch('placeholder')}
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => resetAndSet(setSearch)(e.target.value)}
         />
         {search && (
-          <button type="button" onClick={() => setSearch('')} className="text-stone-300 text-xs">✕</button>
+          <button type="button" onClick={() => resetAndSet(setSearch)('')} className="text-stone-300 text-xs">✕</button>
         )}
       </div>
 
@@ -162,7 +169,7 @@ export default function HomepageClient({
       <div className="flex gap-2 overflow-x-auto pb-1 mb-3">
         <button
           type="button"
-          onClick={() => setSelectedCuisine(null)}
+          onClick={() => resetAndSet(setSelectedCuisine)(null)}
           className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
             !selectedCuisine ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600'
           }`}
@@ -171,7 +178,7 @@ export default function HomepageClient({
           <button
             type="button"
             key={c}
-            onClick={() => setSelectedCuisine(selectedCuisine === c ? null : c)}
+            onClick={() => resetAndSet(setSelectedCuisine)(selectedCuisine === c ? null : c)}
             className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
               selectedCuisine === c ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600'
             }`}
@@ -217,7 +224,7 @@ export default function HomepageClient({
             <button
               type="button"
               key={s}
-              onClick={() => setSortBy(s)}
+              onClick={() => resetAndSet(setSortBy)(s)}
               className={`min-[360px]:text-sm text-xs pb-1 transition-colors ${
                 sortBy === s
                   ? 'font-medium text-[#1A1A1A] border-b-2 border-[#1A1A1A]'
@@ -244,13 +251,13 @@ export default function HomepageClient({
 
           {/* Restaurant list */}
           <div>
-            {filtered.map((r, i) => {
+            {filtered.slice(0, visibleCount).map((r, i) => {
               const m = metrics.get(r.id)
               return (
                 <Link key={r.id} href={`/restaurant/${r.id}`}>
                   <RestaurantCard
                     restaurant={r}
-                    isLast={i === filtered.length - 1}
+                    isLast={i === Math.min(visibleCount, filtered.length) - 1}
                     savings={m?.savings}
                     directBadge={
                       r.direct_url_type === 'ordering'
@@ -269,6 +276,15 @@ export default function HomepageClient({
             })}
             {filtered.length === 0 && (
               <p className="text-center text-stone-400 text-sm py-16">{tResults('none')}</p>
+            )}
+            {visibleCount < filtered.length && (
+              <button
+                type="button"
+                onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
+                className="w-full py-3 mt-2 text-sm font-medium text-stone-500 hover:text-stone-800 border border-stone-200 rounded-xl hover:border-stone-400 transition-colors"
+              >
+                {tResults('load_more', { remaining: filtered.length - visibleCount })}
+              </button>
             )}
           </div>
 
@@ -305,7 +321,7 @@ export default function HomepageClient({
               <button
                 type="button"
                 className="w-full flex items-center justify-between px-5 py-3 border-b border-[#EDEDEA] text-left"
-                onClick={() => { setSelectedNeighborhood(null); setNeighborhoodSheetOpen(false) }}
+                onClick={() => { resetAndSet(setSelectedNeighborhood)(null); setNeighborhoodSheetOpen(false) }}
               >
                 <span className={`text-sm ${!selectedNeighborhood ? 'font-semibold text-[#1A1A1A]' : 'text-[#888780]'}`}>
                   {tSort('all_areas_option')}
@@ -317,7 +333,7 @@ export default function HomepageClient({
                   type="button"
                   key={name}
                   className="w-full flex items-center justify-between px-5 py-3 border-b border-[#EDEDEA] text-left"
-                  onClick={() => { setSelectedNeighborhood(name); setNeighborhoodSheetOpen(false) }}
+                  onClick={() => { resetAndSet(setSelectedNeighborhood)(name); setNeighborhoodSheetOpen(false) }}
                 >
                   <span className={`text-sm ${selectedNeighborhood === name ? 'font-semibold text-[#1A1A1A]' : 'text-[#888780]'}`}>
                     {name}
