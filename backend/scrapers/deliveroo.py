@@ -326,7 +326,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                     "name": r["name"],
                     "slug": r["slug"],
                     "image_url": r.get("image_url"),
-                    **({} if coords is None else {"lat": coords[0], "lng": coords[1]}),
+                    **({} if coords is None else {"lat": coords[0], "lng": coords[1], "geo_source": "deliveroo"}),
                 })
             except ValueError:
                 continue  # junk entry filtered by db._is_junk
@@ -600,7 +600,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
 
                     // 2. Elements whose class names suggest offers
                     for (const el of document.querySelectorAll('[class]')) {
-                        const cls = (el.className || '').toLowerCase();
+                        const cls = (el.getAttribute('class') || '').toLowerCase();
                         if (/offer|promo|deal|discount|voucher/.test(cls)) {
                             const t = (el.innerText || '').trim();
                             if (t && t.length < 200 && t.length > 5) add(t);
