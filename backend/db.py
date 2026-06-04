@@ -540,14 +540,31 @@ def reject_claim(claim_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 def load_restaurants_for_match() -> list[dict]:
-    """Load all restaurants with the fields the matcher scores on."""
+    """Load ALL restaurants with the fields the matcher scores on.
+
+    Supabase/PostgREST caps a single response at 1000 rows, so page through
+    with .range() until a short page is returned — otherwise the matcher would
+    silently ignore every restaurant past the first 1000.
+    """
     client = get_client()
-    res = (
-        client.table("restaurants")
-        .select("id, name, website, phone, lat, lng, geo_source, cuisine, created_at")
-        .execute()
-    )
-    return res.data
+    cols = "id, name, website, phone, lat, lng, geo_source, cuisine, created_at"
+    page = 1000
+    offset = 0
+    rows: list[dict] = []
+    while True:
+        res = (
+            client.table("restaurants")
+            .select(cols)
+            .order("id")
+            .range(offset, offset + page - 1)
+            .execute()
+        )
+        batch = res.data or []
+        rows.extend(batch)
+        if len(batch) < page:
+            break
+        offset += page
+    return rows
 
 
 def enqueue_decision(

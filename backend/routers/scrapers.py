@@ -140,6 +140,7 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
                 scrape_menus=body.scrape_menus,
                 max_menus=body.max_menus,
                 max_items=10 if body.test_mode else None,
+                target=body.target,
             )
             # One automatic retry for transient DB/network errors.
             last_exc: Exception | None = None

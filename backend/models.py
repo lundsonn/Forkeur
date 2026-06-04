@@ -29,6 +29,7 @@ class RunTriggerIn(BaseModel):
     scrape_menus: bool = False
     max_menus: int = 3
     test_mode: bool = False  # True caps at 10 items; False = full run
+    target: str | None = None  # passthrough hint (e.g. "dry-run" for the match job)
 
 
 # ── API response models ────────────────────────────────────────────────────────

@@ -7,7 +7,8 @@ def test_load_restaurants_for_match_selects_fields():
              "created_at": "2026-01-01T00:00:00Z"}]
     with patch("db.get_client") as mock_get:
         client = MagicMock()
-        client.table.return_value.select.return_value.execute.return_value.data = rows
+        # paginated: .select().order().range().execute(); a short page ends the loop
+        client.table.return_value.select.return_value.order.return_value.range.return_value.execute.return_value.data = rows
         mock_get.return_value = client
         import db
         out = db.load_restaurants_for_match()
