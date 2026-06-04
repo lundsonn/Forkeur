@@ -11,7 +11,7 @@ import re
 from typing import Callable
 from models import ScraperResult
 from scrapers.base import new_browser, new_page, noop_log
-from scrapers.direct_classify import classify_url
+from scrapers.direct_classify import classify_url, is_junk_url
 import db
 
 # ── Belgian phone regex (mobile + landline) ───────────────────────────────────
@@ -191,6 +191,8 @@ async def _enrich_existing(page, log: Callable) -> int:
             continue
 
         order_url = analysis['order_url'] or r['website']
+        if is_junk_url(order_url):
+            continue
 
         existing = (
             supabase.table('platform_listings')
@@ -346,6 +348,8 @@ async def _discover_maps(page, log: Callable) -> int:
             ).data
 
             website_url = stub.get('website')
+            if is_junk_url(website_url):
+                continue
             row = {
                 'restaurant_id': rest_id,
                 'platform': 'direct',

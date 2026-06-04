@@ -52,6 +52,11 @@ def _sq_has_restaurant_code(url: str) -> bool:
     return len(parts) >= 3 and parts[0] == "api"
 
 
+def is_junk_url(url: str | None) -> bool:
+    """Return True if the URL is a known junk/booking/aggregator artifact."""
+    return bool(url and _JUNK_RE.search(url))
+
+
 def classify_url(order_url: str | None, phone: str | None = None) -> str:
     """Classify a direct ordering URL. Returns: ordering|menu|website|phone."""
     if not order_url:
