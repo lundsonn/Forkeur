@@ -345,14 +345,15 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
         # Deliveroo has no CF on menu pages so goto is safe.
         menu_items_saved = 0
         n = len(saved)
-        page = await new_page(browser, lang="fr-BE")
-        for i, (r, rid, lid) in enumerate(saved):
+
+        async def _scrape_one(page, i, r, rid, lid):
+            nonlocal menu_items_saved
             log_fn(f"Menu: {i + 1}/{n} — {r['name']}")
             try:
                 menu_url = r.get("url", "")
                 if not menu_url:
                     log_fn(f"  No URL for {r['name']}, skipping")
-                    continue
+                    return
 
                 try:
                     await page.goto(menu_url, wait_until="domcontentloaded", timeout=60000)
@@ -617,13 +618,47 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
             except CloudflareBlockedError:
                 log_fn(f"  Cloudflare blocked — skipping menu for {r['name']}")
             except Exception as exc:
+                if "crashed" in str(exc).lower():
+                    raise  # bubble up so the worker recreates its page
                 log_fn(f"  Error scraping menu for {r['name']}: {exc}")
 
+        # Phase 2 fan-out: Deliveroo menus use direct goto (no click-nav, no CF),
+        # so each worker scrapes its slice on an independent page in parallel.
+        async def _worker(wid: int, slice_items: list) -> None:
+            wpage = await new_page(browser, lang="fr-BE")
+            try:
+                for k, (r, rid, lid) in enumerate(slice_items):
+                    try:
+                        # Hard wall cap — goto(60s)+scroll loops can stack; also
+                        # guards against a crashed page wedging past Playwright timeouts.
+                        await asyncio.wait_for(_scrape_one(wpage, k, r, rid, lid), timeout=150)
+                    except asyncio.TimeoutError:
+                        log_fn(f"  worker {wid}: {r['name']} timed out, skipping")
+                    except Exception:
+                        log_fn(f"  worker {wid}: page crashed, recreating")
+                        try:
+                            await wpage.close()
+                        except Exception:
+                            pass
+                        try:
+                            wpage = await asyncio.wait_for(new_page(browser, lang="fr-BE"), timeout=30)
+                        except Exception:
+                            log_fn(f"  worker {wid}: cannot recover, abandoning {len(slice_items) - k - 1} remaining")
+                            return
+            finally:
+                try:
+                    await wpage.close()
+                except Exception:
+                    pass
+
+        WORKERS = 4
+        slices = [saved[w::WORKERS] for w in range(WORKERS)]
+        log_fn(f"Phase 2: {n} menus across {WORKERS} parallel workers")
+        await asyncio.gather(
+            *[_worker(w, s) for w, s in enumerate(slices) if s],
+            return_exceptions=True,
+        )
         log_fn(f"Done — {records_saved} listings, {menu_items_saved} menu items, {promo_total} promos saved")
-        try:
-            await page.close()
-        except Exception:
-            pass
         return ScraperResult(records_saved=records_saved, restaurants=restaurants, menu_items_saved=menu_items_saved)
 
 
