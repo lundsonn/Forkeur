@@ -10,7 +10,9 @@ const SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY ?? ''
 
 declare global {
   interface Window {
-    grecaptcha: { execute: (key: string, opts: { action: string }) => Promise<string> }
+    grecaptcha: {
+      enterprise: { execute: (key: string, opts: { action: string }) => Promise<string> }
+    }
   }
 }
 
@@ -28,8 +30,8 @@ export default function OwnerContactForm() {
     setState('loading')
     try {
       let recaptchaToken: string | undefined
-      if (SITE_KEY && window.grecaptcha) {
-        recaptchaToken = await window.grecaptcha.execute(SITE_KEY, { action: 'submit_claim' })
+      if (SITE_KEY && window.grecaptcha?.enterprise) {
+        recaptchaToken = await window.grecaptcha.enterprise.execute(SITE_KEY, { action: 'submit_claim' })
       }
 
       const res = await fetch('/api/claims', {
@@ -62,7 +64,7 @@ export default function OwnerContactForm() {
     <>
       {SITE_KEY && (
         <Script
-          src={`https://www.google.com/recaptcha/api.js?render=${SITE_KEY}`}
+          src={`https://www.google.com/recaptcha/enterprise.js?render=${SITE_KEY}`}
           strategy="lazyOnload"
         />
       )}

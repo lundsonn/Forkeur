@@ -4,7 +4,7 @@ const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8000'
 const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET_KEY ?? ''
 
 async function verifyRecaptcha(token: string): Promise<boolean> {
-  if (!RECAPTCHA_SECRET) return true // disabled if not configured
+  if (!RECAPTCHA_SECRET) return true
   try {
     const res = await fetch('https://www.google.com/recaptcha/api/siteverify', {
       method: 'POST',
