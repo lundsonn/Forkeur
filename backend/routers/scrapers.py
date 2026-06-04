@@ -43,13 +43,9 @@ _running: set[str] = set()
 _tasks: dict[str, asyncio.Task] = {}
 _fees_running: bool = False
 
-# Heavy scrapers (large platforms, many Chromium tabs) — max 1 at a time.
-_HEAVY_SCRAPERS = {"ubereats", "deliveroo", "takeaway"}
-# Light scrapers (individual sites, single tab) — max 1 at a time, but
-# can run concurrently with a heavy scraper.
-_LIGHT_SCRAPERS = {"direct", "dom_menu"}
-_heavy_sem = asyncio.Semaphore(1)
-_light_sem = asyncio.Semaphore(1)
+# All Playwright scrapers share one slot — 4GB server can't fit two browsers.
+_PLAYWRIGHT_SCRAPERS = {"ubereats", "deliveroo", "takeaway", "direct", "dom_menu"}
+_browser_sem = asyncio.Semaphore(1)
 
 
 def _is_transient_error(e: Exception) -> bool:
@@ -127,12 +123,7 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
                 max_menus=body.max_menus,
                 max_items=10 if body.test_mode else None,
             )
-            if platform in _HEAVY_SCRAPERS:
-                sem = _heavy_sem
-            elif platform in _LIGHT_SCRAPERS:
-                sem = _light_sem
-            else:
-                sem = None
+            sem = _browser_sem if platform in _PLAYWRIGHT_SCRAPERS else None
             if sem:
                 log_fn(f"  waiting for browser slot...")
                 await sem.acquire()
