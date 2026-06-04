@@ -18,13 +18,17 @@
     "bogo": "2-for-1",
     "pct": "% Off",
     "free_delivery": "Free Delivery",
-    "free_item": "Free Item"
+    "free_item": "Free Item",
+    "more": "More ›",
+    "less": "Less ‹"
   },
   "results": {
     "restaurants": "Restaurants",
     "count": "{count, plural, one {# result} other {# results}}",
     "none": "No restaurants found",
-    "load_more": "Show {remaining, plural, one {# more restaurant} other {# more restaurants}}"
+    "load_more": "Show {next, plural, one {# more restaurant} other {# more restaurants}} ({remaining} total remaining)",
+    "none_query": "No restaurants found for \"{query}\"",
+    "clear_search": "Clear search"
   },
   "deals": {
     "heading": "Best deals",
@@ -57,6 +61,7 @@
     "delivery": "Delivery",
     "you_save": "You save",
     "all_live": "All three · live prices",
+    "live_prices": "Live prices",
     "best_badge": "Best",
     "why": "Why {platform}? Lowest total including all fees.",
     "order_on": "Order on {platform}"
@@ -97,14 +102,16 @@
   "detail": {
     "platform_fees": "Delivery fees",
     "cheapest_signal": "{platform} is €{amount} cheaper than {other}",
-    "just_now": "Just updated",
-    "hours": "Updated {hours}h ago",
-    "days": "Updated {days}d ago",
+    "fees_included": "Fees included",
+    "fees_info": "Prices checked multiple times daily",
     "price_compare": "Menu price differences",
     "cheaper_on": "{pct}% cheaper on {platform}",
     "meta_description": "{name} · {cuisine} · Compare delivery fees on UberEats, Deliveroo & Takeaway in Brussels.",
     "prices_updating": "Prices being updated — check back soon.",
-    "prices_updating_sub": "We check prices multiple times daily."
+    "prices_updating_sub": "We check prices multiple times daily.",
+    "basket_section_title": "Compare your exact order",
+    "basket_section_subtitle": "See which platform is cheapest for what you're ordering.",
+    "basket_single_platform": "Prices available on {platform} only"
   },
   "hours": {
     "closed": "Closed",

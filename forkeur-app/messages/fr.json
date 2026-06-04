@@ -18,13 +18,17 @@
     "bogo": "2 pour 1",
     "pct": "% Remise",
     "free_delivery": "Livraison offerte",
-    "free_item": "Article offert"
+    "free_item": "Article offert",
+    "more": "Plus ›",
+    "less": "Moins ‹"
   },
   "results": {
     "restaurants": "Restaurants",
     "count": "{count, plural, one {# résultat} other {# résultats}}",
     "none": "Aucun restaurant trouvé",
-    "load_more": "Afficher {remaining, plural, one {# restaurant de plus} other {# restaurants de plus}}"
+    "load_more": "Afficher {next, plural, one {# restaurant de plus} other {# restaurants de plus}} ({remaining} au total)",
+    "none_query": "Aucun restaurant trouvé pour \"{query}\"",
+    "clear_search": "Effacer la recherche"
   },
   "deals": {
     "heading": "Meilleures promos",
@@ -57,6 +61,7 @@
     "delivery": "Livraison",
     "you_save": "Économie",
     "all_live": "Les trois · prix en direct",
+    "live_prices": "Prix en direct",
     "best_badge": "Meilleur",
     "why": "Pourquoi {platform} ? Total le plus bas frais inclus.",
     "order_on": "Commander sur {platform}"
@@ -97,14 +102,16 @@
   "detail": {
     "platform_fees": "Frais de livraison",
     "cheapest_signal": "{platform} est €{amount} moins cher que {other}",
-    "just_now": "À l'instant",
-    "hours": "Mis à jour il y a {hours}h",
-    "days": "Mis à jour il y a {days}j",
+    "fees_included": "Frais inclus",
+    "fees_info": "Prix vérifiés plusieurs fois par jour",
     "price_compare": "Différences de prix menu",
     "cheaper_on": "{pct}% moins cher sur {platform}",
     "meta_description": "{name} · {cuisine} · Comparez les frais de livraison sur UberEats, Deliveroo & Takeaway à Bruxelles.",
     "prices_updating": "Prix en cours de mise à jour — revenez bientôt.",
-    "prices_updating_sub": "Nous vérifions les prix plusieurs fois par jour."
+    "prices_updating_sub": "Nous vérifions les prix plusieurs fois par jour.",
+    "basket_section_title": "Comparez votre commande exacte",
+    "basket_section_subtitle": "Voyez quelle plateforme est la moins chère pour ce que vous commandez.",
+    "basket_single_platform": "Prix disponibles sur {platform} uniquement"
   },
   "hours": {
     "closed": "Fermé",

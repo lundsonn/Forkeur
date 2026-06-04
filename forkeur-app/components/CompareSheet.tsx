@@ -98,7 +98,7 @@ export default function CompareSheet({
 
           {/* All three */}
           <p className="text-[10px] font-semibold tracking-widest text-stone-400 uppercase mb-2 pt-4 border-t border-stone-100">
-            {tCompare('all_live')}
+            {sortedByTotal.length === 3 ? tCompare('all_live') : tCompare('live_prices')}
           </p>
           {sortedByTotal.map(({ platform, total: rowTotal, eta: e }) => {
             const isBest = platform === cheapestPlatform

@@ -196,23 +196,12 @@ export default function DealsClient({ deals }: { deals: DealItem[] }) {
                   </div>
                 </Link>
 
-                {/* Order CTA */}
-                {d.platform_url && (
-                  <a
-                    href={d.platform_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-3 flex items-center justify-center w-full py-2 rounded-xl text-xs font-semibold text-white bg-stone-900 hover:bg-stone-700 transition-colors"
-                  >
-                    {tDeals('order_on', { platform: plat.name })}
-                  </a>
-                )}
-                {/* Compare link */}
+                {/* Compare & Order CTA */}
                 <Link
                   href={`/restaurant/${d.restaurant_id}`}
-                  className="mt-2 flex items-center justify-center w-full py-2 rounded-xl text-xs font-medium text-stone-600 bg-stone-50 hover:bg-stone-100 transition-colors"
+                  className="mt-3 flex items-center justify-center w-full py-2 rounded-xl text-xs font-semibold text-white bg-stone-900 hover:bg-stone-700 transition-colors"
                 >
-                  Compare →
+                  {tDeals('compare_and_order', { platform: plat.name })}
                 </Link>
               </div>
             )

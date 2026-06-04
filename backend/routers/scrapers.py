@@ -111,7 +111,16 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
         body = RunTriggerIn()
 
     run_id = db.create_run(platform)
-    log_fn = ws_mod.make_log_fn(run_id)
+    _ws_log = ws_mod.make_log_fn(run_id)
+    _log_path = f"/tmp/fk_{platform}_{run_id[:8]}.log"
+    def log_fn(msg: str) -> None:
+        _ws_log(msg)
+        try:
+            with open(_log_path, "a") as _f:
+                import time as _t
+                _f.write(f"{_t.strftime('%H:%M:%S')} {msg}\n")
+        except Exception:
+            pass
     timeout = _TIMEOUTS.get(platform, 60 * 60)
 
     async def _run():
@@ -126,8 +135,11 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
             last_exc: Exception | None = None
             for attempt in range(2):
                 try:
+                    scraper_fn = SCRAPERS[platform]
+                    import inspect
+                    kwargs = {"run_id": run_id} if "run_id" in inspect.signature(scraper_fn).parameters else {}
                     result = await asyncio.wait_for(
-                        SCRAPERS[platform](config, log_fn),
+                        scraper_fn(config, log_fn, **kwargs),
                         timeout=timeout,
                     )
                     break

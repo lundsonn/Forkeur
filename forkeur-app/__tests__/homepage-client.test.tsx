@@ -74,7 +74,7 @@ describe('HomepageClient', () => {
     fireEvent.change(screen.getByPlaceholderText('Search a restaurant'), {
       target: { value: 'zzznomatch' },
     })
-    expect(screen.getByText('No restaurants found')).toBeInTheDocument()
+    expect(screen.getByText(/No restaurants found/)).toBeInTheDocument()
   })
 
   it('clears search when ✕ button clicked', () => {

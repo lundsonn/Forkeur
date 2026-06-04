@@ -25,6 +25,7 @@ export default function HomepageClient({
   const [sortBy, setSortBy] = useState<SortBy>('best')
   const [view, setView] = useState<'list' | 'map'>('list')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const [cuisineExpanded, setCuisineExpanded] = useState(false)
 
   function resetAndSet<T>(setter: (v: T) => void) {
     return (v: T) => { setter(v); setVisibleCount(PAGE_SIZE) }
@@ -182,31 +183,43 @@ export default function HomepageClient({
       </div>
 
       {/* Cuisine filters */}
-      <div className="flex gap-2 overflow-x-auto pb-1 mb-3">
-        <button
-          type="button"
-          onClick={() => resetAndSet(setSelectedCuisine)(null)}
-          className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-            !selectedCuisine ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600'
-          }`}
-        >{tFilters('all')}</button>
-        {cuisines.map((c) => (
+      <div className="relative mb-3">
+        <div className={`flex gap-2 pb-1 ${cuisineExpanded ? 'flex-wrap' : 'overflow-x-auto'}`}>
           <button
             type="button"
-            key={c}
-            onClick={() => resetAndSet(setSelectedCuisine)(selectedCuisine === c ? null : c)}
-            className={`shrink-0 flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              selectedCuisine === c ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600'
+            onClick={() => resetAndSet(setSelectedCuisine)(null)}
+            className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              !selectedCuisine ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600'
             }`}
+          >{tFilters('all')}</button>
+          {cuisines.map((c) => (
+            <button
+              type="button"
+              key={c}
+              onClick={() => resetAndSet(setSelectedCuisine)(selectedCuisine === c ? null : c)}
+              className={`shrink-0 flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                selectedCuisine === c ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600'
+              }`}
+            >
+              {c}
+              {(cuisineCounts.get(c) ?? 0) > 0 && (
+                <span className={`text-[10px] ${selectedCuisine === c ? 'text-stone-300' : 'text-stone-400'}`}>
+                  {cuisineCounts.get(c)}
+                </span>
+              )}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setCuisineExpanded((v) => !v)}
+            className="shrink-0 rounded-full px-3 py-1 text-xs font-medium bg-white border border-stone-200 text-stone-500 hover:text-stone-800 hover:border-stone-400 transition-colors"
           >
-            {c}
-            {(cuisineCounts.get(c) ?? 0) > 0 && (
-              <span className={`text-[10px] ${selectedCuisine === c ? 'text-stone-300' : 'text-stone-400'}`}>
-                {cuisineCounts.get(c)}
-              </span>
-            )}
+            {cuisineExpanded ? tFilters('less') : tFilters('more')}
           </button>
-        ))}
+        </div>
+        {!cuisineExpanded && (
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-16 bg-gradient-to-l from-stone-50 to-transparent" />
+        )}
       </div>
 
       {/* Toolbar: area filter + sort */}
@@ -298,7 +311,24 @@ export default function HomepageClient({
               )
             })}
             {filtered.length === 0 && (
-              <p className="text-center text-stone-400 text-sm py-16">{tResults('none')}</p>
+              <div className="flex flex-col items-center gap-3 py-16 bg-[#EDEDEA] rounded-2xl">
+                <p className="text-sm font-medium text-[#1A1A1A] text-center px-6">
+                  {search ? tResults('none_query', { query: search }) : tResults('none')}
+                </p>
+                {hasFilter && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetAndSet(setSearch)('')
+                      resetAndSet(setSelectedCuisine)(null)
+                      resetAndSet(setSelectedNeighborhood)(null)
+                    }}
+                    className="text-sm text-[#2E86D8] font-medium"
+                  >
+                    {tResults('clear_search')}
+                  </button>
+                )}
+              </div>
             )}
             {visibleCount < filtered.length && (
               <button
@@ -306,7 +336,7 @@ export default function HomepageClient({
                 onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
                 className="w-full py-3 mt-2 text-sm font-medium text-stone-500 hover:text-stone-800 border border-stone-200 rounded-xl hover:border-stone-400 transition-colors"
               >
-                {tResults('load_more', { remaining: filtered.length - visibleCount })}
+                {tResults('load_more', { next: Math.min(PAGE_SIZE, filtered.length - visibleCount), remaining: filtered.length - visibleCount })}
               </button>
             )}
           </div>

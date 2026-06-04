@@ -214,22 +214,26 @@ async def _enrich_existing(browser, log: Callable) -> int:
                     {'phone': analysis['phone']}
                 ).eq('id', r['id']).execute()
 
-            if not (analysis['has_delivery'] or analysis['order_url']):
-                return 0
-
+            # Always save the website so users can open it in a new tab,
+            # even if no ordering was detected. Prefer a specific order URL if found.
             order_url = analysis['order_url'] or r['website']
             if is_junk_url(order_url):
                 return 0
+
+            url_type = classify_url(order_url, analysis['phone'])
+            # If no ordering/delivery signals, treat as plain website link
+            if not (analysis['has_delivery'] or analysis['order_url']):
+                url_type = 'website'
 
             row = {
                 'restaurant_id': r['id'],
                 'platform': 'direct',
                 'url': order_url,
-                'url_type': classify_url(order_url, analysis['phone']),
+                'url_type': url_type,
                 'is_available': True,
             }
             supabase.table('platform_listings').insert(row).execute()
-            log(f"  ✓ {r['name']}: {order_url[:70]}")
+            log(f"  ✓ {r['name']} [{url_type}]: {order_url[:70]}")
             return 1
 
     results = await asyncio.gather(*[_process(r) for r in restaurants], return_exceptions=True)

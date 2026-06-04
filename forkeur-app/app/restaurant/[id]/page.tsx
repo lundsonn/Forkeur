@@ -20,14 +20,6 @@ function promoBadgeText(tBadge: any, promo: PromoItem): string {
   }
 }
 
-function freshnessLabel(isoStr: string): { key: string; values?: Record<string, number> } {
-  const ageMs = Date.now() - new Date(isoStr).getTime()
-  const ageH = ageMs / 3_600_000
-  if (ageH < 1) return { key: 'just_now' }
-  if (ageH < 24) return { key: 'hours', values: { hours: Math.floor(ageH) } }
-  const ageD = Math.floor(ageMs / 86_400_000)
-  return { key: 'days', values: { days: ageD } }
-}
 
 export async function generateMetadata({
   params,
@@ -80,13 +72,12 @@ export default async function Page({
     .filter((r): r is number => r !== null)
     .sort((a, b) => b - a)[0] ?? null
 
-  // Freshness: most recent last_scraped_at across all listings
+  // Most recent last_scraped_at across all listings (used by StaleRefresh)
   const mostRecentScrape = data.listings
     .map((l) => l.last_scraped_at)
     .filter((s): s is string => s !== null)
     .sort()
     .pop() ?? null
-  const freshness = mostRecentScrape ? freshnessLabel(mostRecentScrape) : null
 
   // Fee overview: aggregator platforms only, those with fee data
   const feeListings = data.listings.filter(
@@ -119,6 +110,8 @@ export default async function Page({
     .sort((a, b) => b.gapPct - a.gapPct)
     .slice(0, 5)
 
+  const allStale = data.listings.length === 0
+
   return (
     <div className="max-w-md mx-auto">
       <StaleRefresh lastScrapedAt={mostRecentScrape} />
@@ -148,11 +141,19 @@ export default async function Page({
             {data.cuisine.join(' · ')} · {data.city}
             {bestRating !== null && ` · ★ ${bestRating.toFixed(1)}`}
           </p>
-          {freshness && (
-            <span className="text-[10px] font-medium text-stone-400 bg-stone-100 rounded-full px-2 py-0.5">
-              {tDetail(freshness.key, freshness.values)}
+          <details className="inline-flex items-center gap-1 relative">
+            <summary className="list-none flex items-center gap-1 cursor-pointer">
+              <span className="text-[10px] font-medium text-stone-400 bg-stone-100 rounded-full px-2 py-0.5">
+                {tDetail('fees_included')}
+              </span>
+              <span className="w-4 h-4 rounded-full bg-stone-200 text-stone-500 text-[9px] font-bold flex items-center justify-center leading-none select-none">
+                i
+              </span>
+            </summary>
+            <span className="absolute top-6 left-0 text-[11px] bg-stone-800 text-white rounded-lg px-3 py-2 shadow-lg z-10 max-w-[min(200px,calc(100vw-2rem))] leading-snug pointer-events-none">
+              {tDetail('fees_info')}
             </span>
-          )}
+          </details>
         </div>
         {data.order_url && (
           <a
@@ -166,96 +167,140 @@ export default async function Page({
         )}
       </div>
 
-      {/* Platform fee overview */}
-      {feeListings.length > 0 && (
-        <div className="px-5 mb-2">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-[10px] font-semibold tracking-widest text-stone-400 uppercase">
-              {tDetail('platform_fees')}
-            </p>
-            {feeGapCents > 0 && cheapestFee && mostExpensiveFee && (
-              <span className="text-[11px] font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
-                {tDetail('cheapest_signal', {
-                  platform: PLATFORM_LABELS[cheapestFee.platform],
-                  amount: (feeGapCents / 100).toFixed(2),
-                  other: PLATFORM_LABELS[mostExpensiveFee.platform],
-                })}
-              </span>
-            )}
-          </div>
-          <div className={`grid gap-2 ${feeListings.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
-            {feeListings.map((l) => {
-              const colors = PLATFORM_COLORS[l.platform]
-              const isCheapest = feeListings.every(
-                (o) => o.platform === l.platform || (o.delivery_fee_cents ?? Infinity) >= (l.delivery_fee_cents ?? 0)
-              )
-              return (
-                <a
-                  key={l.platform}
-                  href={l.platform_url ?? undefined}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`rounded-xl border p-3 text-center transition-colors ${
-                    isCheapest
-                      ? 'border-stone-300 bg-white'
-                      : 'border-stone-100 bg-stone-50 opacity-60'
-                  }`}
-                >
-                  <p className={`text-[10px] font-semibold uppercase tracking-wide ${colors.label}`}>
-                    {PLATFORM_LABELS[l.platform]}
-                  </p>
-                  <p className="text-xl font-bold text-stone-900 mt-1">
-                    {l.delivery_fee_label}
-                  </p>
-                  {l.eta_label && (
-                    <p className="text-[11px] text-stone-400 mt-0.5">{l.eta_label}</p>
-                  )}
-                  {l.min_order_label && (
-                    <p className="text-[11px] text-stone-400">{l.min_order_label}</p>
-                  )}
-                  <div className="flex flex-wrap justify-center gap-1 mt-1.5">
-                    <OpenStatusBadge openingHours={l.opening_hours} isAvailable={l.is_available} />
-                    {l.promotions.map((p, i) => (
-                      <span key={i} className="text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5 leading-tight">
-                        {promoBadgeText(tBadge, p)}
-                      </span>
-                    ))}
-                  </div>
-                </a>
-              )
-            })}
+      {allStale ? (
+        <div className="px-5 mb-4">
+          <div className="rounded-xl border border-stone-100 bg-stone-50 px-5 py-8 text-center">
+            <p className="text-sm font-medium text-stone-600">{tDetail('prices_updating')}</p>
+            <p className="text-xs text-stone-400 mt-1">{tDetail('prices_updating_sub')}</p>
           </div>
         </div>
-      )}
-
-      {/* Menu price insights */}
-      {priceInsights.length > 0 && (
-        <div className="px-5 mb-2 mt-4">
-          <p className="text-[10px] font-semibold tracking-widest text-stone-400 uppercase mb-2">
-            {tDetail('price_compare')}
-          </p>
-          <div className="flex flex-col divide-y divide-stone-100">
-            {priceInsights.map((insight) => (
-              <div key={insight.name} className="flex items-center justify-between py-2.5">
-                <span className="text-sm text-stone-700 truncate pr-3">{insight.name}</span>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-sm font-semibold text-stone-900">
-                    €{(insight.cheapCents / 100).toFixed(2)}
-                  </span>
-                  <span className="text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5 whitespace-nowrap">
-                    {tDetail('cheaper_on', {
-                      pct: insight.gapPct,
-                      platform: tPlatform[insight.cheapPlatform as keyof typeof tPlatform] ?? insight.cheapPlatform,
+      ) : (
+        <>
+          {/* Platform fee overview */}
+          {feeListings.length > 0 && (
+            <div className="px-5 mb-2">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] font-semibold tracking-widest text-stone-400 uppercase">
+                  {tDetail('platform_fees')}
+                </p>
+                {feeGapCents > 0 && cheapestFee && mostExpensiveFee && (
+                  <span className="text-[11px] font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
+                    {tDetail('cheapest_signal', {
+                      platform: PLATFORM_LABELS[cheapestFee.platform],
+                      amount: (feeGapCents / 100).toFixed(2),
+                      other: PLATFORM_LABELS[mostExpensiveFee.platform],
                     })}
                   </span>
-                </div>
+                )}
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+              <div className={`grid gap-2 ${feeListings.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                {feeListings.map((l) => {
+                  const colors = PLATFORM_COLORS[l.platform]
+                  const isCheapest = feeListings.every(
+                    (o) => o.platform === l.platform || (o.delivery_fee_cents ?? Infinity) >= (l.delivery_fee_cents ?? 0)
+                  )
+                  return (
+                    <a
+                      key={l.platform}
+                      href={l.platform_url ?? undefined}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`rounded-xl border p-3 text-center transition-colors ${
+                        isCheapest
+                          ? 'border-stone-300 bg-white'
+                          : 'border-stone-100 bg-stone-50 opacity-60'
+                      }`}
+                    >
+                      <p className={`text-[10px] font-semibold uppercase tracking-wide ${colors.label}`}>
+                        {PLATFORM_LABELS[l.platform]}
+                      </p>
+                      <p className="text-xl font-bold text-stone-900 mt-1">
+                        {l.delivery_fee_label}
+                      </p>
+                      {l.eta_label && (
+                        <p className="text-[11px] text-stone-400 mt-0.5">{l.eta_label}</p>
+                      )}
+                      {l.min_order_label && (
+                        <p className="text-[11px] text-stone-400">{l.min_order_label}</p>
+                      )}
+                      <div className="flex flex-wrap justify-center gap-1 mt-1.5">
+                        <OpenStatusBadge openingHours={l.opening_hours} isAvailable={l.is_available} />
+                        {l.promotions.map((p, i) => (
+                          <span key={i} className="text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5 leading-tight">
+                            {promoBadgeText(tBadge, p)}
+                          </span>
+                        ))}
+                      </div>
+                    </a>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
-      <BasketSimulator menuItems={data.menuItems} listings={data.listings} phone={data.phone} />
+          {/* Menu price insights */}
+          {priceInsights.length > 0 && (
+            <div className="px-5 mb-2 mt-4">
+              <p className="text-[10px] font-semibold tracking-widest text-stone-400 uppercase mb-2">
+                {tDetail('price_compare')}
+              </p>
+              <div className="flex flex-col divide-y divide-stone-100">
+                {priceInsights.map((insight) => (
+                  <div key={insight.name} className="flex items-center justify-between py-2.5">
+                    <span className="text-sm text-stone-700 truncate pr-3">{insight.name}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-sm font-semibold text-stone-900">
+                        €{(insight.cheapCents / 100).toFixed(2)}
+                      </span>
+                      <span className="text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5 whitespace-nowrap">
+                        {tDetail('cheaper_on', {
+                          pct: insight.gapPct,
+                          platform: tPlatform[insight.cheapPlatform as keyof typeof tPlatform] ?? insight.cheapPlatform,
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Basket simulator section */}
+          {(() => {
+            if (data.menuItems.length === 0) return null
+
+            const platformsWithMenu = new Set<string>()
+            for (const item of data.menuItems) {
+              for (const [platform, price] of Object.entries(item.prices)) {
+                if (price !== null && platform !== 'direct') platformsWithMenu.add(platform)
+              }
+            }
+
+            return (
+              <div className="mt-4">
+                <div className="px-5 mb-3">
+                  <p className="text-[10px] font-semibold tracking-widest text-stone-400 uppercase mb-0.5">
+                    {tDetail('basket_section_title')}
+                  </p>
+                  <p className="text-xs text-stone-400">{tDetail('basket_section_subtitle')}</p>
+                </div>
+
+                {platformsWithMenu.size < 2 ? (
+                  <div className="px-5 py-4 text-center">
+                    <p className="text-sm text-stone-400">
+                      {tDetail('basket_single_platform', {
+                        platform: PLATFORM_LABELS[[...platformsWithMenu][0] as keyof typeof PLATFORM_LABELS] ?? [...platformsWithMenu][0],
+                      })}
+                    </p>
+                  </div>
+                ) : (
+                  <BasketSimulator menuItems={data.menuItems} listings={data.listings} phone={data.phone} />
+                )}
+              </div>
+            )
+          })()}
+        </>
+      )}
       <div className="px-5 pb-8">
         <Link
           href={`/owners?name=${encodeURIComponent(data.name)}`}

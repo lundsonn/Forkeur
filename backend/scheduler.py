@@ -57,7 +57,9 @@ async def _run_scraper(platform: str) -> None:
     # their asyncio waits interleave so concurrent runs are safe.
     run_id = db.create_run(platform)
     try:
-        result = await SCRAPERS[platform](ScraperConfig(), _noop)
+        import inspect
+        kwargs = {"run_id": run_id} if "run_id" in inspect.signature(SCRAPERS[platform]).parameters else {}
+        result = await SCRAPERS[platform](ScraperConfig(), _noop, **kwargs)
         db.finish_run(run_id, "success", records_saved=result.records_saved)
     except CloudflareBlockedError as e:
         db.finish_run(run_id, "blocked", error_msg=str(e))

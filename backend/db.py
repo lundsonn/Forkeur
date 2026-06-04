@@ -236,6 +236,12 @@ def create_run(platform: str) -> str:
     return res.data[0]["id"]
 
 
+def update_run_progress(run_id: str, records_saved: int) -> None:
+    get_client().table("scraper_runs").update({
+        "records_saved": records_saved,
+    }).eq("id", run_id).execute()
+
+
 def finish_run(
     run_id: str,
     status: str,
@@ -301,6 +307,21 @@ def get_last_successful_run(platform: str) -> dict | None:
         .execute()
     )
     return res.data[0] if res.data else None
+
+
+def delete_stale_listings(days: int = 30) -> int:
+    """Delete platform_listings older than `days` days. Returns count deleted."""
+    from datetime import datetime, timezone, timedelta
+    client = get_client()
+    threshold = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    result = (
+        client.table("platform_listings")
+        .delete()
+        .not_.is_("last_scraped_at", "null")
+        .lt("last_scraped_at", threshold)
+        .execute()
+    )
+    return len(result.data) if result.data else 0
 
 
 def prune_stale_menu_items(days: int = 30) -> int:

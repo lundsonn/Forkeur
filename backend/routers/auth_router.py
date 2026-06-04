@@ -1,10 +1,17 @@
 from __future__ import annotations
 import os
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
 import auth
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def require_auth(authorization: str = Header(default="")) -> None:
+    """FastAPI dependency that enforces Bearer token authentication."""
+    token = authorization.removeprefix("Bearer ").strip()
+    if not auth.verify_token(token):
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 class LoginIn(BaseModel):

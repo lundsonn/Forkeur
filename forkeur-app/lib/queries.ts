@@ -3,6 +3,8 @@ import { createClient } from '@/utils/supabase/server'
 import type { Platform } from '@/lib/basket'
 import type { DealItem } from '@/lib/deals'
 
+const STALE_THRESHOLD_MS = 72 * 60 * 60 * 1000
+
 export type RestaurantSummary = {
   id: string
   name: string
@@ -97,10 +99,12 @@ export async function getRestaurants(): Promise<{
     .from('restaurants')
     .select(`
       id, name, cuisine, neighborhood, lat, lng, order_url, image_url,
-      platform_listings ( platform, delivery_fee, eta_min, rating, url_type, is_available, opening_hours )
+      platform_listings ( platform, delivery_fee, eta_min, rating, url_type, is_available, opening_hours, last_scraped_at )
     `)
 
   if (error) throw new Error(`getRestaurants: ${error.message}`)
+
+  const threshold = new Date(Date.now() - STALE_THRESHOLD_MS)
 
   const restaurants: RestaurantSummary[] = (data ?? [])
     .map((r) => {
@@ -112,9 +116,14 @@ export async function getRestaurants(): Promise<{
         url_type: string | null
         is_available: boolean | null
         opening_hours: OpeningHours | null
+        last_scraped_at: string | null
       }[]
 
-      const listings = rawListings.map((l) => ({
+      const freshListings = rawListings.filter((l) =>
+        l.last_scraped_at != null && new Date(l.last_scraped_at) >= threshold
+      )
+
+      const listings = freshListings.map((l) => ({
         platform: l.platform as Platform,
         delivery_fee_cents: feeCents(l.delivery_fee),
         eta_min: l.eta_min ?? null,
@@ -280,7 +289,12 @@ export async function getRestaurantWithListings(
 
   if (error) return null
 
-  const listings: PlatformListing[] = (data.platform_listings ?? []).map((l: any) => ({
+  const threshold = new Date(Date.now() - STALE_THRESHOLD_MS)
+  const freshRaw = (data.platform_listings ?? []).filter((l: any) =>
+    l.last_scraped_at != null && new Date(l.last_scraped_at) >= threshold
+  )
+
+  const listings: PlatformListing[] = freshRaw.map((l: any) => ({
     id: l.id,
     platform: l.platform as Platform,
     platform_url: l.url ?? null,
@@ -305,7 +319,7 @@ export async function getRestaurantWithListings(
 
   const itemMap = new Map<string, MenuItemWithPrices>()
 
-  for (const listing of (data.platform_listings ?? []) as any[]) {
+  for (const listing of freshRaw as any[]) {
     const platform = listing.platform as Platform
     for (const item of listing.menu_items ?? []) {
       const key = normalizeTitle(item.title)

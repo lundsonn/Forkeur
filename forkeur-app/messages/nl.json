@@ -18,13 +18,17 @@
     "bogo": "2-voor-1",
     "pct": "% Korting",
     "free_delivery": "Gratis bezorging",
-    "free_item": "Gratis artikel"
+    "free_item": "Gratis artikel",
+    "more": "Meer ›",
+    "less": "Minder ‹"
   },
   "results": {
     "restaurants": "Restaurants",
     "count": "{count, plural, one {# resultaat} other {# resultaten}}",
     "none": "Geen restaurants gevonden",
-    "load_more": "Toon {remaining, plural, one {# restaurant meer} other {# restaurants meer}}"
+    "load_more": "Toon {next, plural, one {# restaurant meer} other {# restaurants meer}} ({remaining} totaal resterend)",
+    "none_query": "Geen restaurants gevonden voor \"{query}\"",
+    "clear_search": "Zoekopdracht wissen"
   },
   "deals": {
     "heading": "Beste aanbiedingen",
@@ -57,6 +61,7 @@
     "delivery": "Bezorging",
     "you_save": "Besparing",
     "all_live": "Alle drie · live prijzen",
+    "live_prices": "Live prijzen",
     "best_badge": "Beste",
     "why": "Waarom {platform}? Laagste totaal inclusief alle kosten.",
     "order_on": "Bestellen bij {platform}"
@@ -97,14 +102,16 @@
   "detail": {
     "platform_fees": "Bezorgkosten",
     "cheapest_signal": "{platform} is €{amount} goedkoper dan {other}",
-    "just_now": "Zojuist bijgewerkt",
-    "hours": "{hours}u geleden bijgewerkt",
-    "days": "{days}d geleden bijgewerkt",
+    "fees_included": "Kosten inbegrepen",
+    "fees_info": "Prijzen meerdere keren per dag gecontroleerd",
     "price_compare": "Menuprijsverschillen",
     "cheaper_on": "{pct}% goedkoper op {platform}",
     "meta_description": "{name} · {cuisine} · Vergelijk bezorgkosten op UberEats, Deliveroo & Takeaway in Brussel.",
     "prices_updating": "Prijzen worden bijgewerkt — kom binnenkort terug.",
-    "prices_updating_sub": "We controleren prijzen meerdere keren per dag."
+    "prices_updating_sub": "We controleren prijzen meerdere keren per dag.",
+    "basket_section_title": "Vergelijk je exacte bestelling",
+    "basket_section_subtitle": "Zie welk platform het goedkoopst is voor wat je bestelt.",
+    "basket_single_platform": "Prijzen alleen beschikbaar op {platform}"
   },
   "hours": {
     "closed": "Gesloten",

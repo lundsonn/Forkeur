@@ -8,7 +8,7 @@ from scrapers.promos import classify_promo, extract_min_order, parse_promo_texts
 import db
 
 
-async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -> ScraperResult:
+async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, run_id: str | None = None) -> ScraperResult:
     log_fn("Starting UberEats scraper")
     records_saved = 0
 
@@ -28,8 +28,8 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
         page.on("response", on_response)
 
         log_fn("Loading ubereats.com...")
-        # /be-fr is a dead URL — navigate to root which redirects to /be-en with address input
-        await page.goto("https://www.ubereats.com/", wait_until="domcontentloaded", timeout=60000)
+        # Navigate directly to /be to avoid GeoIP redirect to /de (server is in Germany)
+        await page.goto("https://www.ubereats.com/be", wait_until="domcontentloaded", timeout=60000)
         check_cloudflare(await page.title())
         log_fn(f"Page loaded: {page.url}")
 
@@ -170,6 +170,8 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
             records_saved += 1
 
         log_fn(f"Phase 1 done — {records_saved} listings, {promo_total} promotions saved")
+        if run_id:
+            db.update_run_progress(run_id, records_saved)
 
         if config.listing_only:
             return ScraperResult(records_saved=records_saved)
@@ -180,6 +182,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
         listing_url = page.url
         menu_items_saved = 0
         n = len(saved_listings)
+        failed_listings: list[tuple[dict, str]] = []
         for i, (r, lid) in enumerate(saved_listings):
             url = r.get("url")
             name = r.get("name", "?")
@@ -206,24 +209,48 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                     except Exception:
                         pass
 
+            # Reload listing page every 50 restaurants to clear Chrome memory accumulation
+            if i > 0 and i % 50 == 0:
+                log_fn(f"Menu: {i}/{n} — reloading listing page to clear Chrome memory")
+                try:
+                    await page.goto(listing_url, wait_until="domcontentloaded", timeout=20000)
+                    await asyncio.sleep(2)
+                except Exception as _e:
+                    log_fn(f"Menu: {i}/{n} — listing reload failed: {_e}")
+
             page.on("response", on_store_response)
             try:
                 # Ensure we're on the listing page (go_back preserves scroll state)
                 if listing_url not in page.url:
-                    await page.go_back(wait_until="domcontentloaded", timeout=15000)
+                    log_fn(f"Menu: {i+1}/{n} — {name} — navigating back to listing")
+                    try:
+                        await asyncio.wait_for(
+                            page.go_back(wait_until="domcontentloaded", timeout=15000),
+                            timeout=20,
+                        )
+                    except (asyncio.TimeoutError, Exception) as _e:
+                        log_fn(f"Menu: {i+1}/{n} — {name} — go_back failed ({_e}), reloading listing")
+                        await page.goto(listing_url, wait_until="domcontentloaded", timeout=20000)
                     await asyncio.sleep(2)
 
                 # Scroll until page height stabilises — ensures all infinite-scroll
                 # cards are in the DOM before we try to click one.
+                # Cap at 15 iterations (18s); wrap each evaluate with asyncio timeout.
                 prev_h = 0
-                for _ in range(40):
-                    h = await page.evaluate("document.body.scrollHeight")
-                    await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                for _ in range(15):
+                    try:
+                        h = await asyncio.wait_for(page.evaluate("document.body.scrollHeight"), timeout=5)
+                        await asyncio.wait_for(page.evaluate("window.scrollTo(0, document.body.scrollHeight)"), timeout=5)
+                    except asyncio.TimeoutError:
+                        break
                     await asyncio.sleep(1.2)
                     if h == prev_h:
                         break
                     prev_h = h
-                await page.evaluate("window.scrollTo(0, 0)")
+                try:
+                    await asyncio.wait_for(page.evaluate("window.scrollTo(0, 0)"), timeout=5)
+                except asyncio.TimeoutError:
+                    pass
                 await asyncio.sleep(0.5)
 
                 # Click restaurant anchor; scroll-retry if not yet in DOM.
@@ -262,6 +289,15 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
             except Exception as exc:
                 log_fn(f"Menu: {i+1}/{n} — {name} — click/nav failed: {exc}")
                 page.remove_listener("response", on_store_response)
+                failed_listings.append((r, lid))
+                if "crashed" in str(exc).lower():
+                    log_fn(f"Menu: {i+1}/{n} — page crashed, recreating page")
+                    try:
+                        page = await new_page(browser, lang="fr-BE")
+                        await page.goto(listing_url, wait_until="domcontentloaded", timeout=20000)
+                        await asyncio.sleep(2)
+                    except Exception as _pe:
+                        log_fn(f"Menu: {i+1}/{n} — page recreate failed: {_pe}")
                 continue
 
             deadline = asyncio.get_event_loop().time() + 12
@@ -271,7 +307,8 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
             page.remove_listener("response", on_store_response)
 
             if not store_raw:
-                log_fn(f"Menu: {i+1}/{n} — {name} — getStoreV1 not captured, skipping")
+                log_fn(f"Menu: {i+1}/{n} — {name} — getStoreV1 not captured, queued for retry")
+                failed_listings.append((r, lid))
                 continue
 
             try:
@@ -290,8 +327,98 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                     if rich_hours:
                         db.patch_listing(lid, {"opening_hours": rich_hours})
                 log_fn(f"Menu: {i+1}/{n} — {name} — {count} items saved")
+                if run_id and (i + 1) % 10 == 0:
+                    db.update_run_progress(run_id, records_saved)
             except Exception as exc:
                 log_fn(f"Menu: {i+1}/{n} — {name} — parse/save error: {exc}")
+
+        # ── Phase 3: retry pass via listing click (direct goto doesn't trigger getStoreV1)
+        if failed_listings:
+            log_fn(f"Retry pass: {len(failed_listings)} restaurants missed in Phase 2")
+            try:
+                await page.goto(listing_url, wait_until="domcontentloaded", timeout=20000)
+                await asyncio.sleep(3)
+                # Scroll to load all cards
+                prev_h = 0
+                for _ in range(15):
+                    try:
+                        h = await asyncio.wait_for(page.evaluate("document.body.scrollHeight"), timeout=5)
+                        await asyncio.wait_for(page.evaluate("window.scrollTo(0, document.body.scrollHeight)"), timeout=5)
+                    except asyncio.TimeoutError:
+                        break
+                    await asyncio.sleep(1.2)
+                    if h == prev_h:
+                        break
+                    prev_h = h
+            except Exception as _e:
+                log_fn(f"Retry pass: failed to load listing: {_e}")
+
+            for r, lid in failed_listings:
+                url = r.get("url")
+                name = r.get("name", "?")
+                if not url:
+                    continue
+                store_path = url.split("/store/")[-1].strip("/") if "/store/" in url else ""
+                if not store_path:
+                    continue
+                retry_buf: list[str] = []
+                async def on_retry_response(response, _buf=retry_buf):
+                    if "getStoreV1" in response.url and not _buf:
+                        try:
+                            text = await response.text()
+                            _buf.append(text)
+                        except Exception:
+                            pass
+                page.on("response", on_retry_response)
+                try:
+                    log_fn(f"Retry: {name}")
+                    slug_only = store_path.split("/")[0] if "/" in store_path else store_path
+                    clicked = await page.evaluate(f"""
+                        (() => {{
+                            let a = document.querySelector('a[href*="/store/{store_path}"]');
+                            if (!a) a = document.querySelector('a[href*="/store/{slug_only}"]');
+                            if (a) {{ a.click(); return true; }}
+                            return false;
+                        }})()
+                    """)
+                    if not clicked:
+                        log_fn(f"Retry: {name} — not in DOM, skipping")
+                        page.remove_listener("response", on_retry_response)
+                        continue
+                    await page.wait_for_load_state("domcontentloaded", timeout=15000)
+                    deadline = asyncio.get_event_loop().time() + 15
+                    while not retry_buf and asyncio.get_event_loop().time() < deadline:
+                        await asyncio.sleep(0.5)
+                except Exception as exc:
+                    log_fn(f"Retry: {name} — failed: {exc}")
+                    if "crashed" in str(exc).lower():
+                        try:
+                            page = await new_page(browser, lang="fr-BE")
+                            await page.goto(listing_url, wait_until="domcontentloaded", timeout=20000)
+                            await asyncio.sleep(2)
+                        except Exception:
+                            pass
+                page.remove_listener("response", on_retry_response)
+                if not retry_buf:
+                    log_fn(f"Retry: {name} — still no getStoreV1, giving up")
+                    continue
+                try:
+                    store_data = json.loads(retry_buf[0])
+                    items = _parse_menu_items(store_data)
+                    count = db.insert_menu_items(lid, items)
+                    menu_items_saved += count
+                    store_obj = store_data.get("data") or {}
+                    if store_obj:
+                        rich_promos = _parse_promotions(store_obj)
+                        if rich_promos:
+                            db.upsert_promotions(lid, rich_promos)
+                        rich_hours = _parse_section_hours(store_obj) or _parse_regular_hours(store_obj)
+                        if rich_hours:
+                            db.patch_listing(lid, {"opening_hours": rich_hours})
+                    log_fn(f"Retry: {name} — {count} items saved")
+                except Exception as exc:
+                    log_fn(f"Retry: {name} — parse/save error: {exc}")
+                await asyncio.sleep(2)
 
         log_fn(f"Done — {records_saved} listings, {menu_items_saved} menu items saved")
         return ScraperResult(
