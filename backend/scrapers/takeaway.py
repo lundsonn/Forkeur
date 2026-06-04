@@ -227,26 +227,32 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
             log_fn(f"Loading zone {zone}")
             zone_page = await new_page(browser, lang="fr-BE")
             try:
-                await zone_page.goto(url, wait_until="domcontentloaded", timeout=60000)
+                async def _scrape_zone():
+                    await zone_page.goto(url, wait_until="domcontentloaded", timeout=60000)
 
-                title = await zone_page.title()
-                if "just a moment" in title.lower():
-                    log_fn(f"  CF challenge — waiting up to 90s")
-                    cleared = await wait_for_cf_clear(zone_page, timeout_s=90)
-                    if not cleared:
-                        log_fn(f"  CF not cleared — skipping {zone}")
-                        continue
+                    title = await zone_page.title()
+                    if "just a moment" in title.lower():
+                        log_fn(f"  CF challenge — waiting up to 60s")
+                        cleared = await wait_for_cf_clear(zone_page, timeout_s=60)
+                        if not cleared:
+                            log_fn(f"  CF not cleared — skipping {zone}")
+                            return []
+
+                    try:
+                        await zone_page.wait_for_selector('[data-qa="restaurant-card"]', timeout=20000)
+                    except Exception:
+                        log_fn(f"  No cards — skipping {zone}")
+                        return []
+
+                    await zone_page.wait_for_timeout(1000)
+                    return await zone_page.evaluate(_LISTING_EVAL)
 
                 try:
-                    await zone_page.wait_for_selector('[data-qa="restaurant-card"]', timeout=20000)
-                except Exception:
-                    log_fn(f"  No cards — skipping {zone}")
-                    continue
+                    page_restaurants = await asyncio.wait_for(_scrape_zone(), timeout=120)
+                except asyncio.TimeoutError:
+                    log_fn(f"  ⚠ zone timed out after 120s, skipping")
+                    page_restaurants = []
 
-                # Brief pause for JS hydration to complete
-                await zone_page.wait_for_timeout(1000)
-
-                page_restaurants = await zone_page.evaluate(_LISTING_EVAL)
                 new_count = 0
                 for r in page_restaurants:
                     if r["slug"] not in all_by_slug:

@@ -450,6 +450,14 @@ def run(max_items: int | None = None) -> dict[str, Any]:
                         break
                     items = items[:remaining]
 
+                if not items:
+                    # API returned nothing — downgrade to 'menu' so dom_menu can try Playwright
+                    db.get_client().table("platform_listings").update(
+                        {"url_type": "menu"}
+                    ).eq("id", lid).execute()
+                    logger.info("direct_menu: no items from %s — downgraded to menu", url[:60])
+                    continue
+
                 db.delete_menu_items(lid)
                 saved = db.insert_menu_items(lid, items)
                 total_scraped += saved
