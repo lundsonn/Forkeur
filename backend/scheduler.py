@@ -8,9 +8,9 @@ import db
 _scheduler = AsyncIOScheduler()
 _schedules: dict[str, ScheduleConfigIn] = {}
 
-# Fee refresh: 45 min after each main scraper batch window
+# Fee refresh: after each meal-aligned scraper batch (lunch 06:30, dinner 13:30)
 _FEE_JOB_ID = "fee_refresh"
-_FEE_CRON = "45 6,12,18,23 * * *"
+_FEE_CRON = "15 8,15 * * *"   # 08:15 / 15:15 UTC — once heavies have finished
 
 _CLEANUP_JOB_ID = "daily_cleanup"
 _CLEANUP_CRON = "0 4 * * *"   # 04:00 UTC daily
