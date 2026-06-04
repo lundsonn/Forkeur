@@ -65,6 +65,7 @@ export type RestaurantDetail = {
   cuisine: string[]
   phone: string | null
   order_url: string | null
+  direct_url_type: string | null
   image_url: string | null
   listings: PlatformListing[]
   menuItems: MenuItemWithPrices[]
@@ -343,6 +344,7 @@ export async function getRestaurantWithListings(
     cuisine: data.cuisine ? [data.cuisine] : [],
     phone: (data as any).phone ?? null,
     order_url: (data as any).order_url ?? null,
+    direct_url_type: freshRaw.find((l: any) => l.platform === 'direct')?.url_type ?? null,
     image_url: (data as any).image_url ?? null,
     listings,
     menuItems: Array.from(itemMap.values()),

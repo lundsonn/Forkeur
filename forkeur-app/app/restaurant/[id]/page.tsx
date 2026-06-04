@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getTranslations } from 'next-intl/server'
+import { ExternalLink, List, Globe, Phone } from 'lucide-react'
 import { getRestaurantWithListings, type PromoItem } from '@/lib/queries'
 import { PLATFORM_LABELS, PLATFORM_COLORS } from '@/lib/basket'
 import BasketSimulator from '@/components/BasketSimulator'
@@ -60,6 +61,7 @@ export default async function Page({
   const { id } = await params
   const data = await getRestaurantWithListings(id)
   const tDirect = await getTranslations('direct')
+  const tCard = await getTranslations('card')
   const tDetail = await getTranslations('detail')
   const tBadge = await getTranslations('badge')
   const tOwners = await getTranslations('owners')
@@ -155,16 +157,30 @@ export default async function Page({
             </span>
           </details>
         </div>
-        {data.order_url && (
-          <a
-            href={data.order_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-semibold text-sm transition-colors"
-          >
-            {tDirect('badge_long')}
-          </a>
-        )}
+        {data.order_url && (() => {
+          const isActionable = !data.direct_url_type || data.direct_url_type === 'ordering' || data.direct_url_type === 'menu'
+          const DirectIcon =
+            data.direct_url_type === 'menu' ? List
+            : data.direct_url_type === 'website' ? Globe
+            : data.direct_url_type === 'phone' ? Phone
+            : ExternalLink
+          const label =
+            data.direct_url_type === 'menu' ? tCard('direct_cta_menu')
+            : data.direct_url_type === 'website' ? tCard('direct_cta_website')
+            : data.direct_url_type === 'phone' ? tCard('direct_cta_phone')
+            : tDirect('badge_long')
+          return (
+            <a
+              href={data.order_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`mt-3 flex items-center justify-center gap-2 w-full py-3 rounded-xl font-semibold text-sm transition-colors text-white ${isActionable ? 'bg-[#D85A30] hover:bg-[#c04e28]' : 'bg-[#888780] hover:bg-[#7a7a73]'}`}
+            >
+              <DirectIcon size={16} aria-hidden="true" />
+              {label}
+            </a>
+          )
+        })()}
       </div>
 
       {allStale ? (
