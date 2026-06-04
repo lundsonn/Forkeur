@@ -4,7 +4,7 @@ import re
 from typing import Callable
 from models import ScraperConfig, ScraperResult
 from scrapers.base import (
-    new_browser, new_page, wait_for_cf_clear,
+    browser_session, new_page, wait_for_cf_clear,
     noop_log, parse_menu_price, CloudflareBlockedError,
 )
 import db
@@ -213,11 +213,10 @@ async def scrape_menu_page(page, listing_id: str, url: str) -> tuple[str, list[d
 async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -> ScraperResult:
     log_fn("Starting Takeaway scraper (Playwright DOM)")
     # headed=True required — CF passes on datacenter IP only with headed Chromium
-    browser = await new_browser(lang="fr-BE", headed=True)
     records_saved = 0
     menu_items_saved = 0
 
-    try:
+    async with browser_session(lang="fr-BE", headed=True) as browser:
         # Phase 0: collect listings — one fresh browser context per zone to avoid CF re-challenge.
         # All restaurant cards are rendered server-side on the first page load (no infinite scroll /
         # lazy pagination), so a single load + extract is sufficient per zone.
@@ -336,9 +335,6 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
             restaurants=restaurants,
             menu_items_saved=menu_items_saved,
         )
-
-    finally:
-        await browser.close()
 
 
 def _parse_float(val: str | None) -> float | None:

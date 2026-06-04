@@ -4,7 +4,7 @@ import re
 from typing import Callable
 from urllib.parse import urlparse, parse_qs
 from models import ScraperConfig, ScraperResult
-from scrapers.base import new_browser, new_page, check_cloudflare, noop_log, CloudflareBlockedError, parse_menu_price
+from scrapers.base import browser_session, new_page, check_cloudflare, noop_log, CloudflareBlockedError, parse_menu_price
 from scrapers.promos import parse_promo_texts
 import db
 
@@ -193,6 +193,7 @@ _LISTING_JS = """anchors => {
             !_isEta(l) && l.length < 120
         );
         const heroImg = card.querySelector('img[src]');
+        const isClosed = lines.some(l => /^(ferm[eé]|closed|gesloten|pr[eé]-?commande|pre-?order|vooruitbestellen)/i.test(l));
         return {
             name, url: a.href, slug,
             rating: ratingMatch ? ratingMatch[1] : 'N/A',
@@ -201,6 +202,7 @@ _LISTING_JS = """anchors => {
             discount: promoLines[0] || null,
             promoLines,
             image_url: heroImg ? heroImg.src : null,
+            is_closed: isClosed,
         };
     });
 }"""
@@ -271,11 +273,10 @@ async def _scrape_zone_listings(browser, zone_address: str, log_fn) -> list[dict
 
 async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -> ScraperResult:
     log_fn("Starting Deliveroo scraper")
-    browser = await new_browser(lang="fr-BE")
     records_saved = 0
     page = None
 
-    try:
+    async with browser_session(lang="fr-BE") as browser:
         # Phase 0: collect listings across all zones, dedup by slug
         zones = LISTING_ZONES
         all_by_slug: dict[str, dict] = {}
@@ -325,6 +326,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 "eta_min": _parse_eta_min(r.get("eta")),
                 "eta_max": _parse_eta_max(r.get("eta")),
                 "discount_label": r.get("discount"),
+                "is_available": not r.get("is_closed", False),
                 # delivery_fee: not exposed on listing page, filled in phase 2
             })
             promos = parse_promo_texts(r.get("promoLines") or [])
@@ -618,14 +620,11 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 log_fn(f"  Error scraping menu for {r['name']}: {exc}")
 
         log_fn(f"Done — {records_saved} listings, {menu_items_saved} menu items, {promo_total} promos saved")
-        return ScraperResult(records_saved=records_saved, restaurants=restaurants, menu_items_saved=menu_items_saved)
-
-    finally:
         try:
             await page.close()
         except Exception:
             pass
-        await browser.close()
+        return ScraperResult(records_saved=records_saved, restaurants=restaurants, menu_items_saved=menu_items_saved)
 
 
 def _parse_fee(val: str | None) -> float | None:

@@ -29,7 +29,7 @@ const makeListing = (platform: PlatformListing['platform'], fee: number | null):
   eta_label: '25–35 min',
   rating: 4.2,
   last_scraped_at: null,
-  promotions: [],
+  promotions: [], is_available: true, opening_hours: null,
 })
 
 const menuItems: MenuItemWithPrices[] = [

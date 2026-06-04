@@ -31,7 +31,8 @@
     "subtitle": "{count} offres en cours sur UberEats, Deliveroo & Takeaway",
     "none": "Aucune promo dans cette catégorie.",
     "min_order": "Min. €{amount}",
-    "order_on": "Commander sur {platform} →"
+    "order_on": "Commander sur {platform} →",
+    "search_placeholder": "Rechercher un restaurant"
   },
   "basket": {
     "no_menu": "Pas encore de menu disponible.",
@@ -99,6 +100,11 @@
     "price_compare": "Différences de prix menu",
     "cheaper_on": "{pct}% moins cher sur {platform}",
     "meta_description": "{name} · {cuisine} · Comparez les frais de livraison sur UberEats, Deliveroo & Takeaway à Bruxelles."
+  },
+  "hours": {
+    "closed": "Fermé",
+    "closes_at": "Ferme à {time}",
+    "unavailable": "Indisponible"
   },
   "meta": {
     "home_title": "Forkeur — Comparez les prix des restos à Bruxelles",

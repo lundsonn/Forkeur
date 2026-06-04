@@ -6,6 +6,7 @@ import { getRestaurantWithListings, type PromoItem } from '@/lib/queries'
 import { PLATFORM_LABELS, PLATFORM_COLORS } from '@/lib/basket'
 import BasketSimulator from '@/components/BasketSimulator'
 import StaleRefresh from '@/components/StaleRefresh'
+import OpenStatusBadge from '@/components/OpenStatusBadge'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function promoBadgeText(tBadge: any, promo: PromoItem): string {
@@ -212,15 +213,14 @@ export default async function Page({
                   {l.min_order_label && (
                     <p className="text-[11px] text-stone-400">{l.min_order_label}</p>
                   )}
-                  {l.promotions.length > 0 && (
-                    <div className="flex flex-wrap justify-center gap-1 mt-1.5">
-                      {l.promotions.map((p, i) => (
-                        <span key={i} className="text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5 leading-tight">
-                          {promoBadgeText(tBadge, p)}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  <div className="flex flex-wrap justify-center gap-1 mt-1.5">
+                    <OpenStatusBadge openingHours={l.opening_hours} isAvailable={l.is_available} />
+                    {l.promotions.map((p, i) => (
+                      <span key={i} className="text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5 leading-tight">
+                        {promoBadgeText(tBadge, p)}
+                      </span>
+                    ))}
+                  </div>
                 </a>
               )
             })}

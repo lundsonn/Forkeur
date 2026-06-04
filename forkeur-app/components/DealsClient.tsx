@@ -21,6 +21,7 @@ type ActiveSet = Set<Exclude<DealFilter, 'all'>>
 
 export default function DealsClient({ deals }: { deals: DealItem[] }) {
   const [active, setActive] = useState<ActiveSet>(new Set())
+  const [search, setSearch] = useState('')
 
   const tNav = useTranslations('nav')
   const tDeals = useTranslations('deals')
@@ -49,9 +50,12 @@ export default function DealsClient({ deals }: { deals: DealItem[] }) {
   const counts = useMemo(() => filterCounts(deals), [deals])
 
   const visible = useMemo(() => {
-    const matched = deals.filter((d) => matchesFilter(d, active))
+    const q = search.toLowerCase()
+    const matched = deals.filter(
+      (d) => matchesFilter(d, active) && (!q || d.restaurant_name.toLowerCase().includes(q))
+    )
     return sortDeals(matched, active)
-  }, [deals, active])
+  }, [deals, active, search])
 
   function toggle(key: DealFilter) {
     if (key === 'all') { setActive(new Set()); return }
@@ -88,6 +92,20 @@ export default function DealsClient({ deals }: { deals: DealItem[] }) {
       <p className="text-sm text-stone-400 mb-5">
         {tDeals('subtitle', { count: deals.length })}
       </p>
+
+      {/* Search */}
+      <div className="flex items-center gap-2.5 border border-stone-200 rounded-xl px-4 py-3 mb-4">
+        <span className="text-stone-400 text-sm">🔍</span>
+        <input
+          className="flex-1 text-sm outline-none placeholder:text-stone-400"
+          placeholder={tDeals('search_placeholder')}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {search && (
+          <button type="button" onClick={() => setSearch('')} className="text-stone-300 text-xs">✕</button>
+        )}
+      </div>
 
       {/* Filter pills */}
       <div className="flex gap-2 overflow-x-auto pb-2 mb-5 scrollbar-hide">

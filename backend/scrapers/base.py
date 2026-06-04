@@ -4,6 +4,7 @@ import math
 import os
 import random
 import re as _re
+from contextlib import asynccontextmanager
 from playwright.async_api import async_playwright, Browser, Page
 from playwright_stealth import Stealth as _Stealth
 
@@ -64,10 +65,13 @@ async def new_browser(lang: str = "fr-BE", headed: bool = False) -> Browser:
         f"--lang={lang}",
         "--disable-blink-features=AutomationControlled",
         "--disable-infobars",
-        "--window-size=1920,1080",
+        "--window-size=1280,800",      # smaller framebuffer; was 1920x1080
         "--disable-dev-shm-usage",
         "--no-first-run",
         "--no-default-browser-check",
+        "--js-flags=--max-old-space-size=512",  # cap V8 heap per renderer (default ~1.4 GB)
+        "--disk-cache-size=1",                  # kill HTTP cache in network process
+        "--media-cache-size=1",
     ]
     if not headed:
         args += ["--disable-gpu", "--disable-extensions"]
@@ -93,12 +97,12 @@ async def new_browser(lang: str = "fr-BE", headed: bool = False) -> Browser:
     return browser
 
 
-async def new_page(browser: Browser, lang: str = "fr-BE") -> Page:
+async def new_page(browser: Browser, lang: str = "fr-BE", block_media: bool = True) -> Page:
     context = await browser.new_context(
         user_agent=_next_ua(),
         locale=lang,
         timezone_id="Europe/Brussels",  # matches Belgian exit IP; mismatch = CF flag
-        viewport={"width": 1920, "height": 1080},
+        viewport={"width": 1280, "height": 800},
         extra_http_headers={"Accept-Language": f"{lang},{lang[:2]};q=0.9,en;q=0.8"},
         java_script_enabled=True,
         bypass_csp=True,
@@ -106,6 +110,15 @@ async def new_page(browser: Browser, lang: str = "fr-BE") -> Page:
     await context.add_init_script(_STEALTH_SCRIPT)
     page = await context.new_page()
     await _stealth.apply_stealth_async(page)
+    if block_media:
+        # Images and media are not needed for data scraping and are the biggest
+        # contributors to renderer RSS and the network-service process cache.
+        await page.route(
+            "**/*",
+            lambda route: route.abort()
+            if route.request.resource_type in {"image", "media"}
+            else route.continue_(),
+        )
     return page
 
 
@@ -170,6 +183,67 @@ def check_cloudflare(title: str) -> None:
 
 def noop_log(line: str) -> None:
     pass
+
+
+# ── Shared browser singleton ─────────────────────────────────────────────────
+# All headless scrapers share one Chromium process. Each gets an isolated
+# context (cookies, storage, network state). Their asyncio.sleep() / wait_for*
+# gaps interleave in the event loop so the total wall time collapses to the
+# slowest scraper rather than the sum.
+# Headed scrapers (takeaway) always get a private browser — can't mix flags.
+
+_shared_browser: Browser | None = None
+_browser_refcount: int = 0
+_browser_lock: asyncio.Lock | None = None
+
+
+def _get_lock() -> asyncio.Lock:
+    global _browser_lock
+    if _browser_lock is None:
+        _browser_lock = asyncio.Lock()
+    return _browser_lock
+
+
+@asynccontextmanager
+async def browser_session(lang: str = "fr-BE", headed: bool = False):
+    """Async context manager yielding a browser.
+
+    Headless: returns (or creates) the shared browser, ref-counted.
+              Closes the browser when the last user exits.
+    Headed:   always creates a private browser; closes it on exit.
+    """
+    global _shared_browser, _browser_refcount
+
+    if headed:
+        browser = await new_browser(lang=lang, headed=True)
+        try:
+            yield browser
+        finally:
+            try:
+                await browser.close()
+            except Exception:
+                pass
+        return
+
+    lock = _get_lock()
+    async with lock:
+        if _shared_browser is None or not _shared_browser.is_connected():
+            _shared_browser = await new_browser(lang=lang, headed=False)
+            _browser_refcount = 0
+        _browser_refcount += 1
+
+    try:
+        yield _shared_browser
+    finally:
+        async with lock:
+            _browser_refcount -= 1
+            if _browser_refcount <= 0 and _shared_browser is not None:
+                try:
+                    await _shared_browser.close()
+                except Exception:
+                    pass
+                _shared_browser = None
+                _browser_refcount = 0
 
 
 def parse_menu_price(val: str | float | int | None, *, is_cents: bool = False) -> float | None:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import httpx
 from typing import Literal
 from uuid import UUID
 
@@ -41,6 +43,33 @@ class ClaimOut(BaseModel):
     restaurants: dict | None = None
 
 
+def _notify_new_claim(body: ClaimIn, claim_id: str) -> None:
+    """Fire-and-forget email notification via Resend. Silently skips if not configured."""
+    api_key = os.getenv("RESEND_API_KEY")
+    notify_to = os.getenv("NOTIFICATION_EMAIL")
+    if not api_key or not notify_to:
+        return
+    type_labels = {"add_url": "Add URL", "new_listing": "New listing", "remove": "Remove"}
+    restaurant = body.restaurant_name_free or str(body.restaurant_id or "unknown")
+    subject = f"[Forkeur] New owner inquiry — {type_labels.get(body.inquiry_type, body.inquiry_type)}: {restaurant}"
+    html = (
+        f"<p><strong>Type:</strong> {body.inquiry_type}</p>"
+        f"<p><strong>Restaurant:</strong> {restaurant}</p>"
+        f"<p><strong>Email:</strong> {body.owner_email}</p>"
+        + (f"<p><strong>URL:</strong> {body.direct_order_url}</p>" if body.direct_order_url else "")
+        + f"<p><a href='http://178.104.57.72:5173/claims'>Review in admin →</a></p>"
+    )
+    try:
+        httpx.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={"from": "Forkeur <noreply@forkeur.be>", "to": [notify_to], "subject": subject, "html": html},
+            timeout=5,
+        )
+    except Exception:
+        pass  # never block the claim submission
+
+
 @router.post("", status_code=201)
 async def submit_claim(body: ClaimIn):
     claim_id = db.insert_claim(
@@ -50,6 +79,7 @@ async def submit_claim(body: ClaimIn):
         direct_order_url=str(body.direct_order_url) if body.direct_order_url else None,
         restaurant_name_free=body.restaurant_name_free,
     )
+    _notify_new_claim(body, claim_id)
     return {"claim_id": claim_id}
 
 

@@ -1,5 +1,6 @@
 import { RestaurantSummary } from '@/lib/queries'
 import { centsToEuro, PLATFORM_COLORS, type Platform } from '@/lib/basket'
+import OpenStatusBadge from './OpenStatusBadge'
 
 const PLATFORM_SHORT: Record<Platform, string> = {
   uber_eats: 'UE',
@@ -85,6 +86,7 @@ export default function RestaurantCard({ restaurant, isLast, directBadge, saving
                 <p className="text-sm font-bold text-stone-900">
                   {centsToEuro(l.delivery_fee_cents)}
                 </p>
+                <OpenStatusBadge openingHours={l.opening_hours} isAvailable={l.is_available} />
               </div>
             )
           })}

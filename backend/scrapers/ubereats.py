@@ -3,17 +3,16 @@ import asyncio
 import json
 from typing import Callable
 from models import ScraperConfig, ScraperResult
-from scrapers.base import new_browser, new_page, check_cloudflare, noop_log
+from scrapers.base import browser_session, new_page, check_cloudflare, noop_log
 from scrapers.promos import classify_promo, extract_min_order, parse_promo_texts
 import db
 
 
 async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -> ScraperResult:
     log_fn("Starting UberEats scraper")
-    browser = await new_browser(lang="fr-BE")
     records_saved = 0
 
-    try:
+    async with browser_session(lang="fr-BE") as browser:
         page = await new_page(browser, lang="fr-BE")
 
         feed_pages: list[str] = []
@@ -153,6 +152,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 })
             except ValueError:
                 continue  # junk entry filtered by db._is_junk
+            hours = _parse_regular_hours(r.get("_store") or {})
             lid = db.upsert_listing({
                 "restaurant_id": rid,
                 "platform": "uber_eats",
@@ -162,6 +162,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 "eta_max": _parse_eta_max(r.get("eta")),
                 "delivery_fee": r.get("delivery_fee"),
                 "discount_label": r.get("discount"),
+                **({"opening_hours": hours} if hours else {}),
             })
             promos = _parse_promotions(r.get("_store") or {})
             promo_total += db.upsert_promotions(lid, promos)
@@ -284,6 +285,9 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                     rich_promos = _parse_promotions(store_obj)
                     if rich_promos:
                         db.upsert_promotions(lid, rich_promos)
+                    rich_hours = _parse_regular_hours(store_obj)
+                    if rich_hours:
+                        db.patch_listing(lid, {"opening_hours": rich_hours})
                 log_fn(f"Menu: {i+1}/{n} — {name} — {count} items saved")
             except Exception as exc:
                 log_fn(f"Menu: {i+1}/{n} — {name} — parse/save error: {exc}")
@@ -295,8 +299,40 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
             menu_items_saved=menu_items_saved,
         )
 
-    finally:
-        await browser.close()
+
+_DAY_MAP = {
+    "MONDAY": "mon", "TUESDAY": "tue", "WEDNESDAY": "wed",
+    "THURSDAY": "thu", "FRIDAY": "fri", "SATURDAY": "sat", "SUNDAY": "sun",
+}
+
+def _parse_regular_hours(store: dict) -> dict | None:
+    """Extract weekly opening hours from a UberEats store/storeInfo object.
+
+    Tries multiple known field names since the API has varied them over time.
+    Returns {"mon": ["11:00", "22:30"], ...} or None if unavailable.
+    """
+    slots = (
+        store.get("regularHours")
+        or store.get("storeHours")
+        or store.get("operatingHours")
+        or store.get("hoursV2")
+    )
+    if not slots or not isinstance(slots, list):
+        return None
+    result: dict[str, list[str]] = {}
+    for slot in slots:
+        if not isinstance(slot, dict):
+            continue
+        day_raw = slot.get("dayOfWeek") or slot.get("day") or ""
+        day = _DAY_MAP.get(str(day_raw).upper())
+        if not day:
+            continue
+        start = slot.get("startTime") or slot.get("open") or slot.get("from") or ""
+        end = slot.get("endTime") or slot.get("close") or slot.get("to") or ""
+        if not start or not end:
+            continue
+        result[day] = [str(start)[:5], str(end)[:5]]
+    return result or None
 
 
 def _extract_store_image(store: dict) -> str | None:

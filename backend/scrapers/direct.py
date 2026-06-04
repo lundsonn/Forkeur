@@ -11,7 +11,7 @@ import re
 from typing import Callable
 import httpx
 from models import ScraperResult
-from scrapers.base import new_browser, new_page, noop_log
+from scrapers.base import browser_session, new_page, noop_log
 from scrapers.direct_classify import classify_url, is_junk_url
 import db
 
@@ -430,15 +430,11 @@ async def _enrich_neighborhoods(log: Callable) -> None:
 
 async def run(config=None, log: Callable = noop_log) -> ScraperResult:
     """Run all three phases: enrich existing, discover new, geocode neighborhoods."""
-    browser = await new_browser(headed=False)
-    page = await new_page(browser)
     saved = 0
-
-    try:
+    async with browser_session(headed=False) as browser:
+        page = await new_page(browser)
         saved += await _enrich_existing(page, log)
         saved += await _discover_maps(page, log)
-    finally:
-        await browser.close()
 
     await _enrich_neighborhoods(log)
 

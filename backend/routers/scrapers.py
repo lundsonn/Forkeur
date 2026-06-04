@@ -43,9 +43,8 @@ _running: set[str] = set()
 _tasks: dict[str, asyncio.Task] = {}
 _fees_running: bool = False
 
-# All Playwright scrapers share one slot — 4GB server can't fit two browsers.
-_PLAYWRIGHT_SCRAPERS = {"ubereats", "deliveroo", "takeaway", "direct", "dom_menu"}
-_browser_sem = asyncio.Semaphore(1)
+# No semaphore needed — all Playwright scrapers share one browser instance
+# via base.browser_session(). Their asyncio sleeps/waits interleave naturally.
 
 
 def _is_transient_error(e: Exception) -> bool:
@@ -123,11 +122,6 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
                 max_menus=body.max_menus,
                 max_items=10 if body.test_mode else None,
             )
-            sem = _browser_sem if platform in _PLAYWRIGHT_SCRAPERS else None
-            if sem:
-                log_fn(f"  waiting for browser slot...")
-                await sem.acquire()
-                log_fn(f"  browser slot acquired")
             # One automatic retry for transient DB/network errors.
             last_exc: Exception | None = None
             for attempt in range(2):
@@ -168,8 +162,6 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
             db.finish_run(run_id, "failed", error_msg=f"Process killed: {type(e).__name__}")
             raise
         finally:
-            if sem:
-                sem.release()
             _running.discard(platform)
             _tasks.pop(platform, None)
 

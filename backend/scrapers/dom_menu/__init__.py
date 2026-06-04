@@ -17,7 +17,7 @@ from typing import Callable
 from urllib.parse import urlparse
 
 from models import ScraperConfig, ScraperResult
-from scrapers.base import new_browser, noop_log
+from scrapers.base import browser_session, noop_log
 from scrapers.dom_menu import generic
 from scrapers.dom_menu.sites import get_adapter
 import db
@@ -42,8 +42,7 @@ async def run(config: ScraperConfig | None = None, log: Callable = noop_log) -> 
         listings = listings[:max_items]
 
     total_saved = 0
-    browser = await new_browser(headed=False)
-    try:
+    async with browser_session(headed=False) as browser:
         for listing in listings:
             url = listing["url"]
             host = urlparse(url).netloc.lower()
@@ -63,8 +62,6 @@ async def run(config: ScraperConfig | None = None, log: Callable = noop_log) -> 
             total_saved += saved
             log(f"     {saved} items saved")
             await asyncio.sleep(1.0)
-    finally:
-        await browser.close()
 
     log(f"\ndone — {total_saved} total items")
     return ScraperResult(records_saved=total_saved)

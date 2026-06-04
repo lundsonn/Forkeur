@@ -31,7 +31,8 @@
     "subtitle": "{count} actieve aanbiedingen op UberEats, Deliveroo & Takeaway",
     "none": "Geen aanbiedingen in deze categorie.",
     "min_order": "Min. €{amount}",
-    "order_on": "Bestellen bij {platform} →"
+    "order_on": "Bestellen bij {platform} →",
+    "search_placeholder": "Zoek een restaurant"
   },
   "basket": {
     "no_menu": "Nog geen menugegevens beschikbaar.",
@@ -99,6 +100,11 @@
     "price_compare": "Menuprijsverschillen",
     "cheaper_on": "{pct}% goedkoper op {platform}",
     "meta_description": "{name} · {cuisine} · Vergelijk bezorgkosten op UberEats, Deliveroo & Takeaway in Brussel."
+  },
+  "hours": {
+    "closed": "Gesloten",
+    "closes_at": "Sluit om {time}",
+    "unavailable": "Niet beschikbaar"
   },
   "meta": {
     "home_title": "Forkeur — Vergelijk voedselprijzen in Brussel",

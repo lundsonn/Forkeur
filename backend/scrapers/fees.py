@@ -11,7 +11,7 @@ import json
 import re
 from typing import Callable
 
-from scrapers.base import new_browser, new_page, check_cloudflare, noop_log, CloudflareBlockedError
+from scrapers.base import browser_session, new_page, check_cloudflare, noop_log, CloudflareBlockedError
 import db
 
 _BRUSSELS_ADDRESS = "Rue de la Loi 16, Bruxelles"
@@ -22,10 +22,9 @@ _BRUSSELS_ADDRESS = "Rue de la Loi 16, Bruxelles"
 async def run_ubereats(log_fn: Callable[[str], None] = noop_log) -> int:
     """Re-load UberEats feed to capture fareInfo for known listings. Returns update count."""
     log_fn("Fees/UberEats: loading feed")
-    browser = await new_browser(lang="fr-BE")
     updated = 0
 
-    try:
+    async with browser_session(lang="fr-BE") as browser:
         page = await new_page(browser, lang="fr-BE")
         feed_pages: list[str] = []
 
@@ -116,9 +115,6 @@ async def run_ubereats(log_fn: Callable[[str], None] = noop_log) -> int:
         log_fn(f"Fees/UberEats: updated {updated} listings")
         return updated
 
-    finally:
-        await browser.close()
-
 
 # ── Deliveroo ────────────────────────────────────────────────────────────────
 
@@ -186,11 +182,10 @@ async def run_deliveroo(log_fn: Callable[[str], None] = noop_log) -> int:
     if not listings:
         return 0
 
-    browser = await new_browser(lang="fr-BE")
     updated = 0
     n = len(listings)
 
-    try:
+    async with browser_session(lang="fr-BE") as browser:
         page = await new_page(browser, lang="fr-BE")
 
         # Must set address first so Deliveroo shows delivery fee on menu pages
@@ -245,9 +240,6 @@ async def run_deliveroo(log_fn: Callable[[str], None] = noop_log) -> int:
         log_fn(f"Fees/Deliveroo: updated {updated} listings")
         return updated
 
-    finally:
-        await browser.close()
-
 
 # ── Takeaway ─────────────────────────────────────────────────────────────────
 
@@ -280,11 +272,10 @@ async def run_takeaway(log_fn: Callable[[str], None] = noop_log) -> int:
     if not listings:
         return 0
 
-    browser = await new_browser(lang="fr-BE")
     updated = 0
     n = len(listings)
 
-    try:
+    async with browser_session(lang="fr-BE") as browser:
         page = await new_page(browser, lang="fr-BE")
 
         for i, listing in enumerate(listings):
@@ -336,9 +327,6 @@ async def run_takeaway(log_fn: Callable[[str], None] = noop_log) -> int:
 
         log_fn(f"Fees/Takeaway: updated {updated} listings")
         return updated
-
-    finally:
-        await browser.close()
 
 
 # ── Combined entry point ─────────────────────────────────────────────────────

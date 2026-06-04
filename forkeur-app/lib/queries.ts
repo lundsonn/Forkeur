@@ -14,7 +14,7 @@ export type RestaurantSummary = {
   image_url: string | null
   rating: number | null
   direct_url_type: string | null
-  listings: { platform: Platform; delivery_fee_cents: number | null; eta_min: number | null }[]
+  listings: { platform: Platform; delivery_fee_cents: number | null; eta_min: number | null; is_available: boolean; opening_hours: OpeningHours | null }[]
   cheapest: {
     platform: Platform
     fee_label: string
@@ -28,6 +28,8 @@ export type PromoItem = {
   value: number | null
 }
 
+export type OpeningHours = Record<string, [string, string]> // {mon: ["11:00","22:30"], ...}
+
 export type PlatformListing = {
   id: string
   platform: Platform
@@ -40,6 +42,8 @@ export type PlatformListing = {
   eta_label: string | null
   rating: number | null
   last_scraped_at: string | null
+  is_available: boolean
+  opening_hours: OpeningHours | null
   promotions: PromoItem[]
 }
 
@@ -92,7 +96,7 @@ export async function getRestaurants(): Promise<{
     .from('restaurants')
     .select(`
       id, name, cuisine, neighborhood, lat, lng, order_url, image_url,
-      platform_listings ( platform, delivery_fee, eta_min, rating, url_type )
+      platform_listings ( platform, delivery_fee, eta_min, rating, url_type, is_available, opening_hours )
     `)
 
   if (error) throw new Error(`getRestaurants: ${error.message}`)
@@ -105,12 +109,16 @@ export async function getRestaurants(): Promise<{
         eta_min: number | null
         rating: number | null
         url_type: string | null
+        is_available: boolean | null
+        opening_hours: OpeningHours | null
       }[]
 
       const listings = rawListings.map((l) => ({
         platform: l.platform as Platform,
         delivery_fee_cents: feeCents(l.delivery_fee),
         eta_min: l.eta_min ?? null,
+        is_available: l.is_available !== false,
+        opening_hours: l.opening_hours ?? null,
       }))
 
       const directListing = rawListings.find((l) => l.platform === 'direct') ?? null
@@ -259,7 +267,7 @@ export async function getRestaurantWithListings(
     .select(`
       id, name, neighborhood, cuisine, phone, order_url, image_url,
       platform_listings (
-        id, platform, url, url_type,
+        id, platform, url, url_type, is_available, opening_hours,
         delivery_fee, min_order, eta_min, eta_max, rating, last_scraped_at,
         menu_items ( title, price, catalog_name, image_url, description ),
         promotions ( promo_type, label, value )
@@ -282,6 +290,8 @@ export async function getRestaurantWithListings(
     eta_label: etaLabel(l.eta_min, l.eta_max),
     rating: l.rating !== null ? parseFloat(String(l.rating)) : null,
     last_scraped_at: l.last_scraped_at ?? null,
+    is_available: l.is_available !== false,
+    opening_hours: (l.opening_hours as OpeningHours | null) ?? null,
     promotions: (l.promotions ?? [])
       .filter((p: any) => p.promo_type !== 'other' && p.promo_type !== 'spend_save')
       .map((p: any): PromoItem => ({
