@@ -231,7 +231,10 @@ export async function getDeals(): Promise<DealItem[]> {
 export function normalizeTitle(title: string): string {
   return title
     .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '')
+    .normalize('NFD').replace(/\p{Mn}/gu, '')  // strip diacritics
+    .replace(/['']/g, '')  // remove apostrophes without space
     .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')  // replace remaining punctuation with space
     .replace(/\s+/g, ' ')
     .trim()
 }

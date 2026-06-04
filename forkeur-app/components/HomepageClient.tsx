@@ -9,12 +9,6 @@ import LangToggle from './LangToggle'
 
 type SortBy = 'best' | 'cheapest' | 'fastest'
 
-const SORT_LABELS: Record<SortBy, string> = {
-  best: 'Best match',
-  cheapest: 'Cheapest',
-  fastest: 'Fastest',
-}
-
 export default function HomepageClient({
   restaurants,
   cuisines,
@@ -36,6 +30,7 @@ export default function HomepageClient({
   const tResults = useTranslations('results')
   const tDirect = useTranslations('direct')
   const tCard = useTranslations('card')
+  const tSort = useTranslations('sort')
 
   const neighborhoods = useMemo(() => {
     const counts = new Map<string, number>()
@@ -207,7 +202,7 @@ export default function HomepageClient({
               onClick={() => setNeighborhoodSheetOpen(true)}
               className="flex items-center gap-1 rounded-full bg-[#EDEDEA] px-3 py-1 text-xs font-medium text-[#888780]"
             >
-              All areas ▾
+              {tSort('all_areas')}
             </button>
           )}
         </div>
@@ -225,7 +220,7 @@ export default function HomepageClient({
                   : 'text-[#888780]'
               }`}
             >
-              {SORT_LABELS[s]}
+              {tSort(s)}
             </button>
           ))}
         </div>
@@ -286,7 +281,7 @@ export default function HomepageClient({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#EDEDEA] sticky top-0 bg-white">
-              <span className="font-semibold text-sm text-[#1A1A1A]">Filter by area</span>
+              <span className="font-semibold text-sm text-[#1A1A1A]">{tSort('filter_by_area')}</span>
               <button
                 type="button"
                 onClick={() => setNeighborhoodSheetOpen(false)}
@@ -302,7 +297,7 @@ export default function HomepageClient({
                 onClick={() => { setSelectedNeighborhood(null); setNeighborhoodSheetOpen(false) }}
               >
                 <span className={`text-sm ${!selectedNeighborhood ? 'font-semibold text-[#1A1A1A]' : 'text-[#888780]'}`}>
-                  All areas
+                  {tSort('all_areas_option')}
                 </span>
                 <span className="text-xs text-[#888780]">{restaurants.length}</span>
               </button>

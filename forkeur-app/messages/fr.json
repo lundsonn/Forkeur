@@ -79,6 +79,14 @@
     "direct_cta_website": "Site du restaurant",
     "direct_cta_phone": "Appeler pour commander"
   },
+  "sort": {
+    "best": "Meilleur match",
+    "cheapest": "Moins cher",
+    "fastest": "Plus rapide",
+    "all_areas": "Toutes les zones ▾",
+    "all_areas_option": "Toutes les zones",
+    "filter_by_area": "Filtrer par zone"
+  },
   "meta": {
     "home_title": "Forkeur — Comparez les prix des restos à Bruxelles",
     "home_description": "Comparez les prix des restaurants sur UberEats, Deliveroo et Takeaway à Bruxelles.",

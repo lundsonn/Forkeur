@@ -79,6 +79,14 @@
     "direct_cta_website": "Website restaurant",
     "direct_cta_phone": "Bellen om te bestellen"
   },
+  "sort": {
+    "best": "Beste match",
+    "cheapest": "Goedkoopst",
+    "fastest": "Snelst",
+    "all_areas": "Alle zones ▾",
+    "all_areas_option": "Alle zones",
+    "filter_by_area": "Filteren op zone"
+  },
   "meta": {
     "home_title": "Forkeur — Vergelijk voedselprijzen in Brussel",
     "home_description": "Vergelijk restaurantprijzen op UberEats, Deliveroo en Takeaway in Brussel.",
