@@ -9,12 +9,27 @@ const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin']
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('meta')
+  const title = t('home_title')
+  const description = t('home_description')
   return {
     title: {
-      default: t('home_title'),
+      default: title,
       template: '%s | Forkeur',
     },
-    description: t('home_description'),
+    description,
+    openGraph: {
+      siteName: 'Forkeur',
+      title,
+      description,
+      locale: 'fr_BE',
+      alternateLocale: ['en_GB', 'nl_BE'],
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary',
+      title,
+      description,
+    },
   }
 }
 

@@ -5,9 +5,13 @@ import DealsClient from '@/components/DealsClient'
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('meta')
+  const title = t('deals_title')
+  const description = t('deals_description')
   return {
-    title: t('deals_title'),
-    description: t('deals_description'),
+    title,
+    description,
+    openGraph: { title, description },
+    twitter: { card: 'summary', title, description },
   }
 }
 

@@ -5,6 +5,7 @@ import { getTranslations } from 'next-intl/server'
 import { getRestaurantWithListings, type PromoItem } from '@/lib/queries'
 import { PLATFORM_LABELS, PLATFORM_COLORS } from '@/lib/basket'
 import BasketSimulator from '@/components/BasketSimulator'
+import StaleRefresh from '@/components/StaleRefresh'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function promoBadgeText(tBadge: any, promo: PromoItem): string {
@@ -119,6 +120,7 @@ export default async function Page({
 
   return (
     <div className="max-w-md mx-auto">
+      <StaleRefresh lastScrapedAt={mostRecentScrape} />
       {/* Nav */}
       <div className="flex items-center px-5 pt-5 pb-3">
         <Link href="/" className="text-stone-500 hover:text-stone-800 text-lg mr-auto">‹</Link>
