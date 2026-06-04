@@ -13,8 +13,14 @@ from __future__ import annotations
 
 from typing import Callable
 
+from scrapers.dom_menu.sites import sq_menu, odoo_pos
+
 # domain-fragment → scrape function
-_REGISTRY: dict[str, Callable] = {}
+_REGISTRY: dict[str, Callable] = {
+    "sq-menu.com":    sq_menu.scrape,
+    "foodbooking.com": sq_menu.scrape,  # same SPA
+    "odoo.com":       odoo_pos.scrape,
+}
 
 
 def get_adapter(host: str) -> Callable | None:
