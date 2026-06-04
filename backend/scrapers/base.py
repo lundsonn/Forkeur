@@ -122,6 +122,26 @@ async def new_page(browser: Browser, lang: str = "fr-BE", block_media: bool = Tr
     return page
 
 
+async def new_sibling_page(page: Page, block_media: bool = True) -> Page:
+    """Open another page in the SAME browser context as `page`.
+
+    Sibling pages share cookies, localStorage and network state, so they inherit
+    a delivery-address session (e.g. UberEats location set during address entry)
+    that a fresh `new_page()` context would not have. Used to parallelize menu
+    scraping across N pages while staying inside the one trusted session.
+    """
+    sib = await page.context.new_page()
+    await _stealth.apply_stealth_async(sib)
+    if block_media:
+        await sib.route(
+            "**/*",
+            lambda route: route.abort()
+            if route.request.resource_type in {"image", "media"}
+            else route.continue_(),
+        )
+    return sib
+
+
 async def _move_mouse_human(page: Page, x: float, y: float) -> None:
     """Move mouse to (x, y) in a curved, non-linear path with random speed."""
     cur_x, cur_y = random.uniform(100, 800), random.uniform(100, 600)
