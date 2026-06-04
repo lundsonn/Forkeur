@@ -312,6 +312,17 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
             except Exception as exc:
                 log_fn(f"Menu: {name} — parse/save error: {exc}")
 
+        async def _fresh_worker_page():
+            """Recreate a worker's sibling page, bounded so a wedged/poisoned
+            context can't hang the worker forever. Returns the page or None."""
+            try:
+                wp = await asyncio.wait_for(new_sibling_page(page), timeout=30)
+                await wp.goto(listing_url, wait_until="domcontentloaded", timeout=20000)
+                await asyncio.sleep(2)
+                return wp
+            except Exception:
+                return None
+
         async def _worker(wid: int, slice_items: list) -> None:
             wpage = await new_sibling_page(page)
             try:
@@ -325,26 +336,39 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                             await asyncio.sleep(2)
                         except Exception:
                             pass
+                    needs_recover = False
                     try:
-                        await _scrape_one(wpage, r, lid)
+                        # Hard per-restaurant wall cap — a page crash can poison the
+                        # shared context and wedge Playwright past its own timeouts.
+                        await asyncio.wait_for(_scrape_one(wpage, r, lid), timeout=80)
+                    except asyncio.TimeoutError:
+                        log_fn(f"Menu worker {wid}: {r.get('name','?')} timed out, requeuing")
+                        async with _fail_lock:
+                            failed_listings.append((r, lid))
+                        needs_recover = True  # page likely wedged
                     except Exception:
-                        # Page crashed mid-scrape — recreate this worker's sibling page.
+                        # Crash bubbled from _scrape_one (already queued the item).
                         log_fn(f"Menu worker {wid}: page crashed, recreating")
+                        needs_recover = True
+                    if needs_recover:
                         try:
                             await wpage.close()
                         except Exception:
                             pass
-                        wpage = await new_sibling_page(page)
-                        try:
-                            await wpage.goto(listing_url, wait_until="domcontentloaded", timeout=20000)
-                            await asyncio.sleep(2)
-                        except Exception:
-                            pass
+                        wpage = await _fresh_worker_page()
+                        if wpage is None:
+                            # Context unrecoverable — hand the rest to the retry pass.
+                            remaining = slice_items[k + 1:]
+                            log_fn(f"Menu worker {wid}: unrecoverable, abandoning {len(remaining)} to retry")
+                            async with _fail_lock:
+                                failed_listings.extend(remaining)
+                            return
             finally:
-                try:
-                    await wpage.close()
-                except Exception:
-                    pass
+                if wpage is not None:
+                    try:
+                        await wpage.close()
+                    except Exception:
+                        pass
 
         # 4 parallel workers; round-robin split keeps slices balanced.
         WORKERS = 4
