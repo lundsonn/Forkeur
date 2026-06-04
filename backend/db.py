@@ -434,6 +434,26 @@ def get_claims(verified: bool | None = None) -> list[dict]:
     return q.order("claimed_at", desc=True).execute().data
 
 
+_SSRF_BLOCKLIST = re.compile(
+    r'localhost|127\.|0\.0\.0\.0|169\.254\.|10\.\d|172\.(1[6-9]|2\d|3[01])\.|192\.168\.'
+    r'|\.internal|\.local$|oast\.|interactsh\.|burpcollaborator\.|canarytokens\.',
+    re.IGNORECASE,
+)
+
+
+def _validate_order_url(url: str) -> None:
+    """Raise ValueError if the URL looks unsafe to publish."""
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError("URL must be http or https")
+    host = parsed.netloc.lower().split(":")[0]
+    if not host or "." not in host:
+        raise ValueError("URL must have a valid domain")
+    if _SSRF_BLOCKLIST.search(host):
+        raise ValueError(f"URL domain not allowed: {host}")
+
+
 def approve_claim(claim_id: str) -> None:
     """Approve a claim: for add_url type, update restaurants.order_url and upsert direct listing."""
     client = get_client()
@@ -445,6 +465,8 @@ def approve_claim(claim_id: str) -> None:
     claim = rows[0]
 
     if claim.get("inquiry_type") == "add_url" and claim.get("restaurant_id") and claim.get("direct_order_url"):
+        _validate_order_url(claim["direct_order_url"])
+
         client.table("restaurants").update(
             {"order_url": claim["direct_order_url"]}
         ).eq("id", claim["restaurant_id"]).execute()
