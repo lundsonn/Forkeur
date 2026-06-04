@@ -87,6 +87,12 @@
     "all_areas_option": "Alle zones",
     "filter_by_area": "Filteren op zone"
   },
+  "detail": {
+    "platform_fees": "Bezorgkosten",
+    "just_now": "Zojuist bijgewerkt",
+    "hours": "{hours}u geleden bijgewerkt",
+    "days": "{days}d geleden bijgewerkt"
+  },
   "meta": {
     "home_title": "Forkeur — Vergelijk voedselprijzen in Brussel",
     "home_description": "Vergelijk restaurantprijzen op UberEats, Deliveroo en Takeaway in Brussel.",

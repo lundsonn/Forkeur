@@ -87,6 +87,12 @@
     "all_areas_option": "Toutes les zones",
     "filter_by_area": "Filtrer par zone"
   },
+  "detail": {
+    "platform_fees": "Frais de livraison",
+    "just_now": "À l'instant",
+    "hours": "Mis à jour il y a {hours}h",
+    "days": "Mis à jour il y a {days}j"
+  },
   "meta": {
     "home_title": "Forkeur — Comparez les prix des restos à Bruxelles",
     "home_description": "Comparez les prix des restaurants sur UberEats, Deliveroo et Takeaway à Bruxelles.",

@@ -33,6 +33,7 @@ export type PlatformListing = {
   min_order_label: string | null
   eta_label: string | null
   rating: number | null
+  last_scraped_at: string | null
 }
 
 export type MenuItemWithPrices = {
@@ -50,6 +51,7 @@ export type RestaurantDetail = {
   cuisine: string[]
   phone: string | null
   order_url: string | null
+  image_url: string | null
   listings: PlatformListing[]
   menuItems: MenuItemWithPrices[]
 }
@@ -247,10 +249,10 @@ export async function getRestaurantWithListings(
   const { data, error } = await supabase
     .from('restaurants')
     .select(`
-      id, name, neighborhood, cuisine, phone, order_url,
+      id, name, neighborhood, cuisine, phone, order_url, image_url,
       platform_listings (
         id, platform, url, url_type,
-        delivery_fee, min_order, eta_min, eta_max, rating,
+        delivery_fee, min_order, eta_min, eta_max, rating, last_scraped_at,
         menu_items ( title, price, catalog_name, image_url, description )
       )
     `)
@@ -270,6 +272,7 @@ export async function getRestaurantWithListings(
     min_order_label: l.min_order != null ? `min €${Number(l.min_order).toFixed(2)}` : null,
     eta_label: etaLabel(l.eta_min, l.eta_max),
     rating: l.rating !== null ? parseFloat(String(l.rating)) : null,
+    last_scraped_at: l.last_scraped_at ?? null,
   }))
 
   const itemMap = new Map<string, MenuItemWithPrices>()
@@ -298,6 +301,7 @@ export async function getRestaurantWithListings(
     cuisine: data.cuisine ? [data.cuisine] : [],
     phone: (data as any).phone ?? null,
     order_url: (data as any).order_url ?? null,
+    image_url: (data as any).image_url ?? null,
     listings,
     menuItems: Array.from(itemMap.values()),
   }

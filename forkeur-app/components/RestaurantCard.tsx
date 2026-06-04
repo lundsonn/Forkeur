@@ -16,7 +16,7 @@ type Props = {
 }
 
 export default function RestaurantCard({ restaurant, isLast, directBadge, savings }: Props) {
-  const { name, cuisine, listings, cheapest, order_url, direct_url_type } = restaurant
+  const { name, cuisine, listings, cheapest, order_url, direct_url_type, image_url } = restaurant
 
   const tiles = listings.filter((l) => l.delivery_fee_cents !== null)
   const savingsLabel = savings && savings > 0
@@ -25,18 +25,31 @@ export default function RestaurantCard({ restaurant, isLast, directBadge, saving
 
   return (
     <div className={`py-4 ${!isLast ? 'border-b border-stone-100' : ''}`}>
-      <div className="flex items-start justify-between mb-3">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-stone-900">{name}</p>
-          <p className="text-xs text-stone-400 mt-0.5">{cuisine.join(' · ')}</p>
-        </div>
-        <div className="flex items-center gap-2 ml-4 shrink-0 mt-0.5">
-          {savingsLabel && (
-            <span className="bg-[#1E8A5A] text-white rounded-full text-xs px-2 py-0.5 font-medium">
-              {savingsLabel}
-            </span>
-          )}
-          <span aria-hidden="true" className="text-stone-300 text-xs">›</span>
+      <div className="flex items-start gap-3 mb-3">
+        {image_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={image_url}
+            alt=""
+            className="w-12 h-12 rounded-lg object-cover shrink-0 bg-stone-100"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+          />
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-stone-900">{name}</p>
+              <p className="text-xs text-stone-400 mt-0.5">{cuisine.join(' · ')}</p>
+            </div>
+            <div className="flex items-center gap-2 ml-4 shrink-0 mt-0.5">
+              {savingsLabel && (
+                <span className="bg-[#1E8A5A] text-white rounded-full text-xs px-2 py-0.5 font-medium">
+                  {savingsLabel}
+                </span>
+              )}
+              <span aria-hidden="true" className="text-stone-300 text-xs">›</span>
+            </div>
+          </div>
         </div>
       </div>
 

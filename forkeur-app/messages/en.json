@@ -87,6 +87,12 @@
     "all_areas_option": "All areas",
     "filter_by_area": "Filter by area"
   },
+  "detail": {
+    "platform_fees": "Delivery fees",
+    "just_now": "Just updated",
+    "hours": "Updated {hours}h ago",
+    "days": "Updated {days}d ago"
+  },
   "meta": {
     "home_title": "Forkeur — Compare food prices in Brussels",
     "home_description": "Compare restaurant prices across UberEats, Deliveroo, and Takeaway in Brussels.",
