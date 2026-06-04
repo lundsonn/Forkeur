@@ -48,19 +48,26 @@ HEADERS = {"User-Agent": "Forkeur/1.0 (food price comparison Brussels; geraud.ma
 
 def reverse_geocode(lat: float, lng: float) -> str | None:
     url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lng}&format=json"
-    try:
-        r = httpx.get(url, headers=HEADERS, timeout=10)
-        r.raise_for_status()
-        data = r.json()
-        addr = data.get("address", {})
-        postcode = addr.get("postcode", "").strip()[:4]
-        if postcode in POSTAL_TO_COMMUNE:
-            return POSTAL_TO_COMMUNE[postcode]
-        # Outside Brussels — use city/town/village
-        return addr.get("city") or addr.get("town") or addr.get("village") or addr.get("municipality")
-    except Exception as e:
-        print(f"  ERROR geocoding ({lat}, {lng}): {e}")
-        return None
+    for attempt in range(4):
+        try:
+            r = httpx.get(url, headers=HEADERS, timeout=10)
+            if r.status_code == 429:
+                wait = 5 * (2 ** attempt)
+                print(f"  429 — sleeping {wait}s")
+                time.sleep(wait)
+                continue
+            r.raise_for_status()
+            addr = r.json().get("address", {})
+            postcode = addr.get("postcode", "").strip()[:4]
+            if postcode in POSTAL_TO_COMMUNE:
+                return POSTAL_TO_COMMUNE[postcode]
+            return addr.get("city") or addr.get("town") or addr.get("village") or addr.get("municipality")
+        except httpx.HTTPStatusError:
+            return None
+        except Exception as e:
+            print(f"  ERROR geocoding ({lat}, {lng}): {e}")
+            return None
+    return None
 
 
 def main() -> None:
@@ -97,7 +104,7 @@ def main() -> None:
         lat, lng = row["lat"], row["lng"]
 
         commune = reverse_geocode(lat, lng)
-        time.sleep(1)  # Nominatim rate limit: 1 req/sec
+        time.sleep(2)  # Nominatim rate limit: be conservative
 
         if not commune:
             print(f"[{i}/{total}] {name!r} → no result, skipping")
