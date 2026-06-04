@@ -288,6 +288,10 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                     rich_hours = _parse_regular_hours(store_obj)
                     if rich_hours:
                         db.patch_listing(lid, {"opening_hours": rich_hours})
+                    else:
+                        # DEBUG: log keys to diagnose hours field name
+                        hour_candidates = {k: type(v).__name__ for k, v in store_obj.items() if "hour" in k.lower() or "schedule" in k.lower() or "time" in k.lower()}
+                        log_fn(f"DEBUG hours keys for {name}: {hour_candidates or list(store_obj.keys())[:15]}")
                 log_fn(f"Menu: {i+1}/{n} — {name} — {count} items saved")
             except Exception as exc:
                 log_fn(f"Menu: {i+1}/{n} — {name} — parse/save error: {exc}")
