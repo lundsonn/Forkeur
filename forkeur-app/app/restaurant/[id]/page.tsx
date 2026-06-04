@@ -2,10 +2,22 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getTranslations } from 'next-intl/server'
-import { getRestaurantWithListings } from '@/lib/queries'
+import { getRestaurantWithListings, type PromoItem } from '@/lib/queries'
 import { PLATFORM_LABELS, PLATFORM_COLORS } from '@/lib/basket'
 import BasketSimulator from '@/components/BasketSimulator'
 import ClaimForm from '@/components/ClaimForm'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function promoBadgeText(tBadge: any, promo: PromoItem): string {
+  switch (promo.promo_type) {
+    case 'bogo': return tBadge('bogo')
+    case 'pct_discount': return promo.value != null ? tBadge('pct_off', { value: Math.round(promo.value) }) : tBadge('pct_off', { value: '' })
+    case 'abs_discount': return promo.value != null ? tBadge('eur_off', { value: promo.value.toFixed(2) }) : tBadge('eur_off', { value: '' })
+    case 'free_delivery': return tBadge('free_delivery')
+    case 'free_item': return tBadge('free_item')
+    default: return promo.label
+  }
+}
 
 function freshnessLabel(isoStr: string): { key: string; values?: Record<string, number> } {
   const ageMs = Date.now() - new Date(isoStr).getTime()
@@ -37,6 +49,7 @@ export default async function Page({
   const data = await getRestaurantWithListings(id)
   const tDirect = await getTranslations('direct')
   const tDetail = await getTranslations('detail')
+  const tBadge = await getTranslations('badge')
 
   if (!data) notFound()
 
@@ -57,6 +70,15 @@ export default async function Page({
   const feeListings = data.listings.filter(
     (l) => l.platform !== 'direct' && l.delivery_fee_cents !== null
   )
+  const sortedFeeListings = [...feeListings].sort(
+    (a, b) => (a.delivery_fee_cents ?? 0) - (b.delivery_fee_cents ?? 0)
+  )
+  const cheapestFee = sortedFeeListings[0] ?? null
+  const mostExpensiveFee = sortedFeeListings[sortedFeeListings.length - 1] ?? null
+  const feeGapCents =
+    feeListings.length >= 2 && cheapestFee && mostExpensiveFee && cheapestFee !== mostExpensiveFee
+      ? (mostExpensiveFee.delivery_fee_cents ?? 0) - (cheapestFee.delivery_fee_cents ?? 0)
+      : 0
 
   return (
     <div className="max-w-md mx-auto">
@@ -107,9 +129,20 @@ export default async function Page({
       {/* Platform fee overview */}
       {feeListings.length > 0 && (
         <div className="px-5 mb-2">
-          <p className="text-[10px] font-semibold tracking-widest text-stone-400 uppercase mb-2">
-            {tDetail('platform_fees')}
-          </p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] font-semibold tracking-widest text-stone-400 uppercase">
+              {tDetail('platform_fees')}
+            </p>
+            {feeGapCents > 0 && cheapestFee && mostExpensiveFee && (
+              <span className="text-[11px] font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
+                {tDetail('cheapest_signal', {
+                  platform: PLATFORM_LABELS[cheapestFee.platform],
+                  amount: (feeGapCents / 100).toFixed(2),
+                  other: PLATFORM_LABELS[mostExpensiveFee.platform],
+                })}
+              </span>
+            )}
+          </div>
           <div className={`grid gap-2 ${feeListings.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
             {feeListings.map((l) => {
               const colors = PLATFORM_COLORS[l.platform]
@@ -139,6 +172,15 @@ export default async function Page({
                   )}
                   {l.min_order_label && (
                     <p className="text-[11px] text-stone-400">{l.min_order_label}</p>
+                  )}
+                  {l.promotions.length > 0 && (
+                    <div className="flex flex-wrap justify-center gap-1 mt-1.5">
+                      {l.promotions.map((p, i) => (
+                        <span key={i} className="text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5 leading-tight">
+                          {promoBadgeText(tBadge, p)}
+                        </span>
+                      ))}
+                    </div>
                   )}
                 </a>
               )

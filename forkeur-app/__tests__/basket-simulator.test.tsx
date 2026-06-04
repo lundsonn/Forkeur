@@ -28,6 +28,8 @@ const makeListing = (platform: PlatformListing['platform'], fee: number | null):
   min_order_label: null,
   eta_label: '25–35 min',
   rating: 4.2,
+  last_scraped_at: null,
+  promotions: [],
 })
 
 const menuItems: MenuItemWithPrices[] = [

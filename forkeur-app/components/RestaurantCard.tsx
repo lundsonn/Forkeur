@@ -19,8 +19,8 @@ export default function RestaurantCard({ restaurant, isLast, directBadge, saving
   const { name, cuisine, listings, cheapest, order_url, direct_url_type, image_url } = restaurant
 
   const tiles = listings.filter((l) => l.delivery_fee_cents !== null)
-  const savingsLabel = savings && savings > 0
-    ? `Save €${(savings / 100).toFixed(2)}`
+  const savingsLabel = savings && savings > 0 && cheapest
+    ? `${PLATFORM_SHORT[cheapest.platform]} · Save €${(savings / 100).toFixed(2)}`
     : null
 
   return (

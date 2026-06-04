@@ -19,6 +19,7 @@ const L = (overrides: Partial<PlatformListing>): PlatformListing => ({
   delivery_fee_cents: 299, delivery_fee_label: '€2.99',
   min_order_cents: null, min_order_label: null,
   eta_label: '18 min', rating: null,
+  last_scraped_at: null, promotions: [],
   ...overrides,
 })
 

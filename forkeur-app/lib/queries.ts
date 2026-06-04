@@ -22,6 +22,12 @@ export type RestaurantSummary = {
   } | null
 }
 
+export type PromoItem = {
+  promo_type: string
+  label: string
+  value: number | null
+}
+
 export type PlatformListing = {
   id: string
   platform: Platform
@@ -34,6 +40,7 @@ export type PlatformListing = {
   eta_label: string | null
   rating: number | null
   last_scraped_at: string | null
+  promotions: PromoItem[]
 }
 
 export type MenuItemWithPrices = {
@@ -253,7 +260,8 @@ export async function getRestaurantWithListings(
       platform_listings (
         id, platform, url, url_type,
         delivery_fee, min_order, eta_min, eta_max, rating, last_scraped_at,
-        menu_items ( title, price, catalog_name, image_url, description )
+        menu_items ( title, price, catalog_name, image_url, description ),
+        promotions ( promo_type, label, value )
       )
     `)
     .eq('id', id)
@@ -273,6 +281,13 @@ export async function getRestaurantWithListings(
     eta_label: etaLabel(l.eta_min, l.eta_max),
     rating: l.rating !== null ? parseFloat(String(l.rating)) : null,
     last_scraped_at: l.last_scraped_at ?? null,
+    promotions: (l.promotions ?? [])
+      .filter((p: any) => p.promo_type !== 'other' && p.promo_type !== 'spend_save')
+      .map((p: any): PromoItem => ({
+        promo_type: p.promo_type,
+        label: p.label,
+        value: p.value != null ? Number(p.value) : null,
+      })),
   }))
 
   const itemMap = new Map<string, MenuItemWithPrices>()
