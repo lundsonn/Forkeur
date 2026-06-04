@@ -41,8 +41,11 @@ async def run(config: ScraperConfig | None = None, log: Callable = noop_log) -> 
     if max_items:
         listings = listings[:max_items]
 
-    # 8 concurrent pages on shared browser — safe on 4vCPU/8GB, ~8× speedup vs sequential.
-    sem = asyncio.Semaphore(8)
+    # 5 concurrent pages on shared browser. 5 (not 8) because dom_menu overlaps
+    # the parallel ube/del menu workers during the batch — 8 pages here pushed
+    # batch peak to 6.7GB / 1.1GB free. 5 frees ~1.5GB at the overlap; dom_menu
+    # only slows ~3.5→5.5min (it's never the batch long pole). ~5× vs sequential.
+    sem = asyncio.Semaphore(5)
 
     async def _scrape_one(listing: dict) -> int:
         async with sem:

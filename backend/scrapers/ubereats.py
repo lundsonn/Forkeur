@@ -329,13 +329,21 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                 await wpage.goto(listing_url, wait_until="domcontentloaded", timeout=20000)
                 await asyncio.sleep(2)
                 for k, (r, lid) in enumerate(slice_items):
-                    # Periodic reload to clear Chrome memory accumulation.
-                    if k > 0 and k % 50 == 0:
+                    # Recycle the worker page every 12 restaurants — reusing one page
+                    # across a whole slice of heavy menu loads leaks renderer RSS
+                    # (full-batch creep drove free RAM to ~300MB). Close+reopen caps it.
+                    if k > 0 and k % 12 == 0:
                         try:
-                            await wpage.goto(listing_url, wait_until="domcontentloaded", timeout=20000)
-                            await asyncio.sleep(2)
+                            await wpage.close()
                         except Exception:
                             pass
+                        wpage = await _fresh_worker_page()
+                        if wpage is None:
+                            remaining = slice_items[k:]
+                            log_fn(f"Menu worker {wid}: recycle failed, abandoning {len(remaining)} to retry")
+                            async with _fail_lock:
+                                failed_listings.extend(remaining)
+                            return
                     needs_recover = False
                     try:
                         # Hard per-restaurant wall cap — a page crash can poison the

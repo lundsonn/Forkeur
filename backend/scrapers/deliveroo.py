@@ -277,29 +277,41 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
     page = None
 
     async with browser_session(lang="fr-BE") as browser:
-        # Phase 0: collect listings across all zones, dedup by slug
+        # Phase 0: collect listings across all zones, dedup by slug.
+        # Zones are independent (own page, same browser/CF session) → run concurrently.
+        ZONE_WORKERS = 4
         zones = LISTING_ZONES
+        zone_sem = asyncio.Semaphore(ZONE_WORKERS)
+
+        async def _scrape_zone_safe(zone_address: str) -> list[dict]:
+            async with zone_sem:
+                log_fn(f"Zone: {zone_address}")
+                try:
+                    return await asyncio.wait_for(
+                        _scrape_zone_listings(browser, zone_address, log_fn),
+                        timeout=180,
+                    )
+                except asyncio.TimeoutError:
+                    log_fn(f"  ⚠ zone timed out: {zone_address}")
+                    return []
+                except Exception as exc:
+                    log_fn(f"  ⚠ zone error ({zone_address}): {exc}")
+                    return []
+
+        log_fn(f"Phase 0: {len(zones)} zones, {ZONE_WORKERS} concurrent")
+        zone_results: list[list[dict]] = await asyncio.gather(
+            *[_scrape_zone_safe(z) for z in zones]
+        )
+
         all_by_slug: dict[str, dict] = {}
-        for zone_address in zones:
-            log_fn(f"Zone: {zone_address}")
-            try:
-                zone_restaurants = await asyncio.wait_for(
-                    _scrape_zone_listings(browser, zone_address, log_fn),
-                    timeout=180,
-                )
-            except asyncio.TimeoutError:
-                log_fn(f"  ⚠ zone timed out after 180s, skipping")
-                continue
-            new_count = 0
+        for zone_restaurants in zone_results:
             for r in zone_restaurants:
                 if r["slug"] not in all_by_slug:
                     all_by_slug[r["slug"]] = r
-                    new_count += 1
-            log_fn(f"  {len(zone_restaurants)} cards, {new_count} new (total {len(all_by_slug)})")
-            await asyncio.sleep(1)
 
         restaurants = list(all_by_slug.values())
-        log_fn(f"Found {len(restaurants)} unique restaurants across {len(zones)} zones")
+        total_cards = sum(len(zr) for zr in zone_results)
+        log_fn(f"Phase 0 done — {total_cards} cards across {len(zones)} zones → {len(restaurants)} unique")
 
         if config.target:
             restaurants = [r for r in restaurants if config.target.lower() in r["name"].lower() or config.target.lower() in r["slug"].lower()]
@@ -628,6 +640,19 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
             wpage = await new_page(browser, lang="fr-BE")
             try:
                 for k, (r, rid, lid) in enumerate(slice_items):
+                    # Recycle the page every 12 restaurants — Deliveroo menu pages
+                    # are heavy (full SSR); reusing one page across a whole slice
+                    # leaks renderer RSS (drove full-batch free RAM to ~300MB).
+                    if k > 0 and k % 12 == 0:
+                        try:
+                            await wpage.close()
+                        except Exception:
+                            pass
+                        try:
+                            wpage = await asyncio.wait_for(new_page(browser, lang="fr-BE"), timeout=30)
+                        except Exception:
+                            log_fn(f"  worker {wid}: recycle failed, abandoning {len(slice_items) - k} remaining")
+                            return
                     try:
                         # Hard wall cap — goto(60s)+scroll loops can stack; also
                         # guards against a crashed page wedging past Playwright timeouts.
