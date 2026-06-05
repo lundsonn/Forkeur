@@ -251,10 +251,15 @@ def score_pair(
         union = len(ma | mb)
         menu_overlap = intersection / union if union > 0 else 0.0
 
-    # Chain guard — use significant_first_token so "McDonald's Bascule" and
-    # "McDonald's Bourse" both map to "mcdonalds", hitting the chain threshold.
+    # Chain guard — two sources, OR'd:
+    #  1. Persisted restaurants.is_chain flag (authoritative; admin/scraper set).
+    #  2. Count heuristic via significant_first_token so "McDonald's Bascule" and
+    #     "McDonald's Bourse" both map to "mcdonalds", hitting the chain threshold.
+    # The flag catches chains with < 3 scraped branches the count would miss.
     is_chain_name = (
-        significant_first_token(a["name"]) in (chain_names or set())
+        bool(a.get("is_chain"))
+        or bool(b.get("is_chain"))
+        or significant_first_token(a["name"]) in (chain_names or set())
         or significant_first_token(b["name"]) in (chain_names or set())
     )
 

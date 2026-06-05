@@ -770,6 +770,16 @@ def test_score_pair_chain_name_detected():
     assert f.is_chain_name is True
 
 
+def test_score_pair_is_chain_db_flag_sets_chain_name():
+    # Persisted restaurants.is_chain=true flags the pair as chain even when the
+    # count heuristic (chain_names) would not.
+    a = _r("Quick Burger", id="a1")
+    a["is_chain"] = True
+    b = _r("Quick Burger", id="b1")
+    f = matching.score_pair(a, b, chain_names=set())
+    assert f.is_chain_name is True
+
+
 def test_score_pair_non_chain_name_not_flagged():
     # "burgerking" is not the first token of "Pizza Napoli"
     chain_names = {"burgerking"}

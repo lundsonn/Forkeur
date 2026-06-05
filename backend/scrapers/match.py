@@ -54,6 +54,23 @@ def run_sync(*, dry_run: bool, log_fn) -> dict:
         f"{len(chain_names)} chain names"
     )
 
+    # Self-maintaining is_chain flag: persist the count-heuristic verdict so the
+    # flag grows over time (and the consumer app can read it). Only flip rows
+    # whose stored flag disagrees, to keep writes minimal.
+    chain_flips = 0
+    for r in rows:
+        tok = matching.significant_first_token(r["name"])
+        should_be = bool(tok and tok in chain_names)
+        if should_be and not r.get("is_chain"):
+            try:
+                db.set_restaurant_chain(str(r["id"]), True)
+                r["is_chain"] = True  # keep in-memory dict consistent for scoring
+                chain_flips += 1
+            except Exception as e:  # noqa: BLE001
+                log_fn(f"  is_chain flip failed for {r['id']}: {e}")
+    if chain_flips:
+        log_fn(f"Flagged {chain_flips} restaurants is_chain=true (count heuristic)")
+
     counts = {"auto_merge": 0, "queue": 0, "separate": 0}
     proposals: list[dict] = []
     touched_ids: set[str] = set()

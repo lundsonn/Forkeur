@@ -642,7 +642,7 @@ def load_restaurants_for_match() -> list[dict]:
     silently ignore every restaurant past the first 1000.
     """
     client = get_client()
-    cols = "id, name, website, phone, lat, lng, geo_source, cuisine, created_at"
+    cols = "id, name, website, phone, lat, lng, geo_source, cuisine, created_at, is_chain"
     page = 1000
     offset = 0
     rows: list[dict] = []
