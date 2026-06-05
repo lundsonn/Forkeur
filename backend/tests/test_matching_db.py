@@ -13,8 +13,8 @@ def test_load_restaurants_for_match_selects_fields():
              "created_at": "2026-01-01T00:00:00Z"}]
     with patch("db.get_client") as mock_get:
         client = MagicMock()
-        # paginated: .select().order().range().execute(); a short page ends the loop
-        client.table.return_value.select.return_value.order.return_value.range.return_value.execute.return_value.data = rows
+        # paginated: .select().is_().order().range().execute(); a short page ends the loop
+        client.table.return_value.select.return_value.is_.return_value.order.return_value.range.return_value.execute.return_value.data = rows
         mock_get.return_value = client
         import db
         out = db.load_restaurants_for_match()
@@ -134,7 +134,7 @@ def test_upsert_restaurant_stamps_geo_source():
 def test_upsert_found_deliveroo_does_not_clobber_venue_geo():
     """A deliveroo re-scrape must not overwrite venue-grade coords/source."""
     import db
-    existing_row = {"cuisine": "Pizza", "image_url": "x",
+    existing_row = {"id": "R1", "cuisine": "Pizza", "image_url": "x",
                     "lat": 50.1, "lng": 4.1, "geo_source": "uber_eats"}
     captured = {}
     client = MagicMock()
@@ -170,7 +170,7 @@ def test_upsert_found_deliveroo_does_not_clobber_venue_geo():
 def test_upsert_found_venue_grade_upgrades_geo():
     """An uber_eats re-scrape upgrades coords + stamps geo_source."""
     import db
-    existing_row = {"cuisine": "Pizza", "image_url": "x",
+    existing_row = {"id": "R1", "cuisine": "Pizza", "image_url": "x",
                     "lat": 50.1, "lng": 4.1, "geo_source": "deliveroo"}
     captured = {}
     client = MagicMock()
@@ -207,7 +207,7 @@ def test_get_queued_decisions_filters_status():
     rows = [{"id": "d1", "status": "queued"}]
     with patch("db.get_client") as mock_get:
         client = MagicMock()
-        client.table.return_value.select.return_value.eq.return_value.order.return_value.execute.return_value.data = rows
+        client.table.return_value.select.return_value.eq.return_value.order.return_value.range.return_value.execute.return_value.data = rows
         mock_get.return_value = client
         import db
         out = db.get_queued_decisions()

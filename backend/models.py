@@ -2,13 +2,18 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from pydantic import BaseModel
+from constants import DEFAULT_ADDRESS
 
 
 # ── Scraper interface ──────────────────────────────────────────────────────────
 
 @dataclass
 class ScraperConfig:
-    address: str = "Pl. Poelaert 1, 1000 Bruxelles"
+    address: str = None
+    
+    def __post_init__(self):
+        if self.address is None:
+            self.address = DEFAULT_ADDRESS
     target: str | None = None
     max_items: int | None = None  # None = no cap (full run); set to 10 for test mode
     scrape_menus: bool = False

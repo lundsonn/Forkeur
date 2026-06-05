@@ -21,7 +21,11 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
             if "getFeedV1" in response.url:
                 try:
                     text = await response.text()
-                    feed_pages.append(json.loads(text))
+                    parsed = json.loads(text)
+                    # Extract only feed data to avoid accumulating 4-10MB of raw dicts
+                    feed_data = parsed.get("data", {}).get("feedItems", [])
+                    if feed_data:
+                        feed_pages.append(feed_data)
                 except Exception:
                     pass
 
@@ -63,9 +67,14 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
         await asyncio.sleep(2)
 
         log_fn("Waiting for first feed API response...")
-        deadline = asyncio.get_event_loop().time() + 15
-        while not feed_pages and asyncio.get_event_loop().time() < deadline:
-            await asyncio.sleep(0.5)
+        feed_event = asyncio.Event()
+        try:
+            async with asyncio.timeout(15):
+                # Wait for first feed response or timeout
+                while not feed_pages:
+                    await asyncio.sleep(0.1)
+        except asyncio.TimeoutError:
+            pass
 
         if not feed_pages:
             raise TimeoutError("Feed API not captured")
@@ -92,7 +101,8 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
         seen_uuids: set[str] = set()
         stores = []
         for feed in feed_pages:
-            feed_items = feed.get("data", {}).get("feedItems", [])
+            # feed is now already the feedItems list (extracted in on_response)
+            feed_items = feed if isinstance(feed, list) else []
             for item in feed_items:
                 if item.get("type") != "REGULAR_STORE":
                     continue
@@ -278,9 +288,12 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                     raise  # bubble up so the worker recreates its page
                 return
 
-            deadline = asyncio.get_event_loop().time() + 12
-            while not store_raw and asyncio.get_event_loop().time() < deadline:
-                await asyncio.sleep(0.5)
+            try:
+                async with asyncio.timeout(12):
+                    while not store_raw:
+                        await asyncio.sleep(0.1)
+            except asyncio.TimeoutError:
+                pass
 
             try:
                 wpage.remove_listener("response", on_store_response)
@@ -445,9 +458,12 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                         page.remove_listener("response", on_retry_response)
                         continue
                     await page.wait_for_load_state("domcontentloaded", timeout=15000)
-                    deadline = asyncio.get_event_loop().time() + 15
-                    while not retry_buf and asyncio.get_event_loop().time() < deadline:
-                        await asyncio.sleep(0.5)
+                    try:
+                        async with asyncio.timeout(15):
+                            while not retry_buf:
+                                await asyncio.sleep(0.1)
+                    except asyncio.TimeoutError:
+                        pass
                 except Exception as exc:
                     log_fn(f"Retry: {name} — failed: {exc}")
                     if "crashed" in str(exc).lower():
@@ -721,87 +737,5 @@ def _parse_eta_max(eta: str | None) -> int | None:
     m = re.search(r"-(\d+)", eta.strip())
     return int(m.group(1)) if m else None
 
-
-def _parse_ue_menu(json_resp: dict, catalog_name: str) -> list[dict]:
-    """Parse menu items from getSectionFeedV1 or getStoreLayoutV1 JSON response.
-
-    Supports two formats:
-    1. Simple catalogSectionsMap with catalogItems (getSectionFeedV1):
-       {
-           "catalogSectionsMap": {
-               "section_key": {
-                   "catalogItems": [
-                       {"title": "...", "price": int (cents), ...}
-                   ]
-               }
-           }
-       }
-
-    2. Nested structure with standardItemsPayload (getStoreV1):
-       {
-           "data": {
-               "catalogSectionsMap": {
-                   "store_uuid": [
-                       {
-                           "payload": {
-                               "standardItemsPayload": {
-                                   "catalogItems": [...]
-                               }
-                           }
-                       }
-                   ]
-               }
-           }
-       }
-
-    UberEats API returns prices in cents (1199 = €11.99).
-    """
-    items = []
-
-    # Try nested format first (getStoreV1)
-    sections_map: dict = json_resp.get("data", {}).get("catalogSectionsMap", {})
-
-    if sections_map and isinstance(next(iter(sections_map.values()), None), list):
-        # Nested format: values are lists of sections
-        for sections_list in sections_map.values():
-            if not isinstance(sections_list, list):
-                continue
-            for section in sections_list:
-                payload = section.get("payload") or {}
-                std = payload.get("standardItemsPayload") or {}
-                if not std:
-                    continue
-                for ci in std.get("catalogItems") or []:
-                    price_cents = ci.get("price")
-                    price = price_cents / 100 if isinstance(price_cents, (int, float)) else None
-                    title = ci.get("title", "").strip()
-                    if title:
-                        items.append({
-                            "title": title,
-                            "price": price,
-                            "catalog_name": catalog_name,
-                        })
-    else:
-        # Try simple format (getSectionFeedV1)
-        sections_map = json_resp.get("catalogSectionsMap", {})
-        for section_key, section_data in sections_map.items():
-            if not isinstance(section_data, dict):
-                continue
-            catalog_items = section_data.get("catalogItems", [])
-            for item in catalog_items:
-                title = item.get("title", "").strip()
-                price_cents = item.get("price")
-
-                # Convert cents to euros if present
-                price = None
-                if price_cents is not None and isinstance(price_cents, (int, float)):
-                    price = round(price_cents / 100, 2)
-
-                if title:
-                    items.append({
-                        "title": title,
-                        "price": price,
-                        "catalog_name": catalog_name,
-                    })
 
     return items

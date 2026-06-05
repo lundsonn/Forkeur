@@ -149,20 +149,9 @@ async def new_sibling_page(page: Page, block_media: bool = True) -> Page:
 
 
 async def _move_mouse_human(page: Page, x: float, y: float) -> None:
-    """Move mouse to (x, y) in a curved, non-linear path with random speed."""
-    cur_x, cur_y = random.uniform(100, 800), random.uniform(100, 600)
+    """Move mouse to (x, y) using Playwright's built-in human-like motion."""
     steps = random.randint(8, 15)
-    for i in range(steps + 1):
-        t = i / steps
-        # ease-in-out + slight sine wobble
-        eased = t * t * (3 - 2 * t)
-        wobble_x = math.sin(t * math.pi * random.uniform(1.5, 3.5)) * random.uniform(4, 14)
-        wobble_y = math.cos(t * math.pi * random.uniform(1.5, 3.5)) * random.uniform(4, 14)
-        mx = cur_x + (x - cur_x) * eased + wobble_x
-        my = cur_y + (y - cur_y) * eased + wobble_y
-        await page.mouse.move(mx, my)
-        await asyncio.sleep(random.uniform(0.01, 0.045))
-
+    await page.mouse.move(x, y, steps=steps)
 
 async def wait_for_cf_clear(page: Page, timeout_s: int = 90) -> bool:
     """Wait for CF challenge to pass, moving mouse naturally. Returns True if cleared."""

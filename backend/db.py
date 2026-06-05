@@ -584,6 +584,7 @@ def load_restaurants_for_match() -> list[dict]:
         res = (
             client.table("restaurants")
             .select(cols)
+            .is_("merged_into", "null")  # skip already-merged losers
             .order("id")
             .range(offset, offset + page - 1)
             .execute()

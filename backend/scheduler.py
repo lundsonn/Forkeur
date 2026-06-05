@@ -1,4 +1,5 @@
 from __future__ import annotations
+from constants import DEFAULT_ADDRESS
 import asyncio
 import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -77,7 +78,7 @@ def _persist_schedule(config: ScheduleConfigIn) -> None:
     db.get_client().table("scraper_schedules").upsert({
         "platform": config.platform,
         "cron": config.cron,
-        "address": "Pl. Poelaert 1, 1000 Bruxelles",
+        "address": DEFAULT_ADDRESS,
         "max_items": None,
         "updated_at": "now()",
     }, on_conflict="platform").execute()
