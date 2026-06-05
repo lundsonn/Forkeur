@@ -625,14 +625,15 @@ class TestRun:
             patch("scrapers.direct_menu.db.insert_menu_items") as mock_insert,
             patch("httpx.Client") as mock_http_cls,
         ):
-            # First listing (sq) raises on delete; odoo and piki succeed
+            # listing-sq: delete raises (error); listing-odoo/piki: delete+insert succeed
             mock_delete.side_effect = [RuntimeError("DB error"), None, None]
             mock_insert.side_effect = [5, 6]
             http_instance = MagicMock()
             mock_http_cls.return_value.__enter__.return_value = http_instance
+            # sq_menu uses GET; piki uses GET (first template succeeds)
             http_instance.get.side_effect = [
-                _mock_response(200, sq_fixture),    # sq_menu first GET attempt
-                _mock_response(200, piki_fixture),  # piki first GET attempt
+                _mock_response(200, sq_fixture),   # sq_menu /api/menu/{code}
+                _mock_response(200, piki_fixture), # piki first template
             ]
             http_instance.post.return_value = _mock_response(200, _load_fixture("odoo_pos_response.json"))
 

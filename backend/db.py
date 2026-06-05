@@ -105,16 +105,27 @@ def upsert_restaurant(data: dict) -> str:
         data = {**data, "cuisine": infer_cuisine(name)}
 
     def _found(rid: str) -> str:
-        existing = client.table("restaurants").select("cuisine, image_url").eq("id", rid).limit(1).execute()
+        existing = client.table("restaurants").select("cuisine, image_url, lat, lng, geo_source").eq("id", rid).limit(1).execute()
         row = existing.data[0] if existing.data else {}
         updates: dict = {}
         if data.get("cuisine") and not row.get("cuisine"):
             updates["cuisine"] = data["cuisine"]
         if data.get("image_url") and not row.get("image_url"):
             updates["image_url"] = data["image_url"]
-        for k in ("lat", "lng"):
-            if data.get(k) is not None:
-                updates[k] = data[k]
+        # Geo provenance: a venue-grade source (uber_eats/direct) always wins and
+        # stamps geo_source; a zone-grade source (deliveroo) only fills coords when
+        # the row has none, and never clobbers venue-grade coords.
+        incoming_src = data.get("geo_source")
+        if data.get("lat") is not None and data.get("lng") is not None:
+            if incoming_src in ("uber_eats", "direct"):
+                updates["lat"] = data["lat"]
+                updates["lng"] = data["lng"]
+                updates["geo_source"] = incoming_src
+            elif row.get("lat") is None:
+                updates["lat"] = data["lat"]
+                updates["lng"] = data["lng"]
+                if incoming_src:
+                    updates["geo_source"] = incoming_src
         if updates:
             client.table("restaurants").update(updates).eq("id", rid).execute()
         return rid
@@ -128,6 +139,21 @@ def upsert_restaurant(data: dict) -> str:
     res = client.table("restaurants").select("id").ilike("name", name).limit(1).execute()
     if res.data:
         return _found(res.data[0]["id"])
+
+    # 2b. Website-domain lock — strongest deterministic signal. A new listing
+    #     whose website resolves to a domain we already store is the same venue.
+    import matching as _m
+    incoming_domain = _m.domain_of(data.get("website"))
+    if incoming_domain:
+        cands = (
+            client.table("restaurants")
+            .select("id, website")
+            .not_.is_("website", "null")
+            .execute()
+        )
+        for c in cands.data:
+            if _m.domain_of(c.get("website")) == incoming_domain:
+                return _found(c["id"])
 
     # 3. Canonical base match ("Burger King - Ixelles" → find "Burger King")
     if canonical != name:
@@ -237,6 +263,12 @@ def create_run(platform: str) -> str:
     return res.data[0]["id"]
 
 
+def update_run_progress(run_id: str, records_saved: int) -> None:
+    get_client().table("scraper_runs").update({
+        "records_saved": records_saved,
+    }).eq("id", run_id).execute()
+
+
 def finish_run(
     run_id: str,
     status: str,
@@ -275,7 +307,7 @@ def get_last_run_per_platform() -> dict[str, dict]:
     """Returns {platform: run_row} for the most recent run of each platform."""
     client = get_client()
     result = {}
-    for platform in ("ubereats", "deliveroo", "takeaway", "fees", "direct", "direct_menu", "dom_menu"):
+    for platform in ("ubereats", "deliveroo", "takeaway", "fees", "direct", "direct_menu", "dom_menu", "match"):
         res = (
             client.table("scraper_runs")
             .select("*")
@@ -302,6 +334,21 @@ def get_last_successful_run(platform: str) -> dict | None:
         .execute()
     )
     return res.data[0] if res.data else None
+
+
+def delete_stale_listings(days: int = 30) -> int:
+    """Delete platform_listings older than `days` days. Returns count deleted."""
+    from datetime import datetime, timezone, timedelta
+    client = get_client()
+    threshold = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    result = (
+        client.table("platform_listings")
+        .delete()
+        .not_.is_("last_scraped_at", "null")
+        .lt("last_scraped_at", threshold)
+        .execute()
+    )
+    return len(result.data) if result.data else 0
 
 
 def prune_stale_menu_items(days: int = 30) -> int:
@@ -487,3 +534,171 @@ def approve_claim(claim_id: str) -> None:
 def reject_claim(claim_id: str) -> None:
     """Delete a claim (rejected — not approved)."""
     get_client().table("restaurant_claims").delete().eq("id", claim_id).execute()
+
+
+# ---------------------------------------------------------------------------
+# Restaurant matching helpers (Tasks 7 & 8)
+# ---------------------------------------------------------------------------
+
+def load_restaurants_for_match() -> list[dict]:
+    """Load ALL restaurants with the fields the matcher scores on.
+
+    Supabase/PostgREST caps a single response at 1000 rows, so page through
+    with .range() until a short page is returned — otherwise the matcher would
+    silently ignore every restaurant past the first 1000.
+    """
+    client = get_client()
+    cols = "id, name, website, phone, lat, lng, geo_source, cuisine, created_at"
+    page = 1000
+    offset = 0
+    rows: list[dict] = []
+    while True:
+        res = (
+            client.table("restaurants")
+            .select(cols)
+            .order("id")
+            .range(offset, offset + page - 1)
+            .execute()
+        )
+        batch = res.data or []
+        rows.extend(batch)
+        if len(batch) < page:
+            break
+        offset += page
+    return rows
+
+
+def enqueue_decision(
+    *, survivor_id: str, loser_id: str, score: float,
+    features: dict, status: str,
+) -> str:
+    """Insert/replace a match decision row (queue or audit log). Returns id.
+
+    Upsert on the unordered-pair unique index so re-runs don't duplicate.
+    """
+    client = get_client()
+    # The uq_match_pair uniqueness is an expression index (least/greatest) that
+    # PostgREST cannot target via on_conflict, so reconcile the unordered pair
+    # manually: update an existing row for either ordering, else insert.
+    existing = (
+        client.table("restaurant_match_decisions")
+        .select("id")
+        .or_(
+            f"and(survivor_id.eq.{survivor_id},loser_id.eq.{loser_id}),"
+            f"and(survivor_id.eq.{loser_id},loser_id.eq.{survivor_id})"
+        )
+        .limit(1)
+        .execute()
+    )
+    row = {
+        "survivor_id": survivor_id,
+        "loser_id": loser_id,
+        "score": score,
+        "features": features,
+        "status": status,
+    }
+    if existing.data:
+        did = existing.data[0]["id"]
+        client.table("restaurant_match_decisions").update(row).eq("id", did).execute()
+        return did
+    res = client.table("restaurant_match_decisions").insert(row).execute()
+    return res.data[0]["id"]
+
+
+def _fetch_restaurant(client, rid: str) -> dict | None:
+    res = client.table("restaurants").select(
+        "id, phone, website, lat, lng, geo_source, cuisine, image_url"
+    ).eq("id", rid).limit(1).execute()
+    return res.data[0] if res.data else None
+
+
+def merge_restaurants(survivor_id: str, loser_id: str) -> None:
+    """Merge loser into survivor: move listings, fill nulls, delete loser.
+
+    Idempotent: if loser is already gone, this is a no-op. Same-platform
+    listing conflicts keep the row with the newer last_scraped_at.
+    """
+    if survivor_id == loser_id:
+        return
+    client = get_client()
+    survivor = _fetch_restaurant(client, survivor_id)
+    loser = _fetch_restaurant(client, loser_id)
+    if survivor is None or loser is None:
+        return  # already merged / missing
+
+    # 1. Listings: detect same-platform conflicts.
+    surv_listings = client.table("platform_listings").select(
+        "id, platform, last_scraped_at"
+    ).eq("restaurant_id", survivor_id).execute().data
+    lose_listings = client.table("platform_listings").select(
+        "id, platform, last_scraped_at"
+    ).eq("restaurant_id", loser_id).execute().data
+
+    from postgrest.exceptions import APIError
+    surv_by_platform = {l["platform"]: l for l in surv_listings}
+    for ll in lose_listings:
+        clash = surv_by_platform.get(ll["platform"])
+        if clash is not None:
+            # Keep the row with the newer scrape; drop the other.
+            keep_loser = (ll.get("last_scraped_at") or "") > (clash.get("last_scraped_at") or "")
+            if not keep_loser:
+                client.table("platform_listings").delete().eq("id", ll["id"]).execute()
+                continue
+            client.table("platform_listings").delete().eq("id", clash["id"]).execute()
+        # Move the loser's listing to the survivor. Guard against any residual
+        # (restaurant_id, platform) collision the pre-scan didn't catch — on a
+        # unique-violation just drop the duplicate loser listing instead of
+        # aborting the whole merge.
+        try:
+            client.table("platform_listings").update(
+                {"restaurant_id": survivor_id}
+            ).eq("id", ll["id"]).execute()
+        except APIError:
+            client.table("platform_listings").delete().eq("id", ll["id"]).execute()
+
+    # 2. Fill survivor null fields from loser.
+    fill = {}
+    for k in ("phone", "website", "lat", "lng", "geo_source", "cuisine", "image_url"):
+        if not survivor.get(k) and loser.get(k):
+            fill[k] = loser[k]
+    if fill:
+        client.table("restaurants").update(fill).eq("id", survivor_id).execute()
+
+    # 3. Delete loser.
+    client.table("restaurants").delete().eq("id", loser_id).execute()
+
+
+def get_queued_decisions() -> list[dict]:
+    """Pending review-queue rows, newest first."""
+    client = get_client()
+    res = (
+        client.table("restaurant_match_decisions")
+        .select("*")
+        .eq("status", "queued")
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return res.data
+
+
+def resolve_decision(decision_id: str, *, approve: bool, resolved_by: str) -> None:
+    """Approve (-> merge) or reject a queued decision."""
+    from datetime import datetime, timezone
+    client = get_client()
+    row = (
+        client.table("restaurant_match_decisions")
+        .select("id, survivor_id, loser_id, status")
+        .eq("id", decision_id)
+        .limit(1)
+        .execute()
+    )
+    if not row.data:
+        return
+    d = row.data[0]
+    if approve:
+        merge_restaurants(d["survivor_id"], d["loser_id"])
+    client.table("restaurant_match_decisions").update({
+        "status": "approved" if approve else "rejected",
+        "resolved_at": datetime.now(timezone.utc).isoformat(),
+        "resolved_by": resolved_by,
+    }).eq("id", decision_id).execute()

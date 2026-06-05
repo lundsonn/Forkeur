@@ -1,12 +1,6 @@
 import { PLATFORMS, PLATFORM_COLORS, type Platform, centsToEuro } from '@/lib/basket'
 import type { MenuItemWithPrices } from '@/lib/queries'
-
-const PLATFORM_SHORT: Record<Platform, string> = {
-  uber_eats: 'UE',
-  deliveroo: 'DE',
-  takeaway: 'TW',
-  direct:    'DIR',
-}
+import PlatformLogo from './ui/PlatformLogo'
 
 function cheapestPlatformForItem(prices: Record<Platform, number | null>): Platform | null {
   let cheapest: Platform | null = null
@@ -85,7 +79,7 @@ export default function PlatformPriceRow({ item, qty, onAdd, onRemove, isLast }:
               <span
                 className={`text-xs ${isCheapest ? 'font-semibold text-green-600' : 'text-stone-500'}`}
               >
-                {PLATFORM_SHORT[platform]} {centsToEuro(price)}
+                <PlatformLogo platform={platform} size={14} className="mr-0.5 align-middle" /> {centsToEuro(price)}
                 {isCheapest && price !== null ? ' ✓' : ''}
               </span>
             </div>

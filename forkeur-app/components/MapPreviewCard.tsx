@@ -56,7 +56,9 @@ export default function MapPreviewCard({ restaurant, onClose }: Props) {
         ? tMap('free_delivery')
         : tMap('from', { fee: rawFeeLabel })
   const savingsCents = restaurant.cheapest?.savings_cents ?? 0
-  const savingsLabel = savingsCents > 0 ? tMap('save', { amount: (savingsCents / 100).toFixed(2) }) : null
+  const cheapestFeeCents = restaurant.cheapest?.delivery_fee_cents ?? null
+  const maxFeeCents = cheapestFeeCents != null && savingsCents > 0 ? cheapestFeeCents + savingsCents : null
+  const showStrikethrough = maxFeeCents != null && savingsCents >= 50
 
   return (
     <>
@@ -134,25 +136,19 @@ export default function MapPreviewCard({ restaurant, onClose }: Props) {
         </div>
 
         {/* Price + savings row */}
-        {(feeLabel || savingsLabel) && (
-          <div className="flex items-center justify-between mb-3">
-            {feeLabel && (
-              <div className="flex items-center gap-1.5">
-                <span
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ backgroundColor: '#1E8A5A' }}
-                />
-                <span className="font-medium" style={{ fontSize: 15, color: '#1A1A1A' }}>
-                  {feeLabel}
-                </span>
-              </div>
-            )}
-            {savingsLabel && (
+        {feeLabel && (
+          <div className="flex items-center gap-1.5 mb-3">
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#1E8A5A' }} />
+            <span className="font-medium" style={{ fontSize: 15, color: '#1A1A1A' }}>
+              {feeLabel}
+            </span>
+            {showStrikethrough && maxFeeCents != null && (
               <span
-                className="font-medium px-2 py-0.5 rounded-full"
-                style={{ fontSize: 12, color: '#1E8A5A', backgroundColor: '#E8F5EE' }}
+                className="line-through"
+                style={{ fontSize: 14, color: '#888780' }}
+                aria-label={`€${(maxFeeCents / 100).toFixed(2)} on other platforms`}
               >
-                {savingsLabel}
+                €{(maxFeeCents / 100).toFixed(2)}
               </span>
             )}
           </div>

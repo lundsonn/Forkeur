@@ -169,10 +169,22 @@ async def _check_website(page, url: str, log: Callable) -> dict:
     return out
 
 
-async def _enrich_existing(page, log: Callable) -> int:
-    """Check DB restaurants with websites for direct ordering. Returns listing count."""
+async def _enrich_existing(browser, log: Callable) -> int:
+    """Check DB restaurants with websites that have no direct listing yet."""
     supabase = db.get_client()
-    restaurants = (
+
+    # Only fetch restaurants with no existing direct listing — skip already-done ones
+    already_done = {
+        row['restaurant_id']
+        for row in (
+            supabase.table('platform_listings')
+            .select('restaurant_id')
+            .eq('platform', 'direct')
+            .execute()
+        ).data
+    }
+
+    all_restaurants = (
         supabase.table('restaurants')
         .select('id, name, website, phone')
         .not_.is_('website', 'null')
@@ -180,49 +192,56 @@ async def _enrich_existing(page, log: Callable) -> int:
         .execute()
     ).data
 
-    log(f"Phase 1: {len(restaurants)} restaurants with websites to check")
+    restaurants = [r for r in all_restaurants if r['id'] not in already_done]
+    log(f"Phase 1: {len(restaurants)} restaurants to check (skipped {len(already_done)} already enriched)")
+
+    if not restaurants:
+        return 0
+
     saved = 0
+    sem = asyncio.Semaphore(5)
 
-    for r in restaurants:
-        analysis = await _check_website(page, r['website'], log)
+    async def _process(r: dict) -> int:
+        async with sem:
+            page = await new_page(browser)
+            try:
+                analysis = await _check_website(page, r['website'], log)
+            finally:
+                await page.close()
 
-        # Persist phone if newly found
-        if analysis['phone'] and not r.get('phone'):
-            supabase.table('restaurants').update(
-                {'phone': analysis['phone']}
-            ).eq('id', r['id']).execute()
+            if analysis['phone'] and not r.get('phone'):
+                supabase.table('restaurants').update(
+                    {'phone': analysis['phone']}
+                ).eq('id', r['id']).execute()
 
-        if not (analysis['has_delivery'] or analysis['order_url']):
-            continue
+            # Always save the website so users can open it in a new tab,
+            # even if no ordering was detected. Prefer a specific order URL if found.
+            order_url = analysis['order_url'] or r['website']
+            if is_junk_url(order_url):
+                return 0
 
-        order_url = analysis['order_url'] or r['website']
-        if is_junk_url(order_url):
-            continue
+            url_type = classify_url(order_url, analysis['phone'])
+            # If no ordering/delivery signals, treat as plain website link
+            if not (analysis['has_delivery'] or analysis['order_url']):
+                url_type = 'website'
 
-        existing = (
-            supabase.table('platform_listings')
-            .select('id')
-            .eq('restaurant_id', r['id'])
-            .eq('platform', 'direct')
-            .execute()
-        ).data
-
-        row = {
-            'restaurant_id': r['id'],
-            'platform': 'direct',
-            'url': order_url,
-            'url_type': classify_url(order_url, analysis['phone']),
-            'is_available': True,
-        }
-
-        if existing:
-            supabase.table('platform_listings').update(row).eq('id', existing[0]['id']).execute()
-        else:
+            row = {
+                'restaurant_id': r['id'],
+                'platform': 'direct',
+                'url': order_url,
+                'url_type': url_type,
+                'is_available': True,
+            }
             supabase.table('platform_listings').insert(row).execute()
-            saved += 1
+            log(f"  ✓ {r['name']} [{url_type}]: {order_url[:70]}")
+            return 1
 
-        log(f"  ✓ {r['name']}: {order_url[:70]}")
-        await asyncio.sleep(0.3)
+    results = await asyncio.gather(*[_process(r) for r in restaurants], return_exceptions=True)
+    for res in results:
+        if isinstance(res, int):
+            saved += res
+        elif isinstance(res, Exception):
+            log(f"  ✗ worker error: {res}")
 
     return saved
 
@@ -432,9 +451,10 @@ async def run(config=None, log: Callable = noop_log) -> ScraperResult:
     """Run all three phases: enrich existing, discover new, geocode neighborhoods."""
     saved = 0
     async with browser_session(headed=False) as browser:
+        saved += await _enrich_existing(browser, log)
         page = await new_page(browser)
-        saved += await _enrich_existing(page, log)
         saved += await _discover_maps(page, log)
+        await page.close()
 
     await _enrich_neighborhoods(log)
 

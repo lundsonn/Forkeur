@@ -7,6 +7,7 @@ const links = [
   { to: '/schedule', label: 'Schedule' },
   { to: '/data', label: 'Data' },
   { to: '/claims', label: 'Claims' },
+  { to: '/match-queue', label: 'Match Queue' },
 ]
 
 export default function Sidebar() {

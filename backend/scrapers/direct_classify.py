@@ -41,14 +41,19 @@ _JUNK_RE = re.compile(
 
 
 def _sq_has_restaurant_code(url: str) -> bool:
-    """Return True only if the sq-menu/foodbooking URL contains a restaurant-specific code.
+    """Return True if the sq-menu/foodbooking URL has a restaurant identifier.
 
-    Valid:   /api/fb/{code}, /api/res/{code}, /api/menu/{code}
-    Invalid: /ordering/restaurant/menu, /ordering/restaurant/menu/reservation
-    These generic SPA base paths have no restaurant identifier and can never
-    be scraped, so we fall through to 'menu'/'website' classification instead.
+    Valid (restaurant-specific subdomain): burger-palace.sq-menu.com/...
+    Valid (API path with code):            www.sq-menu.com/api/fb/{code}
+    Invalid (generic SPA base):            www.sq-menu.com/ordering/restaurant/menu
     """
-    parts = [p for p in urlparse(url).path.split("/") if p]
+    parsed = urlparse(url)
+    # Strip www. and check for restaurant-specific subdomain (e.g. burger-palace.sq-menu.com)
+    bare_host = re.sub(r'^www\.', '', parsed.netloc.lower())
+    if len(bare_host.split('.')) > 2:
+        return True
+    # API path with restaurant code: /api/{type}/{code}
+    parts = [p for p in parsed.path.split("/") if p]
     return len(parts) >= 3 and parts[0] == "api"
 
 
@@ -69,13 +74,9 @@ def classify_url(order_url: str | None, phone: str | None = None) -> str:
     except Exception:
         return 'website'
 
-    # Odoo POS self-order: *.odoo.com/pos-self/{id} — require a numeric config ID
+    # Odoo POS self-order: *.odoo.com/pos-self/...
     if 'odoo.com' in host and 'pos-self' in path:
-        parts = [p for p in path.split('/') if p]
-        pos_idx = next((i for i, p in enumerate(parts) if p == 'pos-self'), -1)
-        if pos_idx >= 0 and pos_idx + 1 < len(parts) and parts[pos_idx + 1].isdigit():
-            return 'ordering'
-        return 'website'
+        return 'ordering'
 
     if _ORDERING_HOSTS.search(host):
         # sq-menu / foodbooking: generic SPA base paths have no restaurant code

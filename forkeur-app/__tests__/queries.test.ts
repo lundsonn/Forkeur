@@ -2,13 +2,14 @@ import { describe, it, expect } from 'vitest'
 import { normalizeTitle } from '../lib/queries'
 
 describe('normalizeTitle', () => {
-  it('lowercases input', () => {
-    expect(normalizeTitle('Pizza Palace')).toBe('pizza palace')
+  it('lowercases input + token sorts', () => {
+    expect(normalizeTitle('Pizza Palace')).toBe('palace pizza')
   })
 
-  it('strips accents', () => {
+  it('strips accents; stopword "des" removed when 2+ tokens remain', () => {
     expect(normalizeTitle('Crêperie')).toBe('creperie')
-    expect(normalizeTitle('Café des Amis')).toBe('cafe des amis')
+    // "cafe des amis" → sort "amis cafe des" → filter "des" → "amis cafe"
+    expect(normalizeTitle('Café des Amis')).toBe('amis cafe')
   })
 
   it('removes punctuation', () => {
@@ -16,23 +17,24 @@ describe('normalizeTitle', () => {
     expect(normalizeTitle('Burger & Fries!')).toBe('burger fries')
   })
 
-  it('collapses multiple spaces', () => {
-    expect(normalizeTitle('Pizza   Palace')).toBe('pizza palace')
+  it('collapses multiple spaces + token sorts', () => {
+    expect(normalizeTitle('Pizza   Palace')).toBe('palace pizza')
   })
 
-  it('trims leading and trailing whitespace', () => {
-    expect(normalizeTitle('  Pizza Palace  ')).toBe('pizza palace')
+  it('trims + token sorts', () => {
+    expect(normalizeTitle('  Pizza Palace  ')).toBe('palace pizza')
   })
 
   it('handles empty string', () => {
     expect(normalizeTitle('')).toBe('')
   })
 
-  it('handles already normalized input unchanged', () => {
-    expect(normalizeTitle('pizza palace')).toBe('pizza palace')
+  it('token sorts already-lowercase input', () => {
+    expect(normalizeTitle('pizza palace')).toBe('palace pizza')
   })
 
-  it('strips mixed diacritics', () => {
-    expect(normalizeTitle('Brasserie Ô Côté')).toBe('brasserie o cote')
+  it('strips mixed diacritics + token sorts', () => {
+    // "brasserie o cote" → sort alphabetically: brasserie < cote < o
+    expect(normalizeTitle('Brasserie Ô Côté')).toBe('brasserie cote o')
   })
 })

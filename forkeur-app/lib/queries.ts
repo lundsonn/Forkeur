@@ -1,7 +1,11 @@
 import { cookies } from 'next/headers'
 import { createClient } from '@/utils/supabase/server'
 import type { Platform } from '@/lib/basket'
-import type { DealItem } from '@/lib/deals'
+import type { DealItem, DealType } from '@/lib/deals'
+import { normalizeTitle } from '@/lib/normalize-title'
+export { normalizeTitle }
+
+const STALE_THRESHOLD_MS = 72 * 60 * 60 * 1000
 
 export type RestaurantSummary = {
   id: string
@@ -19,6 +23,7 @@ export type RestaurantSummary = {
     platform: Platform
     fee_label: string
     savings_cents: number
+    delivery_fee_cents: number | null
   } | null
 }
 
@@ -53,6 +58,7 @@ export type MenuItemWithPrices = {
   category: string | null
   image_url: string | null
   prices: Record<Platform, number | null>
+  platformTitles?: Record<Platform, string | null>
 }
 
 export type RestaurantDetail = {
@@ -62,9 +68,88 @@ export type RestaurantDetail = {
   cuisine: string[]
   phone: string | null
   order_url: string | null
+  direct_url_type: string | null
   image_url: string | null
   listings: PlatformListing[]
   menuItems: MenuItemWithPrices[]
+  matchRate: number
+}
+
+// Raw Supabase row types — no generated DB types in this project
+type RawListingShort = {
+  platform: string
+  delivery_fee: number | null
+  eta_min: number | null
+  rating: number | null
+  url_type: string | null
+  is_available: boolean | null
+  opening_hours: OpeningHours | null
+  last_scraped_at: string | null
+}
+
+type RawRestaurantRow = {
+  id: string
+  name: string
+  cuisine: string | null
+  neighborhood: string | null
+  lat: number | null
+  lng: number | null
+  order_url: string | null
+  image_url: string | null
+  platform_listings: RawListingShort[]
+}
+
+type RawPromoRow = {
+  id: string
+  promo_type: string
+  label: string
+  value: number | null
+  min_order: number | null
+  platform_listings: {
+    platform: string
+    url: string | null
+    rating: number | null
+    review_count: number | null
+    restaurants: { id: string; name: string; cuisine: string | null; neighborhood: string | null } | null
+  } | null
+}
+
+type RawPromoItemRow = { promo_type: string; label: string; value: number | null }
+
+type RawMenuItemRow = {
+  title: string
+  price: number | null
+  catalog_name: string | null
+  image_url: string | null
+  description: string | null
+}
+
+type RawListingDetail = {
+  id: string
+  platform: string
+  url: string | null
+  url_type: string | null
+  is_available: boolean | null
+  opening_hours: OpeningHours | null
+  delivery_fee: number | null
+  min_order: number | null
+  eta_min: number | null
+  eta_max: number | null
+  rating: number | null
+  last_scraped_at: string | null
+  menu_items: RawMenuItemRow[]
+  promotions: RawPromoItemRow[]
+}
+
+type RawRestaurantDetail = {
+  id: string
+  name: string
+  neighborhood: string | null
+  cuisine: string | null
+  phone: string | null
+  order_url: string | null
+  image_url: string | null
+  platform_listings: RawListingDetail[]
 }
 
 async function getSupabase() {
@@ -96,24 +181,22 @@ export async function getRestaurants(): Promise<{
     .from('restaurants')
     .select(`
       id, name, cuisine, neighborhood, lat, lng, order_url, image_url,
-      platform_listings ( platform, delivery_fee, eta_min, rating, url_type, is_available, opening_hours )
+      platform_listings ( platform, delivery_fee, eta_min, rating, url_type, is_available, opening_hours, last_scraped_at )
     `)
 
   if (error) throw new Error(`getRestaurants: ${error.message}`)
 
-  const restaurants: RestaurantSummary[] = (data ?? [])
-    .map((r) => {
-      const rawListings = (r.platform_listings ?? []) as {
-        platform: string
-        delivery_fee: number | null
-        eta_min: number | null
-        rating: number | null
-        url_type: string | null
-        is_available: boolean | null
-        opening_hours: OpeningHours | null
-      }[]
+  const threshold = new Date(Date.now() - STALE_THRESHOLD_MS)
 
-      const listings = rawListings.map((l) => ({
+  const restaurants: RestaurantSummary[] = ((data ?? []) as unknown as RawRestaurantRow[])
+    .map((r) => {
+      const rawListings = r.platform_listings ?? []
+
+      const freshListings = rawListings.filter((l) =>
+        l.last_scraped_at != null && new Date(l.last_scraped_at) >= threshold
+      )
+
+      const listings = freshListings.map((l) => ({
         platform: l.platform as Platform,
         delivery_fee_cents: feeCents(l.delivery_fee),
         eta_min: l.eta_min ?? null,
@@ -134,9 +217,9 @@ export async function getRestaurants(): Promise<{
 
       const lat = r.lat != null ? Number(r.lat) : null
       const lng = r.lng != null ? Number(r.lng) : null
-      const order_url: string | null = (r as any).order_url ?? null
-      const image_url: string | null = (r as any).image_url ?? null
-      const neighborhood: string | null = (r as any).neighborhood ?? null
+      const order_url: string | null = r.order_url ?? null
+      const image_url: string | null = r.image_url ?? null
+      const neighborhood: string | null = r.neighborhood ?? null
 
       if (available.length === 0) {
         return {
@@ -179,6 +262,7 @@ export async function getRestaurants(): Promise<{
           savings_cents:
             (mostExpensive.delivery_fee_cents ?? 0) -
             (cheapest.delivery_fee_cents ?? 0),
+          delivery_fee_cents: cheapest.delivery_fee_cents,
         },
       }
     })
@@ -224,7 +308,7 @@ export async function getDeals(): Promise<DealItem[]> {
 
   if (error) throw new Error(`getDeals: ${error.message}`)
 
-  return (data ?? []).flatMap((p: any): DealItem[] => {
+  return ((data ?? []) as unknown as RawPromoRow[]).flatMap((p): DealItem[] => {
     const listing = p.platform_listings
     const restaurant = listing?.restaurants
     if (!listing || !restaurant) return []
@@ -238,23 +322,12 @@ export async function getDeals(): Promise<DealItem[]> {
       rating: listing.rating != null ? Number(listing.rating) : null,
       review_count: listing.review_count != null ? Number(listing.review_count) : null,
       platform_url: typeof listing.url === 'string' ? listing.url : null,
-      promo_type: p.promo_type,
+      promo_type: p.promo_type as DealType,
       label: p.label,
       value: p.value != null ? Number(p.value) : null,
       min_order: p.min_order != null ? Number(p.min_order) : null,
     }]
   })
-}
-
-export function normalizeTitle(title: string): string {
-  return title
-    .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '')
-    .normalize('NFD').replace(/\p{Mn}/gu, '')  // strip diacritics
-    .replace(/['']/g, '')  // remove apostrophes without space
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')  // replace remaining punctuation with space
-    .replace(/\s+/g, ' ')
-    .trim()
 }
 
 export async function getRestaurantWithListings(
@@ -278,7 +351,13 @@ export async function getRestaurantWithListings(
 
   if (error) return null
 
-  const listings: PlatformListing[] = (data.platform_listings ?? []).map((l: any) => ({
+  const raw = data as unknown as RawRestaurantDetail
+  const threshold = new Date(Date.now() - STALE_THRESHOLD_MS)
+  const freshRaw = (raw.platform_listings ?? []).filter((l) =>
+    l.last_scraped_at != null && new Date(l.last_scraped_at) >= threshold
+  )
+
+  const listings: PlatformListing[] = freshRaw.map((l) => ({
     id: l.id,
     platform: l.platform as Platform,
     platform_url: l.url ?? null,
@@ -293,8 +372,8 @@ export async function getRestaurantWithListings(
     is_available: l.is_available !== false,
     opening_hours: (l.opening_hours as OpeningHours | null) ?? null,
     promotions: (l.promotions ?? [])
-      .filter((p: any) => p.promo_type !== 'other' && p.promo_type !== 'spend_save')
-      .map((p: any): PromoItem => ({
+      .filter((p) => p.promo_type !== 'other' && p.promo_type !== 'spend_save')
+      .map((p): PromoItem => ({
         promo_type: p.promo_type,
         label: p.label,
         value: p.value != null ? Number(p.value) : null,
@@ -303,7 +382,7 @@ export async function getRestaurantWithListings(
 
   const itemMap = new Map<string, MenuItemWithPrices>()
 
-  for (const listing of (data.platform_listings ?? []) as any[]) {
+  for (const listing of freshRaw) {
     const platform = listing.platform as Platform
     for (const item of listing.menu_items ?? []) {
       const key = normalizeTitle(item.title)
@@ -314,21 +393,35 @@ export async function getRestaurantWithListings(
           category: item.catalog_name?.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim() ?? null,
           image_url: item.image_url ?? null,
           prices: { uber_eats: null, deliveroo: null, takeaway: null, direct: null },
+          platformTitles: { uber_eats: null, deliveroo: null, takeaway: null, direct: null },
         })
       }
-      itemMap.get(key)!.prices[platform] = feeCents(item.price)
+      const entry = itemMap.get(key)!
+      entry.prices[platform] = feeCents(item.price)
+      if (entry.platformTitles) {
+        entry.platformTitles[platform] = item.title
+          .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '')
+          .trim()
+      }
     }
   }
 
+  const matchableItems = Array.from(itemMap.values()).filter(
+    (item) => Object.values(item.prices).filter((p) => p !== null).length >= 2
+  ).length
+  const matchRate = itemMap.size > 0 ? matchableItems / itemMap.size : 0
+
   return {
-    id: data.id,
-    name: data.name,
-    city: data.neighborhood ?? 'Brussels',
-    cuisine: data.cuisine ? [data.cuisine] : [],
-    phone: (data as any).phone ?? null,
-    order_url: (data as any).order_url ?? null,
-    image_url: (data as any).image_url ?? null,
+    id: raw.id,
+    name: raw.name,
+    city: raw.neighborhood ?? 'Brussels',
+    cuisine: raw.cuisine ? [raw.cuisine] : [],
+    phone: raw.phone ?? null,
+    order_url: raw.order_url ?? null,
+    direct_url_type: freshRaw.find((l) => l.platform === 'direct')?.url_type ?? null,
+    image_url: raw.image_url ?? null,
     listings,
     menuItems: Array.from(itemMap.values()),
+    matchRate,
   }
 }

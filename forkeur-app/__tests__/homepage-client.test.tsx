@@ -74,7 +74,7 @@ describe('HomepageClient', () => {
     fireEvent.change(screen.getByPlaceholderText('Search a restaurant'), {
       target: { value: 'zzznomatch' },
     })
-    expect(screen.getByText('No restaurants found')).toBeInTheDocument()
+    expect(screen.getByText(/No restaurants found/)).toBeInTheDocument()
   })
 
   it('clears search when ✕ button clicked', () => {
@@ -87,7 +87,7 @@ describe('HomepageClient', () => {
 
   it('filters by cuisine pill', () => {
     renderWithIntl(<HomepageClient restaurants={restaurants} cuisines={cuisines} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Asian' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Asian/ }))
     expect(screen.getByText('Sushi House')).toBeInTheDocument()
     expect(screen.queryByText('Pizza Palace')).toBeNull()
     expect(screen.queryByText('Burger Barn')).toBeNull()
@@ -95,15 +95,15 @@ describe('HomepageClient', () => {
 
   it('deselects cuisine when same pill clicked again', () => {
     renderWithIntl(<HomepageClient restaurants={restaurants} cuisines={cuisines} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Asian' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Asian' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Asian/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Asian/ }))
     expect(screen.getByText('Pizza Palace')).toBeInTheDocument()
     expect(screen.getByText('Sushi House')).toBeInTheDocument()
   })
 
   it('All pill resets cuisine filter', () => {
     renderWithIntl(<HomepageClient restaurants={restaurants} cuisines={cuisines} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Asian' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Asian/ }))
     fireEvent.click(screen.getByRole('button', { name: 'All' }))
     expect(screen.getByText('Pizza Palace')).toBeInTheDocument()
     expect(screen.getByText('Burger Barn')).toBeInTheDocument()
@@ -111,9 +111,9 @@ describe('HomepageClient', () => {
 
   it('renders cuisine pills from prop', () => {
     renderWithIntl(<HomepageClient restaurants={restaurants} cuisines={cuisines} />)
-    expect(screen.getByRole('button', { name: 'Pizza' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Asian' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Burgers' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Pizza/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Asian/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Burgers/ })).toBeInTheDocument()
   })
 
   it('switches to map view when Map button clicked', () => {

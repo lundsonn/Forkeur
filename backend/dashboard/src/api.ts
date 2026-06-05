@@ -116,3 +116,38 @@ export async function rejectClaim(id: string): Promise<void> {
   const res = await apiFetch(`${BASE}/claims/${id}/reject`, { method: 'POST' })
   if (!res.ok) throw new Error(await res.text())
 }
+
+export interface MatchDecision {
+  id: string
+  survivor_id: string
+  loser_id: string
+  score: number
+  features: {
+    name_sim?: number
+    website_match?: boolean
+    phone_match?: boolean
+    geo_dist?: number
+    survivor_name?: string
+    loser_name?: string
+    [key: string]: unknown
+  } | null
+  status: string
+  created_at: string
+  resolved_at: string | null
+  resolved_by: string | null
+}
+
+export async function getMatchQueue(): Promise<MatchDecision[]> {
+  const res = await apiFetch(`${BASE}/data/match-queue`)
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export async function resolveMatch(id: string, approve: boolean): Promise<void> {
+  const res = await apiFetch(`${BASE}/data/match-queue/${id}/resolve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ approve, resolved_by: 'admin' }),
+  })
+  if (!res.ok) throw new Error(await res.text())
+}

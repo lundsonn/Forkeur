@@ -6,7 +6,7 @@ from models import RunTriggerOut, ScraperStatusOut, ScraperConfig, RunTriggerIn,
 import alerting
 import db
 import ws as ws_mod
-from scrapers import ubereats, deliveroo, takeaway, fees, direct, direct_menu
+from scrapers import ubereats, deliveroo, takeaway, fees, direct, direct_menu, match
 from scrapers import dom_menu
 from scrapers.base import CloudflareBlockedError
 
@@ -17,9 +17,10 @@ _TIMEOUTS: dict[str, int] = {
     "ubereats":    90 * 60,
     "deliveroo":   60 * 60,
     "takeaway":    60 * 60,
-    "direct":      30 * 60,
+    "direct":      60 * 60,
     "direct_menu": 15 * 60,
     "dom_menu":    60 * 60,
+    "match":       15 * 60,
 }
 
 
@@ -36,6 +37,7 @@ SCRAPERS = {
     "direct":      direct.run,
     "direct_menu": _direct_menu_adapter,
     "dom_menu":    dom_menu.run,
+    "match":       match.run,
 }
 
 # Track currently running platforms (also read by scheduler to skip duplicates).
@@ -91,6 +93,14 @@ async def trigger_fees():
     return RunTriggerOut(run_id=run_id)
 
 
+@router.post("/batch/run")
+async def trigger_batch():
+    """Trigger all scrapers concurrently (same as the scheduled batch job)."""
+    import scheduler as _sched
+    asyncio.create_task(_sched._run_batch_all())
+    return {"status": "started"}
+
+
 @router.get("/fees/status")
 async def fees_status():
     import scheduler
@@ -111,7 +121,16 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
         body = RunTriggerIn()
 
     run_id = db.create_run(platform)
-    log_fn = ws_mod.make_log_fn(run_id)
+    _ws_log = ws_mod.make_log_fn(run_id)
+    _log_path = f"/tmp/fk_{platform}_{run_id[:8]}.log"
+    def log_fn(msg: str) -> None:
+        _ws_log(msg)
+        try:
+            with open(_log_path, "a") as _f:
+                import time as _t
+                _f.write(f"{_t.strftime('%H:%M:%S')} {msg}\n")
+        except Exception:
+            pass
     timeout = _TIMEOUTS.get(platform, 60 * 60)
 
     async def _run():
@@ -121,13 +140,17 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
                 scrape_menus=body.scrape_menus,
                 max_menus=body.max_menus,
                 max_items=10 if body.test_mode else None,
+                target=body.target,
             )
             # One automatic retry for transient DB/network errors.
             last_exc: Exception | None = None
             for attempt in range(2):
                 try:
+                    scraper_fn = SCRAPERS[platform]
+                    import inspect
+                    kwargs = {"run_id": run_id} if "run_id" in inspect.signature(scraper_fn).parameters else {}
                     result = await asyncio.wait_for(
-                        SCRAPERS[platform](config, log_fn),
+                        scraper_fn(config, log_fn, **kwargs),
                         timeout=timeout,
                     )
                     break

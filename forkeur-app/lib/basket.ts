@@ -209,6 +209,68 @@ export function computeDirectSavingsCentsFromMenu(
   return savingsCents
 }
 
+export type PlatformCoverage = {
+  priced: number
+  total: number
+  complete: boolean
+}
+
+export type PlatformCoverages = Record<Platform, PlatformCoverage | null>
+
+export type TotalsWithCoverage = {
+  totals: PlatformTotals
+  coverages: PlatformCoverages
+}
+
+/**
+ * Like calculateAllTotals but also returns per-platform coverage metadata.
+ * Coverage is null when the platform is unavailable (fee === null).
+ * When basket is empty, all available platforms get complete=true (fee comparison only).
+ */
+export function calculateAllTotalsWithCoverage(
+  items: BasketItem[],
+  fees: PlatformFees
+): TotalsWithCoverage {
+  const totals = calculateAllTotals(items, fees)
+  const coverages = {} as PlatformCoverages
+  for (const p of PLATFORMS) {
+    if (fees[p] === null) {
+      coverages[p] = null
+    } else if (items.length === 0) {
+      coverages[p] = { priced: 0, total: 0, complete: true }
+    } else {
+      const priced = items.filter((item) => item.prices[p] !== null).length
+      coverages[p] = { priced, total: items.length, complete: priced === items.length }
+    }
+  }
+  return { totals, coverages }
+}
+
+/**
+ * Like findCheapestPlatform but only considers platforms with complete coverage
+ * when the basket has items. Falls back to fee-only comparison when basket is empty.
+ * Returns null if no platform has complete coverage (no winner).
+ */
+export function findCheapestCompletePlatform(
+  totals: PlatformTotals,
+  coverages: PlatformCoverages,
+  hasBasketItems: boolean
+): Platform | null {
+  if (!hasBasketItems) return findCheapestPlatform(totals)
+  let cheapest: Platform | null = null
+  let minTotal = Infinity
+  for (const p of PLATFORMS) {
+    const coverage = coverages[p]
+    if (coverage === null || !coverage.complete) continue
+    const total = totals[p]
+    if (total !== null && total < minTotal) {
+      minTotal = total
+      cheapest = p
+    }
+  }
+  return cheapest
+}
+
 export const PLATFORM_COLORS: Record<Platform, { dot: string; label: string; ring: string }> = {
   uber_eats:  { dot: 'bg-green-500',  label: 'text-green-600',  ring: 'border-green-500' },
   deliveroo:  { dot: 'bg-cyan-500',   label: 'text-cyan-600',   ring: 'border-cyan-500'  },

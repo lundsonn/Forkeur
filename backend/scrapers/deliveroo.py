@@ -277,29 +277,41 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
     page = None
 
     async with browser_session(lang="fr-BE") as browser:
-        # Phase 0: collect listings across all zones, dedup by slug
+        # Phase 0: collect listings across all zones, dedup by slug.
+        # Zones are independent (own page, same browser/CF session) → run concurrently.
+        ZONE_WORKERS = 4
         zones = LISTING_ZONES
+        zone_sem = asyncio.Semaphore(ZONE_WORKERS)
+
+        async def _scrape_zone_safe(zone_address: str) -> list[dict]:
+            async with zone_sem:
+                log_fn(f"Zone: {zone_address}")
+                try:
+                    return await asyncio.wait_for(
+                        _scrape_zone_listings(browser, zone_address, log_fn),
+                        timeout=180,
+                    )
+                except asyncio.TimeoutError:
+                    log_fn(f"  ⚠ zone timed out: {zone_address}")
+                    return []
+                except Exception as exc:
+                    log_fn(f"  ⚠ zone error ({zone_address}): {exc}")
+                    return []
+
+        log_fn(f"Phase 0: {len(zones)} zones, {ZONE_WORKERS} concurrent")
+        zone_results: list[list[dict]] = await asyncio.gather(
+            *[_scrape_zone_safe(z) for z in zones]
+        )
+
         all_by_slug: dict[str, dict] = {}
-        for zone_address in zones:
-            log_fn(f"Zone: {zone_address}")
-            try:
-                zone_restaurants = await asyncio.wait_for(
-                    _scrape_zone_listings(browser, zone_address, log_fn),
-                    timeout=180,
-                )
-            except asyncio.TimeoutError:
-                log_fn(f"  ⚠ zone timed out after 180s, skipping")
-                continue
-            new_count = 0
+        for zone_restaurants in zone_results:
             for r in zone_restaurants:
                 if r["slug"] not in all_by_slug:
                     all_by_slug[r["slug"]] = r
-                    new_count += 1
-            log_fn(f"  {len(zone_restaurants)} cards, {new_count} new (total {len(all_by_slug)})")
-            await asyncio.sleep(1)
 
         restaurants = list(all_by_slug.values())
-        log_fn(f"Found {len(restaurants)} unique restaurants across {len(zones)} zones")
+        total_cards = sum(len(zr) for zr in zone_results)
+        log_fn(f"Phase 0 done — {total_cards} cards across {len(zones)} zones → {len(restaurants)} unique")
 
         if config.target:
             restaurants = [r for r in restaurants if config.target.lower() in r["name"].lower() or config.target.lower() in r["slug"].lower()]
@@ -314,7 +326,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                     "name": r["name"],
                     "slug": r["slug"],
                     "image_url": r.get("image_url"),
-                    **({} if coords is None else {"lat": coords[0], "lng": coords[1]}),
+                    **({} if coords is None else {"lat": coords[0], "lng": coords[1], "geo_source": "deliveroo"}),
                 })
             except ValueError:
                 continue  # junk entry filtered by db._is_junk
@@ -345,14 +357,15 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
         # Deliveroo has no CF on menu pages so goto is safe.
         menu_items_saved = 0
         n = len(saved)
-        page = await new_page(browser, lang="fr-BE")
-        for i, (r, rid, lid) in enumerate(saved):
+
+        async def _scrape_one(page, i, r, rid, lid):
+            nonlocal menu_items_saved
             log_fn(f"Menu: {i + 1}/{n} — {r['name']}")
             try:
                 menu_url = r.get("url", "")
                 if not menu_url:
                     log_fn(f"  No URL for {r['name']}, skipping")
-                    continue
+                    return
 
                 try:
                     await page.goto(menu_url, wait_until="domcontentloaded", timeout=60000)
@@ -587,7 +600,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
 
                     // 2. Elements whose class names suggest offers
                     for (const el of document.querySelectorAll('[class]')) {
-                        const cls = (el.className || '').toLowerCase();
+                        const cls = (el.getAttribute('class') || '').toLowerCase();
                         if (/offer|promo|deal|discount|voucher/.test(cls)) {
                             const t = (el.innerText || '').trim();
                             if (t && t.length < 200 && t.length > 5) add(t);
@@ -617,13 +630,61 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
             except CloudflareBlockedError:
                 log_fn(f"  Cloudflare blocked — skipping menu for {r['name']}")
             except Exception as exc:
+                if "crashed" in str(exc).lower():
+                    raise  # bubble up so the worker recreates its page
                 log_fn(f"  Error scraping menu for {r['name']}: {exc}")
 
+        # Phase 2 fan-out: Deliveroo menus use direct goto (no click-nav, no CF),
+        # so each worker scrapes its slice on an independent page in parallel.
+        async def _worker(wid: int, slice_items: list) -> None:
+            wpage = await new_page(browser, lang="fr-BE")
+            try:
+                for k, (r, rid, lid) in enumerate(slice_items):
+                    # Recycle the page every 12 restaurants — Deliveroo menu pages
+                    # are heavy (full SSR); reusing one page across a whole slice
+                    # leaks renderer RSS (drove full-batch free RAM to ~300MB).
+                    if k > 0 and k % 12 == 0:
+                        try:
+                            await wpage.close()
+                        except Exception:
+                            pass
+                        try:
+                            wpage = await asyncio.wait_for(new_page(browser, lang="fr-BE"), timeout=30)
+                        except Exception:
+                            log_fn(f"  worker {wid}: recycle failed, abandoning {len(slice_items) - k} remaining")
+                            return
+                    try:
+                        # Hard wall cap — goto(60s)+scroll loops can stack; also
+                        # guards against a crashed page wedging past Playwright timeouts.
+                        await asyncio.wait_for(_scrape_one(wpage, k, r, rid, lid), timeout=150)
+                    except asyncio.TimeoutError:
+                        log_fn(f"  worker {wid}: {r['name']} timed out, skipping")
+                    except Exception:
+                        log_fn(f"  worker {wid}: page crashed, recreating")
+                        try:
+                            await wpage.close()
+                        except Exception:
+                            pass
+                        try:
+                            wpage = await asyncio.wait_for(new_page(browser, lang="fr-BE"), timeout=30)
+                        except Exception:
+                            log_fn(f"  worker {wid}: cannot recover, abandoning {len(slice_items) - k - 1} remaining")
+                            return
+            finally:
+                try:
+                    await wpage.close()
+                except Exception:
+                    pass
+
+        # 3 workers (not 4) — keeps full-batch peak RAM clear of the 8GB ceiling.
+        WORKERS = 3
+        slices = [saved[w::WORKERS] for w in range(WORKERS)]
+        log_fn(f"Phase 2: {n} menus across {WORKERS} parallel workers")
+        await asyncio.gather(
+            *[_worker(w, s) for w, s in enumerate(slices) if s],
+            return_exceptions=True,
+        )
         log_fn(f"Done — {records_saved} listings, {menu_items_saved} menu items, {promo_total} promos saved")
-        try:
-            await page.close()
-        except Exception:
-            pass
         return ScraperResult(records_saved=records_saved, restaurants=restaurants, menu_items_saved=menu_items_saved)
 
 

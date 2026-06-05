@@ -41,27 +41,37 @@ async def run(config: ScraperConfig | None = None, log: Callable = noop_log) -> 
     if max_items:
         listings = listings[:max_items]
 
-    total_saved = 0
-    async with browser_session(headed=False) as browser:
-        for listing in listings:
+    # 5 concurrent pages on shared browser. 5 (not 8) because dom_menu overlaps
+    # the parallel ube/del menu workers during the batch — 8 pages here pushed
+    # batch peak to 6.7GB / 1.1GB free. 5 frees ~1.5GB at the overlap; dom_menu
+    # only slows ~3.5→5.5min (it's never the batch long pole). ~5× vs sequential.
+    sem = asyncio.Semaphore(5)
+
+    async def _scrape_one(listing: dict) -> int:
+        async with sem:
             url = listing["url"]
             host = urlparse(url).netloc.lower()
             log(f"  → {url[:70]}")
-
             adapter = get_adapter(host)
-            if adapter:
-                log(f"    [site-specific adapter]")
-                items = await adapter(url, browser, log)
-            else:
-                items = await generic.scrape_url(url, browser, log)
-
+            try:
+                if adapter:
+                    log(f"    [site-specific]")
+                    items = await adapter(url, browser, log)
+                else:
+                    items = await generic.scrape_url(url, browser, log)
+            except Exception as e:
+                log(f"     error: {e}")
+                return 0
             if not items:
-                continue
-
+                return 0
             saved = db.insert_menu_items(listing["id"], items)
-            total_saved += saved
             log(f"     {saved} items saved")
-            await asyncio.sleep(1.0)
+            return saved
+
+    total_saved = 0
+    async with browser_session(headed=False) as browser:
+        results = await asyncio.gather(*[_scrape_one(l) for l in listings], return_exceptions=True)
+        total_saved = sum(r for r in results if isinstance(r, int))
 
     log(f"\ndone — {total_saved} total items")
     return ScraperResult(records_saved=total_saved)

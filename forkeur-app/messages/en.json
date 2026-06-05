@@ -18,13 +18,17 @@
     "bogo": "2-for-1",
     "pct": "% Off",
     "free_delivery": "Free Delivery",
-    "free_item": "Free Item"
+    "free_item": "Free Item",
+    "more": "More ›",
+    "less": "Less ‹"
   },
   "results": {
     "restaurants": "Restaurants",
     "count": "{count, plural, one {# result} other {# results}}",
     "none": "No restaurants found",
-    "load_more": "Show {remaining, plural, one {# more restaurant} other {# more restaurants}}"
+    "load_more": "Show {next, plural, one {# more restaurant} other {# more restaurants}} ({remaining} total remaining)",
+    "none_query": "No restaurants found for \"{query}\"",
+    "clear_search": "Clear search"
   },
   "deals": {
     "heading": "Best deals",
@@ -32,6 +36,7 @@
     "none": "No deals in this category right now.",
     "min_order": "Min. €{amount}",
     "order_on": "Order on {platform} →",
+    "compare_and_order": "Compare & order on {platform} →",
     "search_placeholder": "Search a restaurant"
   },
   "basket": {
@@ -41,11 +46,15 @@
     "delivery": "Delivery {fee}",
     "items": "{count, plural, one {# item} other {# items}}",
     "best": "Best:",
+    "compare_platforms": "Compare platforms",
     "direct_savings": "~{fee} in platform fees saved",
     "direct_order_cta": "Order directly →",
     "direct_savings_banner": "Ordering directly saves you {amount}",
     "direct_savings_subtitle": "Same dishes · no platform fees",
-    "direct_order_btn": "Order →"
+    "direct_order_btn": "Order →",
+    "dish_prices": "Prices",
+    "dish_add": "Add to basket",
+    "cheapest_delivery_subline": "Cheapest delivery to your area"
   },
   "compare": {
     "best_now": "Best right now",
@@ -54,9 +63,16 @@
     "delivery": "Delivery",
     "you_save": "You save",
     "all_live": "All three · live prices",
+    "live_prices": "Live prices",
     "best_badge": "Best",
     "why": "Why {platform}? Lowest total including all fees.",
-    "order_on": "Order on {platform}"
+    "order_on": "Order on {platform}",
+    "no_winner_heading": "Prices vary by platform",
+    "no_winner_subline": "Not all items are priced on every platform — compare below",
+    "partial_coverage": "· {priced} of {total} items",
+    "compare_cta": "Compare platforms →",
+    "subtitle_fees": "Cheapest delivery to your area.",
+    "why_fees": "Why {platform}? Lowest delivery fee."
   },
   "direct": {
     "badge": "Order directly · no fees",
@@ -87,24 +103,34 @@
     "best": "Best match",
     "cheapest": "Cheapest",
     "fastest": "Fastest",
-    "all_areas": "All areas ▾",
-    "all_areas_option": "All areas",
-    "filter_by_area": "Filter by area"
+    "all_areas": "All communes ▾",
+    "all_areas_option": "All communes",
+    "filter_by_area": "Filter by commune"
   },
   "detail": {
     "platform_fees": "Delivery fees",
     "cheapest_signal": "{platform} is €{amount} cheaper than {other}",
-    "just_now": "Just updated",
-    "hours": "Updated {hours}h ago",
-    "days": "Updated {days}d ago",
+    "fees_included": "Fees included",
+    "fees_info": "Prices checked multiple times daily",
     "price_compare": "Menu price differences",
     "cheaper_on": "{pct}% cheaper on {platform}",
-    "meta_description": "{name} · {cuisine} · Compare delivery fees on UberEats, Deliveroo & Takeaway in Brussels."
+    "meta_description": "{name} · {cuisine} · Compare delivery fees on UberEats, Deliveroo & Takeaway in Brussels.",
+    "prices_updating": "Prices being updated — check back soon.",
+    "prices_updating_sub": "We check prices multiple times daily.",
+    "basket_section_title": "Compare your exact order",
+    "basket_section_subtitle": "See which platform is cheapest for what you're ordering.",
+    "basket_single_platform": "Prices available on {platform} only",
+    "partial_match_disclaimer": "Prices compared for {priced} of {total} menu items · some items only listed on one platform",
+    "no_match_neutral": "Menu prices vary by platform · not enough data to compare"
   },
   "hours": {
     "closed": "Closed",
     "closes_at": "Closes {time}",
-    "unavailable": "Unavailable"
+    "unavailable": "Unavailable",
+    "opens_at": "Opens {time}",
+    "opens_tomorrow": "Opens tomorrow {time}",
+    "not_checked": "Hours not verified",
+    "not_checked_tooltip": "We're working on live opening hours — coming soon"
   },
   "meta": {
     "home_title": "Forkeur — Compare food prices in Brussels",
@@ -138,5 +164,16 @@
     "sending": "Sending…",
     "success": "Request received — we will get back to you within a few days.",
     "error": "Something went wrong. Please try again."
+  },
+  "menuPrices": {
+    "section_label": "Menu prices",
+    "winner": "{platform} wins on {x} of {y} items",
+    "avg_savings": "cheaper per item on avg",
+    "same_prices": "Same prices across platforms",
+    "one_item_compared": "1 item compared",
+    "disclaimer": "Prices compared for {x} of {y} menu items · some items only listed on one platform",
+    "expand": "See all {count} items",
+    "show_more": "Show {count} more items",
+    "showing_count": "Showing {shown} of {total} items · sorted by biggest savings"
   }
 }
