@@ -15,27 +15,23 @@ from unittest.mock import MagicMock, patch
 @patch("db.get_client")
 def test_upsert_listing_updates_when_exists(mock_get):
     client = MagicMock()
-    client.table.return_value.select.return_value \
-        .eq.return_value.eq.return_value.execute.return_value.data = [{"id": "lid-1"}]
+    client.table.return_value.upsert.return_value.execute.return_value.data = [{"id": "lid-1"}]
     mock_get.return_value = client
     import db
     result = db.upsert_listing({"restaurant_id": "r1", "platform": "uber_eats", "url": "https://x.com"})
     assert result == "lid-1"
-    client.table.return_value.update.assert_called_once()
-    client.table.return_value.insert.assert_not_called()
+    client.table.return_value.upsert.assert_called_once()
 
 
 @patch("db.get_client")
 def test_upsert_listing_inserts_when_not_exists(mock_get):
     client = MagicMock()
-    client.table.return_value.select.return_value \
-        .eq.return_value.eq.return_value.execute.return_value.data = []
-    client.table.return_value.insert.return_value.execute.return_value.data = [{"id": "lid-new"}]
+    client.table.return_value.upsert.return_value.execute.return_value.data = [{"id": "lid-new"}]
     mock_get.return_value = client
     import db
     result = db.upsert_listing({"restaurant_id": "r1", "platform": "uber_eats"})
     assert result == "lid-new"
-    client.table.return_value.update.assert_not_called()
+    client.table.return_value.upsert.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -265,7 +261,7 @@ def test_get_last_successful_run_returns_none(mock_get):
 def test_get_restaurants_no_search(mock_get):
     client = MagicMock()
     client.table.return_value.select.return_value \
-        .range.return_value.execute.return_value.data = [{"id": "r1"}, {"id": "r2"}]
+        .order.return_value.range.return_value.execute.return_value.data = [{"id": "r1"}, {"id": "r2"}]
     mock_get.return_value = client
     import db
     result = db.get_restaurants()
@@ -276,12 +272,12 @@ def test_get_restaurants_no_search(mock_get):
 def test_get_restaurants_with_search_uses_ilike(mock_get):
     client = MagicMock()
     client.table.return_value.select.return_value \
-        .range.return_value.ilike.return_value.execute.return_value.data = [{"id": "r1"}]
+        .order.return_value.range.return_value.ilike.return_value.execute.return_value.data = [{"id": "r1"}]
     mock_get.return_value = client
     import db
     result = db.get_restaurants(search="pizza")
     assert len(result) == 1
-    ilike_arg = client.table.return_value.select.return_value.range.return_value.ilike.call_args[0]
+    ilike_arg = client.table.return_value.select.return_value.order.return_value.range.return_value.ilike.call_args[0]
     assert "%pizza%" in ilike_arg
 
 
