@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import type { RestaurantSummary } from '@/lib/queries'
+import OpenStatusBadge from './OpenStatusBadge'
+import { getOpenStatus } from '@/lib/hours'
 
 const CUISINE_ICONS: Record<string, string> = {
   pizza: '🍕',
@@ -47,6 +49,10 @@ export default function MapPreviewCard({ restaurant, onClose }: Props) {
   const tMap = useTranslations('map')
 
   const showImage = !!restaurant.image_url && !imgError
+  const openingHours = restaurant.listings.find((l) => l.opening_hours != null)?.opening_hours ?? null
+  const isAvailable = restaurant.listings.some((l) => l.is_available)
+  const openStatus = getOpenStatus(openingHours)
+  const isClosed = !isAvailable || openStatus.status === 'closed'
   // cheapest.fee_label is "Free" | "€X.XX" | null
   const rawFeeLabel = restaurant.cheapest?.fee_label ?? null
   const feeLabel =
@@ -71,7 +77,7 @@ export default function MapPreviewCard({ restaurant, onClose }: Props) {
 
       {/* Preview card */}
       <div
-        className="absolute bottom-0 left-0 right-0 z-20 bg-white px-4 pt-3 pb-5 map-preview-slide-up"
+        className={`absolute bottom-0 left-0 right-0 z-20 bg-white px-4 pt-3 pb-5 map-preview-slide-up ${isClosed ? 'opacity-70' : ''}`}
         style={{
           borderRadius: '16px 16px 0 0',
           boxShadow: '0 -4px 24px rgba(0,0,0,0.13)',
@@ -107,12 +113,17 @@ export default function MapPreviewCard({ restaurant, onClose }: Props) {
           {/* Name + cuisine + rating */}
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
-              <p
-                className="font-medium leading-snug truncate"
-                style={{ fontSize: 16, color: '#1A1A1A' }}
-              >
-                {restaurant.name}
-              </p>
+              <div className="flex-1 min-w-0">
+                <p
+                  className="font-medium leading-snug truncate"
+                  style={{ fontSize: 16, color: '#1A1A1A' }}
+                >
+                  {restaurant.name}
+                </p>
+                <div className="mt-0.5">
+                  <OpenStatusBadge openingHours={openingHours} isAvailable={isAvailable} />
+                </div>
+              </div>
               {restaurant.rating != null && (
                 <div
                   className="shrink-0 flex items-center gap-0.5 font-medium"

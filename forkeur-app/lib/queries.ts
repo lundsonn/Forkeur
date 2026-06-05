@@ -113,6 +113,8 @@ type RawPromoRow = {
     url: string | null
     rating: number | null
     review_count: number | null
+    is_available: boolean
+    opening_hours: OpeningHours | null
     restaurants: { id: string; name: string; cuisine: string | null; neighborhood: string | null } | null
   } | null
 }
@@ -300,7 +302,7 @@ export async function getDeals(): Promise<DealItem[]> {
     .select(`
       id, promo_type, label, value, min_order,
       platform_listings (
-        platform, url, rating, review_count,
+        platform, url, rating, review_count, is_available, opening_hours,
         restaurants ( id, name, cuisine, neighborhood )
       )
     `)
@@ -328,6 +330,8 @@ export async function getDeals(): Promise<DealItem[]> {
       label: p.label,
       value: p.value != null ? Number(p.value) : null,
       min_order: p.min_order != null ? Number(p.min_order) : null,
+      opening_hours: (listing.opening_hours as OpeningHours | null) ?? null,
+      is_available: listing.is_available ?? true,
     }]
   })
 }

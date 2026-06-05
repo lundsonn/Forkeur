@@ -5,10 +5,10 @@ import RestaurantCard from '../components/RestaurantCard'
 import type { RestaurantSummary } from '../lib/queries'
 import en from '../messages/en.json'
 
-function renderCard(props: React.ComponentProps<typeof RestaurantCard>) {
+function renderCard(props: Omit<React.ComponentProps<typeof RestaurantCard>, 'href'> & { href?: string }) {
   return render(
     <NextIntlClientProvider locale="en" messages={en}>
-      <RestaurantCard {...props} />
+      <RestaurantCard href={props.href ?? '/restaurant/test'} {...props} />
     </NextIntlClientProvider>
   )
 }
@@ -24,6 +24,7 @@ const threeListings: RestaurantSummary = {
   image_url: null,
   rating: null,
   direct_url_type: null,
+  is_chain: false,
   listings: [
     { platform: 'uber_eats', delivery_fee_cents: 49, eta_min: null, is_available: true, opening_hours: null },
     { platform: 'deliveroo', delivery_fee_cents: 149, eta_min: null, is_available: true, opening_hours: null },
@@ -43,6 +44,7 @@ const nullFees: RestaurantSummary = {
   image_url: null,
   rating: null,
   direct_url_type: null,
+  is_chain: false,
   listings: [
     { platform: 'uber_eats', delivery_fee_cents: null, eta_min: null, is_available: true, opening_hours: null },
     { platform: 'deliveroo', delivery_fee_cents: 299, eta_min: null, is_available: true, opening_hours: null },
@@ -61,6 +63,7 @@ const freeListing: RestaurantSummary = {
   image_url: null,
   rating: null,
   direct_url_type: null,
+  is_chain: false,
   listings: [
     { platform: 'uber_eats', delivery_fee_cents: 0, eta_min: null, is_available: true, opening_hours: null },
     { platform: 'deliveroo', delivery_fee_cents: 99, eta_min: null, is_available: true, opening_hours: null },
@@ -80,6 +83,7 @@ const withDirectOrdering: RestaurantSummary = {
   image_url: null,
   rating: null,
   direct_url_type: 'ordering',
+  is_chain: false,
   listings: [
     { platform: 'uber_eats', delivery_fee_cents: 299, eta_min: null, is_available: true, opening_hours: null },
     { platform: 'deliveroo', delivery_fee_cents: 199, eta_min: null, is_available: true, opening_hours: null },
@@ -98,6 +102,7 @@ const withDirectMenu: RestaurantSummary = {
   image_url: null,
   rating: null,
   direct_url_type: 'menu',
+  is_chain: false,
   listings: [
     { platform: 'uber_eats', delivery_fee_cents: 299, eta_min: null, is_available: true, opening_hours: null },
   ],
@@ -115,6 +120,7 @@ const withNullUrlType: RestaurantSummary = {
   image_url: null,
   rating: null,
   direct_url_type: null,
+  is_chain: false,
   listings: [
     { platform: 'uber_eats', delivery_fee_cents: 199, eta_min: null, is_available: true, opening_hours: null },
   ],

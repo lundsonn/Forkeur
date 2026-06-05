@@ -7,6 +7,8 @@ import { useTranslations } from 'next-intl'
 import type { RestaurantSummary } from '@/lib/queries'
 import { centsToEuro, PLATFORM_LABELS, type Platform } from '@/lib/basket'
 import PlatformLogo from './ui/PlatformLogo'
+import OpenStatusBadge from './OpenStatusBadge'
+import { getOpenStatus } from '@/lib/hours'
 
 type Props = {
   restaurant: RestaurantSummary
@@ -21,6 +23,12 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge }
   const tCard = useTranslations('card')
   const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
+
+  const bestListing = listings.find((l) => l.opening_hours != null) ?? listings[0] ?? null
+  const openingHours = bestListing?.opening_hours ?? null
+  const isAvailable = listings.some((l) => l.is_available)
+  const status = getOpenStatus(openingHours)
+  const isClosed = !isAvailable || status.status === 'closed'
 
   const tiles = listings.filter((l) => l.delivery_fee_cents !== null)
   const sortedTiles = [...tiles].sort((a, b) => {
@@ -39,7 +47,7 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge }
 
   return (
     <div
-      className={`py-4 cursor-pointer select-none ${!isLast ? 'border-b border-stone-100' : ''}`}
+      className={`py-4 cursor-pointer select-none ${!isLast ? 'border-b border-stone-100' : ''} ${isClosed ? 'opacity-60' : ''}`}
       onClick={handleCardClick}
     >
       {/* Header */}
@@ -54,8 +62,11 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge }
           />
         )}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-stone-900 truncate">{name}</p>
-          <p className="text-xs text-stone-400 mt-0.5 truncate">{cuisine.join(' · ')}</p>
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <p className="text-sm font-semibold text-stone-900 truncate">{name}</p>
+            <OpenStatusBadge openingHours={openingHours} isAvailable={isAvailable} />
+          </div>
+          <p className="text-xs text-stone-400 truncate">{cuisine.join(' · ')}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0 mt-0.5">
           {cheapestFeeCents != null && (

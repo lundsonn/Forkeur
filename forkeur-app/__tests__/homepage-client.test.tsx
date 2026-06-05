@@ -30,6 +30,7 @@ const makeRestaurant = (overrides: Partial<RestaurantSummary> & { id: string; na
   image_url: null,
   rating: null,
   direct_url_type: null,
+  is_chain: false,
   listings: [],
   cheapest: null,
   ...overrides,

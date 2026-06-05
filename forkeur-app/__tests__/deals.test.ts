@@ -29,6 +29,8 @@ function deal(overrides: Partial<DealItem>): DealItem {
     label: '',
     value: null,
     min_order: null,
+    opening_hours: null,
+    is_available: true,
     ...overrides,
   }
 }

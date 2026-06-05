@@ -10,6 +10,8 @@ import {
 } from '@/lib/deals'
 import { useTranslations } from 'next-intl'
 import LangToggle from './LangToggle'
+import OpenStatusBadge from './OpenStatusBadge'
+import { getOpenStatus } from '@/lib/hours'
 
 const PLATFORM_META: Record<string, { name: string; color: string }> = {
   uber_eats: { name: 'UberEats', color: 'bg-black text-white' },
@@ -28,6 +30,7 @@ export default function DealsClient({ deals }: { deals: DealItem[] }) {
   const tDeals = useTranslations('deals')
   const tFilters = useTranslations('filters')
   const tBadge = useTranslations('badge')
+  const tHours = useTranslations('hours')
 
   function localizedBadge(d: DealItem): string {
     switch (d.promo_type) {
@@ -149,17 +152,24 @@ export default function DealsClient({ deals }: { deals: DealItem[] }) {
               color: 'bg-stone-200 text-stone-700',
             }
             const meta = [d.cuisine.join(' · '), d.area].filter(Boolean).join(' · ')
+            const status = getOpenStatus(d.opening_hours)
+            const isClosed = !d.is_available || status.status === 'closed'
             return (
               <div
                 key={d.id}
-                className="border border-stone-100 rounded-2xl p-4 hover:border-stone-300 hover:shadow-sm transition-all"
+                className={`border border-stone-100 rounded-2xl p-4 hover:border-stone-300 hover:shadow-sm transition-all ${isClosed ? 'opacity-60' : ''}`}
               >
                 <Link href={`/restaurant/${d.restaurant_id}`} className="block">
                   {/* Top row: name + platform */}
                   <div className="flex items-start justify-between gap-3 mb-1">
-                    <span className="font-semibold text-sm leading-snug" style={{ color: '#1A1A1A' }}>
-                      {d.restaurant_name}
-                    </span>
+                    <div className="flex-1 min-w-0">
+                      <span className="font-semibold text-sm leading-snug" style={{ color: '#1A1A1A' }}>
+                        {d.restaurant_name}
+                      </span>
+                      <div className="mt-0.5">
+                        <OpenStatusBadge openingHours={d.opening_hours} isAvailable={d.is_available} />
+                      </div>
+                    </div>
                     <span className={`flex-shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${plat.color}`}>
                       {plat.name}
                     </span>
@@ -197,10 +207,27 @@ export default function DealsClient({ deals }: { deals: DealItem[] }) {
                   </div>
                 </Link>
 
+                {/* Closed banner */}
+                {isClosed && (() => {
+                  const s = status
+                  const label = !d.is_available
+                    ? tHours('unavailable')
+                    : s.status === 'closed' && s.opensAt
+                      ? s.opensAt.startsWith('tomorrow ')
+                        ? tHours('opens_tomorrow', { time: s.opensAt.replace('tomorrow ', '') })
+                        : tHours('opens_at', { time: s.opensAt })
+                      : tHours('closed')
+                  return (
+                    <div className="mt-3 flex items-center justify-center py-2 rounded-xl bg-stone-100 text-xs font-medium text-stone-500">
+                      {label}
+                    </div>
+                  )
+                })()}
+
                 {/* Compare & Order CTA */}
                 <Link
                   href={`/restaurant/${d.restaurant_id}`}
-                  className="mt-3 flex items-center justify-center w-full py-2 rounded-xl text-xs font-semibold text-white bg-stone-900 hover:bg-stone-700 transition-colors"
+                  className="mt-2 flex items-center justify-center w-full py-2 rounded-xl text-xs font-semibold text-white bg-stone-900 hover:bg-stone-700 transition-colors"
                 >
                   {tDeals('compare_and_order', { platform: plat.name })}
                 </Link>
