@@ -71,7 +71,7 @@ def send_daily_digest() -> None:
     """Send a morning status summary for all core scraper platforms."""
     import db
 
-    platforms = ("ubereats", "deliveroo", "takeaway", "fees")
+    platforms = ("ubereats", "deliveroo", "takeaway")
     cutoff_ok = datetime.now(timezone.utc) - timedelta(hours=25)
     rows_html = ""
     any_problem = False

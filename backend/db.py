@@ -335,7 +335,7 @@ def get_last_run_per_platform() -> dict[str, dict]:
     """Returns {platform: run_row} for the most recent run of each platform."""
     client = get_client()
     result = {}
-    for platform in ("ubereats", "deliveroo", "takeaway", "fees", "direct", "direct_menu", "dom_menu", "match"):
+    for platform in ("ubereats", "deliveroo", "takeaway", "direct", "direct_menu", "dom_menu", "match"):
         res = (
             client.table("scraper_runs")
             .select("*")
@@ -519,24 +519,10 @@ def get_claims(verified: bool | None = None) -> list[dict]:
     return q.order("claimed_at", desc=True).execute().data
 
 
-_SSRF_BLOCKLIST = re.compile(
-    r'localhost|127\.|0\.0\.0\.0|169\.254\.|10\.\d|172\.(1[6-9]|2\d|3[01])\.|192\.168\.'
-    r'|\.internal|\.local$|oast\.|interactsh\.|burpcollaborator\.|canarytokens\.',
-    re.IGNORECASE,
-)
-
-
 def _validate_order_url(url: str) -> None:
-    """Raise ValueError if the URL looks unsafe to publish."""
-    from urllib.parse import urlparse
-    parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https"):
-        raise ValueError("URL must be http or https")
-    host = parsed.netloc.lower().split(":")[0]
-    if not host or "." not in host:
-        raise ValueError("URL must have a valid domain")
-    if _SSRF_BLOCKLIST.search(host):
-        raise ValueError(f"URL domain not allowed: {host}")
+    """Raise ValueError if the URL looks unsafe to publish (delegated to ssrf module)."""
+    from ssrf_guard import validate_public_url
+    validate_public_url(url)
 
 
 def approve_claim(claim_id: str) -> None:
@@ -614,15 +600,18 @@ def enqueue_decision(
     Upsert on the unordered-pair unique index so re-runs don't duplicate.
     """
     client = get_client()
-    # The uq_match_pair uniqueness is an expression index (least/greatest) that
-    # PostgREST cannot target via on_conflict, so reconcile the unordered pair
-    # manually: update an existing row for either ordering, else insert.
+    # Validate before interpolating into PostgREST filter DSL — `.or_()` accepts
+    # raw strings and would otherwise be a filter-injection vector.
+    s = _validate_uuid(survivor_id)
+    l = _validate_uuid(loser_id)
+    if s == l:
+        raise ValueError("survivor_id and loser_id must differ")
     existing = (
         client.table("restaurant_match_decisions")
         .select("id")
         .or_(
-            f"and(survivor_id.eq.{survivor_id},loser_id.eq.{loser_id}),"
-            f"and(survivor_id.eq.{loser_id},loser_id.eq.{survivor_id})"
+            f"and(survivor_id.eq.{s},loser_id.eq.{l}),"
+            f"and(survivor_id.eq.{l},loser_id.eq.{s})"
         )
         .limit(1)
         .execute()

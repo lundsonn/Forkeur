@@ -9,17 +9,12 @@ import db
 _scheduler = AsyncIOScheduler()
 _schedules: dict[str, ScheduleConfigIn] = {}
 
-# Fee refresh: after each meal-aligned scraper batch (lunch 06:30, dinner 13:30)
-_FEE_JOB_ID = "fee_refresh"
-_FEE_CRON = "15 8,15 * * *"   # 08:15 / 15:15 UTC — once heavies have finished
-
 _CLEANUP_JOB_ID = "daily_cleanup"
 _CLEANUP_CRON = "0 4 * * *"   # 04:00 UTC daily
 
 _DIGEST_JOB_ID = "daily_digest"
 _DIGEST_CRON = "0 19 * * *"   # 19:00 UTC = 21:00 Brussels (CEST)
 
-# Batch: all scrapers concurrently, fees auto-triggered after
 _BATCH_JOB_ID = "batch_all"
 _BATCH_CRON = "0 5,11 * * *"  # 05:00 + 11:00 UTC (off-peak + lunch prep)
 
@@ -174,27 +169,8 @@ async def _run_batch_all() -> None:
         phase2.append(_run_scraper("dom_menu"))
     await asyncio.gather(*phase2, return_exceptions=True)
 
-    # Fees run after all scrapers complete, no need for a separate cron.
-    await _run_fee_refresh()
-
     # Reconcile cross-platform duplicates after all data is fresh.
     await _run_match()
-
-
-async def _run_fee_refresh() -> None:
-    from scrapers import fees
-    from routers.scrapers import _fees_running
-    if _fees_running:
-        _noop("Scheduler: fee refresh already running, skipping")
-        return
-    run_id = db.create_run("fees")
-    try:
-        counts = await fees.run(_noop)
-        total = sum(counts.values())
-        db.finish_run(run_id, "success", records_saved=total)
-    except Exception as e:
-        db.finish_run(run_id, "failed", error_msg=str(e))
-        import alerting; alerting.send_failure_alert("fees", str(e), run_id)
 
 
 async def _run_match() -> None:
@@ -227,12 +203,6 @@ def start() -> None:
         replace_existing=True,
     )
     _scheduler.add_job(
-        _run_fee_refresh,
-        CronTrigger.from_crontab(_FEE_CRON),
-        id=_FEE_JOB_ID,
-        replace_existing=True,
-    )
-    _scheduler.add_job(
         _run_daily_cleanup,
         CronTrigger.from_crontab(_CLEANUP_CRON),
         id=_CLEANUP_JOB_ID,
@@ -260,6 +230,3 @@ def shutdown() -> None:
     _scheduler.shutdown(wait=False)
 
 
-def get_fee_next_run():
-    job = _scheduler.get_job(_FEE_JOB_ID)
-    return job.next_run_time if job else None

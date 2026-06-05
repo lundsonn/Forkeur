@@ -58,55 +58,12 @@ def _is_transient_error(e: Exception) -> bool:
     )
 
 
-@router.post("/fees/run")
-async def trigger_fees():
-    """Trigger a fee refresh run (delivery_fee + min_order for all known listings)."""
-    global _fees_running
-    if _fees_running:
-        raise HTTPException(409, "Fee refresh already running")
-
-    run_id = db.create_run("fees")
-
-    async def _run():
-        global _fees_running
-        _fees_running = True
-        log_fn = ws_mod.make_log_fn(run_id)
-        try:
-            counts = await asyncio.wait_for(fees.run(log_fn), timeout=120 * 60)
-            total = sum(counts.values())
-            db.finish_run(run_id, "success", records_saved=total)
-            await ws_mod.send_done(run_id, total)
-        except asyncio.TimeoutError:
-            msg = "timed out after 120 min"
-            db.finish_run(run_id, "failed", error_msg=msg)
-            await ws_mod.send_error(run_id, msg)
-            alerting.send_failure_alert("fees", msg, run_id)
-        except Exception as e:
-            db.finish_run(run_id, "failed", error_msg=str(e))
-            await ws_mod.send_error(run_id, str(e))
-            alerting.send_failure_alert("fees", str(e), run_id)
-        finally:
-            _fees_running = False
-
-    asyncio.create_task(_run())
-    return RunTriggerOut(run_id=run_id)
-
-
 @router.post("/batch/run")
 async def trigger_batch():
     """Trigger all scrapers concurrently (same as the scheduled batch job)."""
     import scheduler as _sched
     asyncio.create_task(_sched._run_batch_all())
     return {"status": "started"}
-
-
-@router.get("/fees/status")
-async def fees_status():
-    import scheduler
-    return {
-        "running": _fees_running,
-        "next_run": scheduler.get_fee_next_run(),
-    }
 
 
 @router.post("/{platform}/run", response_model=RunTriggerOut)
