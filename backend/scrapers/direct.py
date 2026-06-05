@@ -189,7 +189,7 @@ async def _enrich_existing(browser, log: Callable) -> int:
 
     all_restaurants = (
         supabase.table('restaurants')
-        .select('id, name, website, phone')
+        .select('id, name, website, phone, is_chain')
         .not_.is_('website', 'null')
         .neq('website', '')
         .execute()
@@ -226,6 +226,10 @@ async def _enrich_existing(browser, log: Callable) -> int:
             url_type = classify_url(order_url, analysis['phone'])
             # If no ordering/delivery signals, treat as plain website link
             if not (analysis['has_delivery'] or analysis['order_url']):
+                url_type = 'website'
+            # Chain restaurants have corporate/global websites — never claim they allow
+            # direct ordering or show a local menu. Keep the link but degrade to 'website'.
+            if r.get('is_chain'):
                 url_type = 'website'
 
             row = {
@@ -376,7 +380,7 @@ async def _discover_maps(page, log: Callable) -> int:
             ).data
 
             website_url = stub.get('website')
-            if is_junk_url(website_url):
+            if is_junk_url(website_url) or not _validate_order_url(website_url):
                 continue
             row = {
                 'restaurant_id': rest_id,

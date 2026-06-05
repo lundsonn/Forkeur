@@ -39,6 +39,24 @@ _JUNK_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Global chain corporate domains that geo-redirect or serve generic menus —
+# never "ordering" or "menu": always downgrade to "website" so we don't show
+# "Order directly · no platform fees" or "View menu" for a page that may
+# redirect the user to a different country's site.
+_CHAIN_CORPORATE_RE = re.compile(
+    r'subway\.com'
+    r'|mcdonalds\.com'
+    r'|kfc\.com'
+    r'|burgerking\.com'
+    r'|pizzahut\.com'
+    r'|dominos\.com'
+    r'|starbucks\.com'
+    r'|quick\.be'
+    r'|tgifridays\.com'
+    r'|papajohns\.com',
+    re.IGNORECASE,
+)
+
 
 def _sq_has_restaurant_code(url: str) -> bool:
     """Return True if the sq-menu/foodbooking URL has a restaurant identifier.
@@ -72,6 +90,10 @@ def classify_url(order_url: str | None, phone: str | None = None) -> str:
         host = parsed.netloc.lower()
         path = parsed.path
     except Exception:
+        return 'website'
+
+    # Known global chain corporate sites — never claim ordering/menu capability
+    if _CHAIN_CORPORATE_RE.search(host):
         return 'website'
 
     # Odoo POS self-order: *.odoo.com/pos-self/...
