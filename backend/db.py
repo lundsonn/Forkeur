@@ -1,10 +1,24 @@
 import os
 import re
 import unicodedata
+from uuid import UUID
 from supabase import create_client, Client
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def _validate_uuid(value: str) -> str:
+    """Return the value if it parses as a UUID, else raise ValueError.
+
+    PostgREST filter expressions (`.or_(...)`) accept raw strings; interpolating
+    unvalidated input there opens a filter-injection vector.
+    """
+    UUID(str(value))
+    return str(value)
+
+
+_MENU_INSERT_CHUNK = 500
 
 _client: Client | None = None
 
@@ -252,8 +266,11 @@ def insert_menu_items(listing_id: str, items: list[dict]) -> int:
     if not items:
         return 0
     rows = [{**item, "listing_id": listing_id} for item in items]
-    res = client.table("menu_items").insert(rows).execute()
-    return len(res.data)
+    total = 0
+    for i in range(0, len(rows), _MENU_INSERT_CHUNK):
+        res = client.table("menu_items").insert(rows[i : i + _MENU_INSERT_CHUNK]).execute()
+        total += len(res.data)
+    return total
 
 
 def run_exists(run_id: str) -> bool:
@@ -378,9 +395,18 @@ def prune_stale_menu_items(days: int = 30) -> int:
         .lt("last_scraped_at", cutoff)
         .execute()
     ).data
+    if not stale:
+        return 0
+    ids = [row["id"] for row in stale]
     deleted = 0
-    for row in stale:
-        res = client.table("menu_items").delete().eq("listing_id", row["id"]).execute()
+    # PostgREST `in_` builds a URL query param; chunk to keep it under typical limits.
+    for i in range(0, len(ids), 200):
+        res = (
+            client.table("menu_items")
+            .delete()
+            .in_("listing_id", ids[i : i + 200])
+            .execute()
+        )
         deleted += len(res.data)
     return deleted
 
