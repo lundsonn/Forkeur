@@ -20,12 +20,22 @@ HIGH_NAME_SIM = 0.92       # Jaro-Winkler on normalized names
 NAME_SIM_WEBSITE_AUTO = 0.97  # website-only auto-merge needs near-identical names
 GEO_CONFIRM_M = 75.0       # <= confirms same venue
 GEO_VETO_M = 300.0         # > vetoes merge (chain branches)
+SOFT_GEO_VETO_M = 600.0    # > veto when only one side is venue-grade
+MENU_OVERLAP_VETO = 0.03   # < 3% shared items → veto (different menus)
+MENU_OVERLAP_CONFIRM = 0.15  # >= 15% shared items → strong confirm
 VENUE_GRADE_SOURCES = {"uber_eats", "direct", "deliveroo_venue"}
 
 _ARTICLES = {"le", "la", "les", "l", "au", "aux", "un", "une", "de", "du",
              "des", "the", "a", "el", "il"}
 
 _SUFFIX_RE = re.compile(r"\s+-\s+\S.*$")  # " - Ixelles"
+
+_BRUSSELS_LOCATIONS = {
+    "anderlecht", "auderghem", "berchem", "etterbeek", "evere", "forest",
+    "ganshoren", "ixelles", "elsene", "jette", "koekelberg", "molenbeek",
+    "saintgilles", "sintgillis", "saintjosse", "schaerbeek", "schaarbeek",
+    "uccle", "ukkel", "watermael", "woluwe", "laeken", "neder", "haren",
+}
 
 
 def _strip_accents(s: str) -> str:
@@ -112,6 +122,34 @@ def is_venue_grade(r: dict) -> bool:
     )
 
 
+def _location_tokens(raw_name: str, slugs: list[str] | None = None) -> set[str]:
+    """Extract Brussels commune tokens from raw (uncanonical) name and optional slugs."""
+    key = re.sub(r"[^a-z]", "", _strip_accents(raw_name).lower())
+    tokens = {loc for loc in _BRUSSELS_LOCATIONS if loc in key}
+    for slug in (slugs or []):
+        slug_key = re.sub(r"[^a-z]", "", _strip_accents(slug).lower())
+        tokens |= {loc for loc in _BRUSSELS_LOCATIONS if loc in slug_key}
+    return tokens
+
+
+def _cuisine_conflict(ca: str | None, cb: str | None) -> bool:
+    """True if both cuisines are set AND they do not match (case-insensitive, accent-stripped).
+
+    'Match' means equal OR one is a substring of the other. This tolerates
+    "Asian" vs "Japanese" not being treated as a conflict (substring check
+    handles hierarchical cuisine labels).
+    """
+    if not ca or not cb:
+        return False
+    na = re.sub(r"[^a-z0-9]", "", _strip_accents(ca).lower())
+    nb = re.sub(r"[^a-z0-9]", "", _strip_accents(cb).lower())
+    if na == nb:
+        return False
+    if na in nb or nb in na:
+        return False
+    return True
+
+
 @dataclass
 class MatchFeatures:
     name_sim: float
@@ -119,12 +157,24 @@ class MatchFeatures:
     phone_match: bool
     geo_dist: float | None          # metres; None unless both venue-grade
     cuisine_match: bool
+    cuisine_conflict: bool          # both set and cuisines don't match
+    location_conflict: bool         # commune tokens are disjoint
+    menu_overlap: float | None      # Jaccard overlap; None if either side < 3 items
+    soft_geo_dist: float | None     # metres; one venue-grade + one has any coords
+    is_chain_name: bool             # normalized name appears 3+ times in corpus
 
     def to_dict(self) -> dict:
         return asdict(self)
 
 
-def score_pair(a: dict, b: dict) -> MatchFeatures:
+def score_pair(
+    a: dict,
+    b: dict,
+    *,
+    menus: dict[str, set[str]] | None = None,
+    chain_names: set[str] | None = None,
+    slugs: dict[str, list[str]] | None = None,
+) -> MatchFeatures:
     """Compute per-signal features for a candidate pair (order-independent)."""
     name_sim = JaroWinkler.similarity(normalize_name(a["name"]), normalize_name(b["name"]))
 
@@ -134,14 +184,58 @@ def score_pair(a: dict, b: dict) -> MatchFeatures:
     pa, pb = phone_digits(a.get("phone")), phone_digits(b.get("phone"))
     phone_match = pa is not None and pa == pb
 
+    # Venue-grade geo (both sides must be venue-grade)
     geo_dist: float | None = None
     if is_venue_grade(a) and is_venue_grade(b):
         geo_dist = haversine_m(a["lat"], a["lng"], b["lat"], b["lng"])
 
+    # Soft geo (one venue-grade + other has any coords)
+    soft_geo_dist: float | None = None
+    if geo_dist is None:
+        a_has_coords = a.get("lat") is not None and a.get("lng") is not None
+        b_has_coords = b.get("lat") is not None and b.get("lng") is not None
+        if a_has_coords and b_has_coords:
+            dist = haversine_m(a["lat"], a["lng"], b["lat"], b["lng"])
+            soft_geo_dist = dist
+
     ca, cb = a.get("cuisine"), b.get("cuisine")
     cuisine_match = bool(ca) and ca == cb
+    cuisine_conflict = _cuisine_conflict(ca, cb)
 
-    return MatchFeatures(name_sim, website_match, phone_match, geo_dist, cuisine_match)
+    # Location tokens — use raw name (before _canonical strips suffix)
+    a_slugs = slugs.get(str(a["id"]), []) if slugs else []
+    b_slugs = slugs.get(str(b["id"]), []) if slugs else []
+    a_locs = _location_tokens(a["name"], a_slugs)
+    b_locs = _location_tokens(b["name"], b_slugs)
+    location_conflict = bool(a_locs and b_locs and a_locs.isdisjoint(b_locs))
+
+    # Menu item overlap (Jaccard)
+    ma = menus.get(str(a["id"]), set()) if menus else set()
+    mb = menus.get(str(b["id"]), set()) if menus else set()
+    menu_overlap: float | None = None
+    if len(ma) >= 3 and len(mb) >= 3:
+        intersection = len(ma & mb)
+        union = len(ma | mb)
+        menu_overlap = intersection / union if union > 0 else 0.0
+
+    # Chain guard
+    is_chain_name = (
+        normalize_match_key(a["name"]) in (chain_names or set())
+        or normalize_match_key(b["name"]) in (chain_names or set())
+    )
+
+    return MatchFeatures(
+        name_sim=name_sim,
+        website_match=website_match,
+        phone_match=phone_match,
+        geo_dist=geo_dist,
+        cuisine_match=cuisine_match,
+        cuisine_conflict=cuisine_conflict,
+        location_conflict=location_conflict,
+        menu_overlap=menu_overlap,
+        soft_geo_dist=soft_geo_dist,
+        is_chain_name=is_chain_name,
+    )
 
 
 class Decision(str, Enum):
@@ -153,15 +247,28 @@ class Decision(str, Enum):
 def decide(f: MatchFeatures) -> Decision:
     """Map features to a decision band.
 
-    Order matters: geo veto first (chain guard), then strong-signal auto-merge,
-    then name-only queue, else separate.
+    Order matters: geo vetos first (strongest physical evidence), then semantic
+    vetos, then name threshold, then menu veto, then strong-signal auto-merge,
+    then chain guard, else queue.
     """
-    # NOTE: f.cuisine_match is intentionally not used here — it is retained in
-    # MatchFeatures purely for audit/debugging in the stored features jsonb.
+    # Geo vetos (strongest physical evidence)
     if f.geo_dist is not None and f.geo_dist > GEO_VETO_M:
         return Decision.SEPARATE
+    if f.soft_geo_dist is not None and f.soft_geo_dist > SOFT_GEO_VETO_M:
+        return Decision.SEPARATE
 
+    # Semantic vetos
+    if f.location_conflict:
+        return Decision.SEPARATE
+    if f.cuisine_conflict:
+        return Decision.SEPARATE
+
+    # Name threshold
     if f.name_sim < HIGH_NAME_SIM:
+        return Decision.SEPARATE
+
+    # Menu veto (after name threshold so low-sim pairs don't reach here)
+    if f.menu_overlap is not None and f.menu_overlap < MENU_OVERLAP_VETO:
         return Decision.SEPARATE
 
     # Strong confirmation = same physical place. Phone and close geo prove it.
@@ -174,7 +281,13 @@ def decide(f: MatchFeatures) -> Decision:
         f.phone_match
         or (f.geo_dist is not None and f.geo_dist <= GEO_CONFIRM_M)
         or (f.website_match and f.name_sim >= NAME_SIM_WEBSITE_AUTO)
+        or (f.menu_overlap is not None and f.menu_overlap >= MENU_OVERLAP_CONFIRM)
     )
+
+    # Chain guard: don't auto-merge or queue chain branches without evidence
+    if f.is_chain_name and not strong_confirm:
+        return Decision.SEPARATE
+
     if strong_confirm:
         return Decision.AUTO_MERGE
 

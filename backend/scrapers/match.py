@@ -29,6 +29,20 @@ def run_sync(*, dry_run: bool, log_fn) -> dict:
     pairs = matching.block_candidates(rows)
     log_fn(f"{len(pairs)} candidate pairs after blocking")
 
+    # Load supplementary data for enhanced scoring
+    menus_raw = db.load_menu_items_for_match()
+    slugs = db.load_slugs_for_match()
+    # Build chain_names: normalized names appearing 3+ times in the restaurant corpus
+    name_counts: dict[str, int] = {}
+    for r in rows:
+        k = matching.normalize_match_key(r["name"])
+        name_counts[k] = name_counts.get(k, 0) + 1
+    chain_names = {k for k, count in name_counts.items() if count >= 3}
+    log_fn(
+        f"Supplementary: {len(menus_raw)} restaurants with menus, "
+        f"{len(chain_names)} chain names"
+    )
+
     counts = {"auto_merge": 0, "queue": 0, "separate": 0}
     proposals: list[dict] = []
     touched_ids: set[str] = set()
@@ -37,7 +51,7 @@ def run_sync(*, dry_run: bool, log_fn) -> dict:
         if a["id"] in touched_ids or b["id"] in touched_ids:
             log_fn(f"  skip pair {a['id']}/{b['id']} — already merged this run (will reconcile next run)")
             continue
-        features = matching.score_pair(a, b)
+        features = matching.score_pair(a, b, menus=menus_raw, chain_names=chain_names, slugs=slugs)
         decision = matching.decide(features)
         counts[decision.value] += 1
         if decision == matching.Decision.SEPARATE:
@@ -97,7 +111,7 @@ def run_sync(*, dry_run: bool, log_fn) -> dict:
         if not (matching.is_venue_grade(ra) and matching.is_venue_grade(rb)):
             continue
 
-        features = matching.score_pair(ra, rb)
+        features = matching.score_pair(ra, rb, menus=menus_raw, chain_names=chain_names, slugs=slugs)
         if features.geo_dist is None:
             continue  # still not both venue-grade after re-check
 

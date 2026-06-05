@@ -434,6 +434,24 @@ def _r(name, **kw):
     return base
 
 
+def _f(**kw) -> matching.MatchFeatures:
+    """Build a MatchFeatures with sensible defaults for all fields."""
+    defaults = dict(
+        name_sim=0.95,
+        website_match=False,
+        phone_match=False,
+        geo_dist=None,
+        cuisine_match=False,
+        cuisine_conflict=False,
+        location_conflict=False,
+        menu_overlap=None,
+        soft_geo_dist=None,
+        is_chain_name=False,
+    )
+    defaults.update(kw)
+    return matching.MatchFeatures(**defaults)
+
+
 def test_score_pair_identical_normalized_name():
     f = matching.score_pair(_r("Pizza minute"), _r("PizzaMinute"))
     assert f.name_sim >= matching.HIGH_NAME_SIM
@@ -467,52 +485,332 @@ def test_score_pair_phone_match():
 
 
 def test_decide_website_plus_near_identical_name_auto_merges():
-    f = matching.MatchFeatures(name_sim=0.98, website_match=True,
-                               phone_match=False, geo_dist=None, cuisine_match=False)
+    f = _f(name_sim=0.98, website_match=True)
     assert matching.decide(f) == matching.Decision.AUTO_MERGE
 
 
 def test_decide_phone_signal_auto_merges():
-    f = matching.MatchFeatures(name_sim=0.95, website_match=False,
-                               phone_match=True, geo_dist=None, cuisine_match=False)
+    f = _f(name_sim=0.95, phone_match=True)
     assert matching.decide(f) == matching.Decision.AUTO_MERGE
 
 
 def test_decide_website_with_location_suffix_queues_not_merges():
     # shared chain domain + distinguishing location suffix (mid name_sim) → review
-    f = matching.MatchFeatures(name_sim=0.93, website_match=True,
-                               phone_match=False, geo_dist=None, cuisine_match=False)
+    f = _f(name_sim=0.93, website_match=True)
     assert matching.decide(f) == matching.Decision.QUEUE
 
 
 def test_decide_close_geo_auto_merges():
-    f = matching.MatchFeatures(name_sim=0.95, website_match=False,
-                               phone_match=False, geo_dist=40.0, cuisine_match=False)
+    f = _f(name_sim=0.95, geo_dist=40.0)
     assert matching.decide(f) == matching.Decision.AUTO_MERGE
 
 
 def test_decide_name_only_queues():
-    f = matching.MatchFeatures(name_sim=0.97, website_match=False,
-                               phone_match=False, geo_dist=None, cuisine_match=False)
+    f = _f(name_sim=0.97)
     assert matching.decide(f) == matching.Decision.QUEUE
 
 
 def test_decide_geo_veto_separates_even_if_name_identical():
-    f = matching.MatchFeatures(name_sim=1.0, website_match=False,
-                               phone_match=False, geo_dist=900.0, cuisine_match=False)
+    f = _f(name_sim=1.0, geo_dist=900.0)
     assert matching.decide(f) == matching.Decision.SEPARATE
 
 
 def test_decide_low_name_separates():
-    f = matching.MatchFeatures(name_sim=0.40, website_match=False,
-                               phone_match=False, geo_dist=None, cuisine_match=False)
+    f = _f(name_sim=0.40)
     assert matching.decide(f) == matching.Decision.SEPARATE
 
 
 def test_decide_website_match_overrides_far_geo_is_still_veto():
-    f = matching.MatchFeatures(name_sim=0.95, website_match=True,
-                               phone_match=False, geo_dist=1200.0, cuisine_match=False)
+    f = _f(name_sim=0.95, website_match=True, geo_dist=1200.0)
     assert matching.decide(f) == matching.Decision.SEPARATE
+
+
+# ---------------------------------------------------------------------------
+# Signal 1: Cuisine veto
+# ---------------------------------------------------------------------------
+
+def test_decide_cuisine_conflict_separates():
+    f = _f(name_sim=0.97, cuisine_conflict=True)
+    assert matching.decide(f) == matching.Decision.SEPARATE
+
+
+def test_decide_cuisine_conflict_after_geo_veto():
+    # geo veto fires first even when cuisine_conflict=True
+    f = _f(name_sim=0.97, geo_dist=900.0, cuisine_conflict=True)
+    assert matching.decide(f) == matching.Decision.SEPARATE
+
+
+def test_decide_no_cuisine_conflict_queues_normally():
+    f = _f(name_sim=0.97, cuisine_conflict=False)
+    assert matching.decide(f) == matching.Decision.QUEUE
+
+
+def test_cuisine_conflict_both_set_different():
+    assert matching._cuisine_conflict("Pizza", "Japanese") is True
+
+
+def test_cuisine_conflict_both_set_same():
+    assert matching._cuisine_conflict("Pizza", "Pizza") is False
+
+
+def test_cuisine_conflict_one_none():
+    assert matching._cuisine_conflict(None, "Pizza") is False
+    assert matching._cuisine_conflict("Pizza", None) is False
+
+
+def test_cuisine_conflict_substring():
+    # "Asian" contains "sian" — not substring of each other; still different
+    assert matching._cuisine_conflict("Asian", "Japanese") is True
+
+
+def test_cuisine_no_conflict_substring_contained():
+    # one is substring of the other → no conflict
+    assert matching._cuisine_conflict("Asian", "Asian Fusion") is False
+
+
+def test_score_pair_cuisine_conflict_detected():
+    a = _r("Sushi World", cuisine="Japanese")
+    b = _r("Sushi World", cuisine="Pizza")
+    f = matching.score_pair(a, b)
+    assert f.cuisine_conflict is True
+
+
+def test_score_pair_same_cuisine_no_conflict():
+    a = _r("Pizza Napoli", cuisine="Pizza")
+    b = _r("Pizza Napoli", cuisine="Pizza")
+    f = matching.score_pair(a, b)
+    assert f.cuisine_conflict is False
+    assert f.cuisine_match is True
+
+
+# ---------------------------------------------------------------------------
+# Signal 2: Location token veto
+# ---------------------------------------------------------------------------
+
+def test_location_tokens_ixelles():
+    tokens = matching._location_tokens("Le Grill - Ixelles")
+    assert "ixelles" in tokens
+
+
+def test_location_tokens_etterbeek():
+    tokens = matching._location_tokens("Sushi Palace Etterbeek")
+    assert "etterbeek" in tokens
+
+
+def test_location_tokens_empty_for_generic_name():
+    tokens = matching._location_tokens("Burger King")
+    assert tokens == set()
+
+
+def test_location_tokens_slug_reinforces():
+    tokens = matching._location_tokens("Sushi Palace", slugs=["sushi-palace-ixelles"])
+    assert "ixelles" in tokens
+
+
+def test_decide_location_conflict_separates():
+    f = _f(name_sim=0.97, location_conflict=True)
+    assert matching.decide(f) == matching.Decision.SEPARATE
+
+
+def test_score_pair_location_conflict_ixelles_vs_etterbeek():
+    a = _r("Le Grill - Ixelles", id="a1")
+    b = _r("Le Grill - Etterbeek", id="b1")
+    f = matching.score_pair(a, b)
+    assert f.location_conflict is True
+    assert matching.decide(f) == matching.Decision.SEPARATE
+
+
+def test_score_pair_no_location_conflict_same_commune():
+    a = _r("Le Grill - Ixelles", id="a1")
+    b = _r("Le Grill Ixelles", id="b1")
+    f = matching.score_pair(a, b)
+    assert f.location_conflict is False
+
+
+# ---------------------------------------------------------------------------
+# Signal 3: Menu overlap
+# ---------------------------------------------------------------------------
+
+def test_decide_menu_overlap_veto_below_threshold():
+    # name_sim fine, but almost zero menu overlap → SEPARATE
+    f = _f(name_sim=0.97, menu_overlap=0.01)
+    assert matching.decide(f) == matching.Decision.SEPARATE
+
+
+def test_decide_menu_overlap_confirm_auto_merges():
+    # name_sim just at threshold, menu_overlap provides strong confirm
+    f = _f(name_sim=0.92, menu_overlap=0.20)
+    assert matching.decide(f) == matching.Decision.AUTO_MERGE
+
+
+def test_decide_menu_overlap_none_no_effect():
+    # None means insufficient data — no veto, no confirm
+    f = _f(name_sim=0.97, menu_overlap=None)
+    assert matching.decide(f) == matching.Decision.QUEUE
+
+
+def test_score_pair_menu_overlap_computed():
+    a = _r("Foo", id="r1")
+    b = _r("Foo", id="r2")
+    menus = {
+        "r1": {"margherita", "calzone", "tiramisu", "lasagna", "cannoli"},
+        "r2": {"margherita", "calzone", "tiramisu", "carbonara", "risotto"},
+    }
+    f = matching.score_pair(a, b, menus=menus)
+    # intersection={margherita,calzone,tiramisu}=3, union=7 → 3/7 ≈ 0.429
+    assert f.menu_overlap is not None
+    assert abs(f.menu_overlap - 3 / 7) < 0.001
+
+
+def test_score_pair_menu_overlap_none_when_too_few_items():
+    a = _r("Foo", id="r1")
+    b = _r("Foo", id="r2")
+    menus = {
+        "r1": {"margherita", "calzone"},  # only 2 items — below threshold
+        "r2": {"margherita", "calzone", "tiramisu"},
+    }
+    f = matching.score_pair(a, b, menus=menus)
+    assert f.menu_overlap is None
+
+
+def test_score_pair_menu_overlap_zero_disjoint():
+    a = _r("Foo", id="r1")
+    b = _r("Foo", id="r2")
+    menus = {
+        "r1": {"burger", "fries", "cola"},
+        "r2": {"sushi", "miso", "edamame"},
+    }
+    f = matching.score_pair(a, b, menus=menus)
+    assert f.menu_overlap == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Signal 4: Soft geo veto
+# ---------------------------------------------------------------------------
+
+def test_decide_soft_geo_veto_above_threshold():
+    f = _f(name_sim=0.97, soft_geo_dist=700.0)
+    assert matching.decide(f) == matching.Decision.SEPARATE
+
+
+def test_decide_soft_geo_below_threshold_no_veto():
+    f = _f(name_sim=0.97, soft_geo_dist=400.0)
+    assert matching.decide(f) == matching.Decision.QUEUE
+
+
+def test_score_pair_soft_geo_when_one_venue_grade():
+    # a is venue-grade, b has coords but non-venue geo_source
+    a = _r("Foo", id="a1", lat=50.8467, lng=4.3525, geo_source="uber_eats")
+    b = _r("Foo", id="b1", lat=50.8447, lng=4.3495, geo_source="deliveroo")
+    f = matching.score_pair(a, b)
+    assert f.geo_dist is None         # not both venue-grade
+    assert f.soft_geo_dist is not None
+    assert 300 < f.soft_geo_dist < 460
+
+
+def test_score_pair_no_soft_geo_when_both_venue_grade():
+    # both venue-grade → geo_dist is used, soft_geo_dist stays None
+    a = _r("Foo", id="a1", lat=50.8467, lng=4.3525, geo_source="uber_eats")
+    b = _r("Foo", id="b1", lat=50.8447, lng=4.3495, geo_source="direct")
+    f = matching.score_pair(a, b)
+    assert f.geo_dist is not None
+    assert f.soft_geo_dist is None
+
+
+def test_score_pair_no_soft_geo_when_no_coords():
+    a = _r("Foo", id="a1")
+    b = _r("Foo", id="b1")
+    f = matching.score_pair(a, b)
+    assert f.soft_geo_dist is None
+
+
+# ---------------------------------------------------------------------------
+# Signal 5: Chain guard
+# ---------------------------------------------------------------------------
+
+def test_decide_chain_name_without_strong_confirm_separates():
+    f = _f(name_sim=0.97, is_chain_name=True)
+    assert matching.decide(f) == matching.Decision.SEPARATE
+
+
+def test_decide_chain_name_with_phone_confirm_auto_merges():
+    f = _f(name_sim=0.97, is_chain_name=True, phone_match=True)
+    assert matching.decide(f) == matching.Decision.AUTO_MERGE
+
+
+def test_decide_chain_name_with_close_geo_auto_merges():
+    f = _f(name_sim=0.97, is_chain_name=True, geo_dist=40.0)
+    assert matching.decide(f) == matching.Decision.AUTO_MERGE
+
+
+def test_decide_chain_name_with_menu_confirm_auto_merges():
+    f = _f(name_sim=0.92, is_chain_name=True, menu_overlap=0.20)
+    assert matching.decide(f) == matching.Decision.AUTO_MERGE
+
+
+def test_decide_non_chain_name_still_queues():
+    f = _f(name_sim=0.97, is_chain_name=False)
+    assert matching.decide(f) == matching.Decision.QUEUE
+
+
+def test_score_pair_chain_name_detected():
+    # Build a corpus where "pizzanapoli" appears 3 times → it's a chain
+    chain_names = {"pizzanapoli"}
+    a = _r("Pizza Napoli", id="a1")
+    b = _r("Pizza Napoli", id="b1")
+    f = matching.score_pair(a, b, chain_names=chain_names)
+    assert f.is_chain_name is True
+
+
+def test_score_pair_non_chain_name_not_flagged():
+    chain_names = {"burgerking"}
+    a = _r("Pizza Napoli", id="a1")
+    b = _r("Pizza Napoli", id="b1")
+    f = matching.score_pair(a, b, chain_names=chain_names)
+    assert f.is_chain_name is False
+
+
+# ---------------------------------------------------------------------------
+# Signal 6: Slug location tokens
+# ---------------------------------------------------------------------------
+
+def test_location_tokens_from_slug_only():
+    # name has no commune, but slug does
+    tokens = matching._location_tokens("Sushi Palace", slugs=["sushi-palace-schaerbeek"])
+    assert "schaerbeek" in tokens
+
+
+def test_location_conflict_via_slug():
+    # slugs encode different communes → conflict
+    a = _r("Le Grill", id="a1")
+    b = _r("Le Grill", id="b1")
+    slugs = {"a1": ["le-grill-ixelles"], "b1": ["le-grill-etterbeek"]}
+    f = matching.score_pair(a, b, slugs=slugs)
+    assert f.location_conflict is True
+    assert matching.decide(f) == matching.Decision.SEPARATE
+
+
+def test_no_conflict_when_slugs_share_commune():
+    a = _r("Le Grill", id="a1")
+    b = _r("Le Grill", id="b1")
+    slugs = {"a1": ["le-grill-ixelles"], "b1": ["le-grill-ixelles-centre"]}
+    f = matching.score_pair(a, b, slugs=slugs)
+    assert f.location_conflict is False
+
+
+# ---------------------------------------------------------------------------
+# to_dict includes all new fields
+# ---------------------------------------------------------------------------
+
+def test_match_features_to_dict_has_all_fields():
+    f = _f()
+    d = f.to_dict()
+    expected = {
+        "name_sim", "website_match", "phone_match", "geo_dist",
+        "cuisine_match", "cuisine_conflict", "location_conflict",
+        "menu_overlap", "soft_geo_dist", "is_chain_name",
+    }
+    assert expected.issubset(d.keys())
 
 
 def test_block_candidates_groups_by_first_token_and_domain():

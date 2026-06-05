@@ -383,6 +383,27 @@ def get_last_successful_run(platform: str) -> dict | None:
     return res.data[0] if res.data else None
 
 
+def get_last_successful_run_batch(platforms: list[str]) -> dict[str, dict]:
+    """Single query for last successful run across multiple platforms."""
+    rows = (
+        get_client()
+        .table("scraper_runs")
+        .select("platform,status,started_at,finished_at,records_saved")
+        .eq("status", "success")
+        .in_("platform", platforms)
+        .order("finished_at", desc=True)
+        .limit(len(platforms) * 5)
+        .execute()
+        .data
+    )
+    result: dict[str, dict] = {}
+    for row in rows:
+        p = row["platform"]
+        if p not in result:
+            result[p] = row
+    return result
+
+
 def delete_stale_listings(days: int = 30) -> int:
     """Delete platform_listings older than `days` days. Returns count deleted."""
     from datetime import datetime, timezone, timedelta
@@ -734,3 +755,51 @@ def resolve_decision(decision_id: str, *, approve: bool, resolved_by: str) -> No
         "resolved_at": datetime.now(timezone.utc).isoformat(),
         "resolved_by": resolved_by,
     }).eq("id", decision_id).execute()
+
+
+def load_menu_items_for_match() -> dict[str, set[str]]:
+    """Return {restaurant_id: {normalized_item_name, ...}} for menu overlap scoring.
+
+    Joins menu_items -> platform_listings -> restaurants. Returns only restaurants
+    with >= 1 item. Normalizes names: strip accents, lowercase, keep [a-z0-9].
+    """
+    import re as _re
+    import unicodedata as _ud
+
+    client = get_client()
+    res = (
+        client.table("menu_items")
+        .select("name, platform_listings(restaurant_id)")
+        .execute()
+    )
+    result: dict[str, set[str]] = {}
+    for row in (res.data or []):
+        rid_obj = row.get("platform_listings") or {}
+        rid = str(rid_obj.get("restaurant_id", "")) if isinstance(rid_obj, dict) else ""
+        if not rid or rid == "None":
+            continue
+        raw = row.get("name") or ""
+        # normalize: strip accents, lowercase, keep [a-z0-9]
+        nfkd = _ud.normalize("NFD", raw)
+        no_acc = "".join(ch for ch in nfkd if _ud.category(ch) != "Mn")
+        norm = _re.sub(r"[^a-z0-9]", "", no_acc.lower())
+        if norm and len(norm) >= 3:
+            result.setdefault(rid, set()).add(norm)
+    return result
+
+
+def load_slugs_for_match() -> dict[str, list[str]]:
+    """Return {restaurant_id: [slug, ...]} from platform_listings."""
+    client = get_client()
+    res = (
+        client.table("platform_listings")
+        .select("restaurant_id, slug")
+        .not_.is_("slug", "null")
+        .execute()
+    )
+    result: dict[str, list[str]] = {}
+    for row in (res.data or []):
+        rid = str(row["restaurant_id"])
+        if row["slug"]:
+            result.setdefault(rid, []).append(row["slug"])
+    return result
