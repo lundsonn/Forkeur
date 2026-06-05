@@ -84,14 +84,18 @@ def run_sync(*, dry_run: bool, log_fn) -> dict:
         # whole batch — log it and move on so the rest still reconciles.
         try:
             if decision == matching.Decision.AUTO_MERGE:
-                db.merge_restaurants(survivor["id"], loser["id"])
-                touched_ids.add(survivor["id"])
-                touched_ids.add(loser["id"])
+                # Record BEFORE merge: merge_restaurants_atomic deletes the
+                # loser row, which sets loser_id=NULL via FK cascade, so any
+                # enqueue_decision call after the merge silently fails to
+                # find/update the row.
                 db.enqueue_decision(
                     survivor_id=survivor["id"], loser_id=loser["id"],
                     score=float(features.name_sim), features=feat_payload,
                     status="auto_merged",
                 )
+                db.merge_restaurants(survivor["id"], loser["id"])
+                touched_ids.add(survivor["id"])
+                touched_ids.add(loser["id"])
             else:  # QUEUE
                 db.enqueue_decision(
                     survivor_id=survivor["id"], loser_id=loser["id"],
@@ -136,13 +140,13 @@ def run_sync(*, dry_run: bool, log_fn) -> dict:
 
         try:
             if decision == matching.Decision.AUTO_MERGE and sid not in touched_ids and lid not in touched_ids:
-                db.merge_restaurants(sid, lid)
-                touched_ids.add(sid)
-                touched_ids.add(lid)
-                db.enqueue_decision(
+                db.enqueue_decision(  # record before merge — see main loop comment
                     survivor_id=sid, loser_id=lid,
                     score=float(features.name_sim), features=feat_payload, status="auto_merged",
                 )
+                db.merge_restaurants(sid, lid)
+                touched_ids.add(sid)
+                touched_ids.add(lid)
                 counts["auto_merge"] += 1
                 rescored["upgraded"] += 1
                 log_fn(f"  upgraded {ra['name']} / {rb['name']}: geo_dist={features.geo_dist:.0f}m → auto_merged")
