@@ -157,6 +157,26 @@ def run_sync(*, dry_run: bool, log_fn) -> dict:
 
     log_fn(f"Re-score: upgraded={rescored['upgraded']} refreshed={rescored['refreshed']}")
 
+    # --- Prune stale SEPARATE decisions ---
+    # Decisions written before the current signals existed may now be SEPARATE.
+    # Re-score every queued decision; delete rows whose new verdict is SEPARATE.
+    all_queued = db.get_queued_decisions(limit=500, offset=0)
+    to_prune: list[str] = []
+    for dec in all_queued:
+        sid = str(dec["survivor_id"])
+        lid = str(dec["loser_id"])
+        ra = rows_by_id.get(sid)
+        rb = rows_by_id.get(lid)
+        if not ra or not rb:
+            continue
+        feats = matching.score_pair(ra, rb, menus=menus_raw, chain_names=chain_names, slugs=slugs)
+        if matching.decide(feats) == matching.Decision.SEPARATE:
+            to_prune.append(dec["id"])
+            log_fn(f"  prune queued: {ra['name']} / {rb['name']} → now SEPARATE")
+    if to_prune and not dry_run:
+        db.delete_decisions(to_prune)
+    log_fn(f"Prune: removed {len(to_prune)} stale SEPARATE decisions from queue")
+
     if dry_run:
         out_dir = os.path.join(os.path.dirname(__file__), "..", "match_output")
         os.makedirs(out_dir, exist_ok=True)

@@ -710,6 +710,15 @@ def merge_restaurants(survivor_id: str, loser_id: str) -> None:
     ).execute()
 
 
+def delete_decisions(ids: list[str]) -> None:
+    """Delete match decision rows by id — used to prune stale SEPARATE verdicts."""
+    if not ids:
+        return
+    validated = [_validate_uuid(i) for i in ids]
+    client = get_client()
+    client.table("restaurant_match_decisions").delete().in_("id", validated).execute()
+
+
 def get_stale_queued_decisions() -> list[dict]:
     """Queued decisions where geo_dist was null at scoring time (both sides may now be venue-grade)."""
     client = get_client()

@@ -15,6 +15,11 @@ def test_match_job_dry_run_writes_nothing():
     rows = [_r("Pizza Minute", id="1", website="https://pz.be"),
             _r("PizzaMinute", id="2", website="http://pz.be")]
     with patch("db.load_restaurants_for_match", return_value=rows), \
+         patch("db.load_menu_items_for_match", return_value={}), \
+         patch("db.load_slugs_for_match", return_value={}), \
+         patch("db.get_stale_queued_decisions", return_value=[]), \
+         patch("db.get_queued_decisions", return_value=[]), \
+         patch("db.delete_decisions"), \
          patch("db.merge_restaurants") as merge, \
          patch("db.enqueue_decision") as enq:
         result = match.run_sync(dry_run=True, log_fn=lambda m: None)
@@ -28,6 +33,11 @@ def test_match_job_executes_merges_when_not_dry_run():
     rows = [_r("Pizza Minute", id="1", website="https://pz.be"),
             _r("PizzaMinute", id="2", website="http://pz.be")]
     with patch("db.load_restaurants_for_match", return_value=rows), \
+         patch("db.load_menu_items_for_match", return_value={}), \
+         patch("db.load_slugs_for_match", return_value={}), \
+         patch("db.get_stale_queued_decisions", return_value=[]), \
+         patch("db.get_queued_decisions", return_value=[]), \
+         patch("db.delete_decisions"), \
          patch("db.merge_restaurants") as merge, \
          patch("db.enqueue_decision") as enq:
         match.run_sync(dry_run=False, log_fn=lambda m: None)
@@ -40,6 +50,11 @@ def test_match_job_enqueues_names_in_features():
     rows = [_r("Pizza Minute", id="1", website="https://pz.be"),
             _r("PizzaMinute", id="2", website="http://pz.be")]
     with patch("db.load_restaurants_for_match", return_value=rows), \
+         patch("db.load_menu_items_for_match", return_value={}), \
+         patch("db.load_slugs_for_match", return_value={}), \
+         patch("db.get_stale_queued_decisions", return_value=[]), \
+         patch("db.get_queued_decisions", return_value=[]), \
+         patch("db.delete_decisions"), \
          patch("db.merge_restaurants"), \
          patch("db.enqueue_decision") as enq:
         match.run_sync(dry_run=False, log_fn=lambda m: None)
