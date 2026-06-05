@@ -20,7 +20,7 @@ HIGH_NAME_SIM = 0.92       # Jaro-Winkler on normalized names
 NAME_SIM_WEBSITE_AUTO = 0.97  # website-only auto-merge needs near-identical names
 GEO_CONFIRM_M = 75.0       # <= confirms same venue
 GEO_VETO_M = 300.0         # > vetoes merge (chain branches)
-VENUE_GRADE_SOURCES = {"uber_eats", "direct"}
+VENUE_GRADE_SOURCES = {"uber_eats", "direct", "deliveroo_venue"}
 
 _ARTICLES = {"le", "la", "les", "l", "au", "aux", "un", "une", "de", "du",
              "des", "the", "a", "el", "il"}

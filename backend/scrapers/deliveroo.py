@@ -63,6 +63,65 @@ def _coords_from_url(url: str) -> tuple[float, float] | None:
         return None
 
 
+async def _venue_coords_from_page(page) -> tuple[float, float] | None:
+    """Extract actual venue coords from a Deliveroo restaurant menu page.
+
+    Tries JSON-LD Restaurant schema first (most stable), then __NEXT_DATA__.
+    Returns None if not found or coords are outside Brussels area.
+    """
+    try:
+        result = await page.evaluate("""() => {
+            // Strategy 1: JSON-LD with Restaurant + geo
+            for (const script of document.querySelectorAll('script[type="application/ld+json"]')) {
+                try {
+                    const d = JSON.parse(script.textContent);
+                    const items = Array.isArray(d) ? d : [d];
+                    for (const item of items) {
+                        if (item['@type'] === 'Restaurant' && item.geo) {
+                            const lat = parseFloat(item.geo.latitude);
+                            const lng = parseFloat(item.geo.longitude);
+                            if (!isNaN(lat) && !isNaN(lng)) return [lat, lng];
+                        }
+                    }
+                } catch {}
+            }
+            // Strategy 2: __NEXT_DATA__ — scan props for lat/lng keys
+            try {
+                const nd = window.__NEXT_DATA__;
+                if (nd) {
+                    function findCoords(obj, depth) {
+                        if (depth > 8 || !obj || typeof obj !== 'object') return null;
+                        if ('latitude' in obj && 'longitude' in obj) {
+                            const lat = parseFloat(obj.latitude);
+                            const lng = parseFloat(obj.longitude);
+                            if (!isNaN(lat) && !isNaN(lng)) return [lat, lng];
+                        }
+                        if ('lat' in obj && ('lng' in obj || 'lon' in obj)) {
+                            const lat = parseFloat(obj.lat);
+                            const lng = parseFloat(obj.lng ?? obj.lon);
+                            if (!isNaN(lat) && !isNaN(lng)) return [lat, lng];
+                        }
+                        for (const v of Object.values(obj)) {
+                            const r = findCoords(v, depth + 1);
+                            if (r) return r;
+                        }
+                        return null;
+                    }
+                    const r = findCoords(nd.props, 0);
+                    if (r) return r;
+                }
+            } catch {}
+            return null;
+        }""")
+        if result and len(result) == 2:
+            lat, lng = float(result[0]), float(result[1])
+            if 50.4 < lat < 51.1 and 3.9 < lng < 4.8:  # Brussels + surrounding area
+                return (lat, lng)
+    except Exception:
+        pass
+    return None
+
+
 def _parse_dom_items(dom_output: dict) -> list[dict]:
     """Parse menu items from DOM eval output.
 
@@ -386,6 +445,12 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 # Extra settle — Deliveroo defers off-screen section rendering
                 await asyncio.sleep(2)
                 check_cloudflare(await page.title())
+
+                # Try to extract actual venue coords (JSON-LD / __NEXT_DATA__)
+                venue_coords = await _venue_coords_from_page(page)
+                if venue_coords:
+                    db.patch_restaurant_geo(rid, venue_coords[0], venue_coords[1], "deliveroo_venue")
+                    log_fn(f"  Venue coords: {venue_coords[0]:.5f}, {venue_coords[1]:.5f}")
 
                 # Wait for price-bearing element. notranslate is more stable than
                 # CSS-module hashed MenuItemCard class (changes every Deliveroo deploy).

@@ -21,6 +21,12 @@ def _validate_uuid(value: str) -> str:
 _MENU_INSERT_CHUNK = 500
 
 _client: Client | None = None
+_domain_cache: dict[str, str] | None = None  # domain → restaurant_id
+
+
+def invalidate_domain_cache() -> None:
+    global _domain_cache
+    _domain_cache = None
 
 
 def get_client() -> Client:
@@ -135,12 +141,17 @@ def upsert_restaurant(data: dict) -> str:
             updates["cuisine"] = data["cuisine"]
         if data.get("image_url") and not row.get("image_url"):
             updates["image_url"] = data["image_url"]
-        # Geo provenance: a venue-grade source (uber_eats/direct) always wins and
-        # stamps geo_source; a zone-grade source (deliveroo) only fills coords when
-        # the row has none, and never clobbers venue-grade coords.
+        # Geo provenance hierarchy: uber_eats/direct > deliveroo_venue > deliveroo (zone centroid).
+        # venue-grade always overwrites; deliveroo_venue upgrades over zone centroid only;
+        # plain deliveroo only fills when row has no coords.
         incoming_src = data.get("geo_source")
+        _VENUE = {"uber_eats", "direct"}
         if data.get("lat") is not None and data.get("lng") is not None:
-            if incoming_src in ("uber_eats", "direct"):
+            if incoming_src in _VENUE:
+                updates["lat"] = data["lat"]
+                updates["lng"] = data["lng"]
+                updates["geo_source"] = incoming_src
+            elif incoming_src == "deliveroo_venue" and row.get("geo_source") not in _VENUE:
                 updates["lat"] = data["lat"]
                 updates["lng"] = data["lng"]
                 updates["geo_source"] = incoming_src
@@ -168,15 +179,21 @@ def upsert_restaurant(data: dict) -> str:
     import matching as _m
     incoming_domain = _m.domain_of(data.get("website"))
     if incoming_domain:
-        cands = (
-            client.table("restaurants")
-            .select(f"website, {_MATCH_COLS}")
-            .not_.is_("website", "null")
-            .execute()
-        )
-        for c in cands.data:
-            if _m.domain_of(c.get("website")) == incoming_domain:
-                return _found(c["id"], c)
+        global _domain_cache
+        if _domain_cache is None:
+            cands = (
+                client.table("restaurants")
+                .select("id, website")
+                .not_.is_("website", "null")
+                .execute()
+            ).data or []
+            _domain_cache = {}
+            for c in cands:
+                d = _m.domain_of(c.get("website"))
+                if d:
+                    _domain_cache[d] = c["id"]
+        if incoming_domain in _domain_cache:
+            return _found(_domain_cache[incoming_domain])
 
     # 3. Canonical base match ("Burger King - Ixelles" → find "Burger King")
     if canonical != name:
@@ -216,24 +233,19 @@ def upsert_restaurant(data: dict) -> str:
 
     # Not found — insert new row
     res = client.table("restaurants").upsert(data, on_conflict="slug").execute()
-    return res.data[0]["id"]
+    rid = res.data[0]["id"]
+    invalidate_domain_cache()
+    return rid
 
 
 def upsert_listing(data: dict) -> str:
     """Upsert platform_listing by restaurant_id + platform. Returns id."""
-    client = get_client()
-    existing = (
-        client.table("platform_listings")
-        .select("id")
-        .eq("restaurant_id", data["restaurant_id"])
-        .eq("platform", data["platform"])
+    res = (
+        get_client()
+        .table("platform_listings")
+        .upsert(data, on_conflict="restaurant_id,platform")
         .execute()
     )
-    if existing.data:
-        lid = existing.data[0]["id"]
-        client.table("platform_listings").update(data).eq("id", lid).execute()
-        return lid
-    res = client.table("platform_listings").insert(data).execute()
     return res.data[0]["id"]
 
 
@@ -338,20 +350,21 @@ def get_run(run_id: str) -> dict | None:
 
 def get_last_run_per_platform() -> dict[str, dict]:
     """Returns {platform: run_row} for the most recent run of each platform."""
-    client = get_client()
-    result = {}
-    for platform in ("ubereats", "deliveroo", "takeaway", "direct", "direct_menu", "dom_menu", "match"):
-        res = (
-            client.table("scraper_runs")
-            .select("*")
-            .eq("platform", platform)
-            .order("started_at", desc=True)
-            .limit(1)
-            .execute()
-        )
-        if res.data:
-            result[platform] = res.data[0]
-    return result
+    platforms = ("ubereats", "deliveroo", "takeaway", "direct", "direct_menu", "dom_menu", "match")
+    rows = (
+        get_client()
+        .table("scraper_runs")
+        .select("*")
+        .in_("platform", list(platforms))
+        .order("started_at", desc=True)
+        .execute()
+    ).data or []
+    seen: dict[str, dict] = {}
+    for row in rows:
+        p = row["platform"]
+        if p not in seen:
+            seen[p] = row
+    return seen
 
 
 def get_last_successful_run(platform: str) -> dict | None:
@@ -446,7 +459,7 @@ def get_restaurants(
     search: str | None = None,
 ) -> list[dict]:
     client = get_client()
-    q = client.table("restaurants").select("*").range(offset, offset + limit - 1)
+    q = client.table("restaurants").select("*").order("id").range(offset, offset + limit - 1)
     if search:
         q = q.ilike("name", f"%{search}%")
     return q.execute().data
@@ -458,6 +471,7 @@ def get_menu_items(listing_id: str) -> list[dict]:
         client.table("menu_items")
         .select("*")
         .eq("listing_id", listing_id)
+        .limit(2000)
         .execute()
         .data
     )
@@ -474,6 +488,21 @@ def get_listings_with_urls(platform: str) -> list[dict]:
         .execute()
         .data
     )
+
+
+_GEO_RANK = {"uber_eats": 3, "direct": 3, "deliveroo_venue": 2, "deliveroo": 1}
+
+
+def patch_restaurant_geo(restaurant_id: str, lat: float, lng: float, geo_source: str) -> None:
+    """Update restaurant coords only if incoming source outranks the current one."""
+    existing = get_client().table("restaurants").select("geo_source").eq("id", restaurant_id).limit(1).execute()
+    if existing.data:
+        current_src = existing.data[0].get("geo_source")
+        if _GEO_RANK.get(current_src, 0) >= _GEO_RANK.get(geo_source, 0):
+            return
+    get_client().table("restaurants").update(
+        {"lat": lat, "lng": lng, "geo_source": geo_source}
+    ).eq("id", restaurant_id).execute()
 
 
 def patch_restaurant_website(restaurant_id: str, website: str | None, order_url: str | None) -> None:
