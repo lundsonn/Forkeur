@@ -15,13 +15,13 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
     async with browser_session(lang="fr-BE") as browser:
         page = await new_page(browser, lang="fr-BE")
 
-        feed_pages: list[str] = []
+        feed_pages: list[dict] = []
 
         async def on_response(response):
             if "getFeedV1" in response.url:
                 try:
                     text = await response.text()
-                    feed_pages.append(text)
+                    feed_pages.append(json.loads(text))
                 except Exception:
                     pass
 
@@ -74,10 +74,10 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
         log_fn("Scrolling to load all restaurants...")
         prev_count = 0
         stale_ticks = 0
-        max_stale = 4  # stop after 4 scroll cycles with no new responses
+        max_stale = 3  # stop after 3 scroll cycles with no new responses
         while stale_ticks < max_stale:
             await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            await asyncio.sleep(2.5)
+            await asyncio.sleep(0.5)
             cur_count = len(feed_pages)
             if cur_count == prev_count:
                 stale_ticks += 1
@@ -91,11 +91,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
         # Aggregate all stores across all pages, dedup by storeUuid
         seen_uuids: set[str] = set()
         stores = []
-        for raw in feed_pages:
-            try:
-                feed = json.loads(raw)
-            except Exception:
-                continue
+        for feed in feed_pages:
             feed_items = feed.get("data", {}).get("feedItems", [])
             for item in feed_items:
                 if item.get("type") != "REGULAR_STORE":
@@ -232,8 +228,10 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                 prev_h = 0
                 for _ in range(15):
                     try:
-                        h = await asyncio.wait_for(wpage.evaluate("document.body.scrollHeight"), timeout=5)
-                        await asyncio.wait_for(wpage.evaluate("window.scrollTo(0, document.body.scrollHeight)"), timeout=5)
+                        h = await asyncio.wait_for(
+                            wpage.evaluate("(function(){var h=document.body.scrollHeight;window.scrollTo(0,h);return h;})()"),
+                            timeout=5,
+                        )
                     except asyncio.TimeoutError:
                         break
                     await asyncio.sleep(1.2)
@@ -330,10 +328,10 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                 await wpage.goto(listing_url, wait_until="domcontentloaded", timeout=20000)
                 await asyncio.sleep(2)
                 for k, (r, lid) in enumerate(slice_items):
-                    # Recycle the worker page every 12 restaurants — reusing one page
+                    # Recycle the worker page every 30 restaurants — reusing one page
                     # across a whole slice of heavy menu loads leaks renderer RSS
                     # (full-batch creep drove free RAM to ~300MB). Close+reopen caps it.
-                    if k > 0 and k % 12 == 0:
+                    if k > 0 and k % 30 == 0:
                         try:
                             await wpage.close()
                         except Exception:
@@ -349,7 +347,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                     try:
                         # Hard per-restaurant wall cap — a page crash can poison the
                         # shared context and wedge Playwright past its own timeouts.
-                        await asyncio.wait_for(_scrape_one(wpage, r, lid), timeout=80)
+                        await asyncio.wait_for(_scrape_one(wpage, r, lid), timeout=45)
                     except asyncio.TimeoutError:
                         log_fn(f"Menu worker {wid}: {r.get('name','?')} timed out, requeuing")
                         async with _fail_lock:

@@ -3,6 +3,8 @@ import { getTranslations } from 'next-intl/server'
 import { getDeals } from '@/lib/queries'
 import DealsClient from '@/components/DealsClient'
 
+export const revalidate = 3600
+
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('meta')
   const title = t('deals_title')

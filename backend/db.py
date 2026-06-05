@@ -104,9 +104,12 @@ def upsert_restaurant(data: dict) -> str:
     if not data.get("cuisine"):
         data = {**data, "cuisine": infer_cuisine(name)}
 
-    def _found(rid: str) -> str:
-        existing = client.table("restaurants").select("cuisine, image_url, lat, lng, geo_source").eq("id", rid).limit(1).execute()
-        row = existing.data[0] if existing.data else {}
+    _MATCH_COLS = "id, cuisine, image_url, lat, lng, geo_source"
+
+    def _found(rid: str, row: dict | None = None) -> str:
+        if row is None:
+            existing = client.table("restaurants").select("cuisine, image_url, lat, lng, geo_source").eq("id", rid).limit(1).execute()
+            row = existing.data[0] if existing.data else {}
         updates: dict = {}
         if data.get("cuisine") and not row.get("cuisine"):
             updates["cuisine"] = data["cuisine"]
@@ -131,14 +134,14 @@ def upsert_restaurant(data: dict) -> str:
         return rid
 
     # 1. Exact name match (same scraper re-running)
-    res = client.table("restaurants").select("id").eq("name", name).limit(1).execute()
+    res = client.table("restaurants").select(_MATCH_COLS).eq("name", name).limit(1).execute()
     if res.data:
-        return _found(res.data[0]["id"])
+        return _found(res.data[0]["id"], res.data[0])
 
     # 2. Case-insensitive exact match ("GOMU" ↔ "Gomu", "Bombay Inn" ↔ "bombay inn")
-    res = client.table("restaurants").select("id").ilike("name", name).limit(1).execute()
+    res = client.table("restaurants").select(_MATCH_COLS).ilike("name", name).limit(1).execute()
     if res.data:
-        return _found(res.data[0]["id"])
+        return _found(res.data[0]["id"], res.data[0])
 
     # 2b. Website-domain lock — strongest deterministic signal. A new listing
     #     whose website resolves to a domain we already store is the same venue.
@@ -147,30 +150,30 @@ def upsert_restaurant(data: dict) -> str:
     if incoming_domain:
         cands = (
             client.table("restaurants")
-            .select("id, website")
+            .select(f"website, {_MATCH_COLS}")
             .not_.is_("website", "null")
             .execute()
         )
         for c in cands.data:
             if _m.domain_of(c.get("website")) == incoming_domain:
-                return _found(c["id"])
+                return _found(c["id"], c)
 
     # 3. Canonical base match ("Burger King - Ixelles" → find "Burger King")
     if canonical != name:
-        res = client.table("restaurants").select("id").ilike("name", canonical).limit(1).execute()
+        res = client.table("restaurants").select(_MATCH_COLS).ilike("name", canonical).limit(1).execute()
         if res.data:
-            return _found(res.data[0]["id"])
+            return _found(res.data[0]["id"], res.data[0])
 
     # 4. Suffixed variant match ("Burger King" → find "Burger King - Ixelles")
     res = (
         client.table("restaurants")
-        .select("id")
+        .select(_MATCH_COLS)
         .ilike("name", f"{canonical} -%")
         .limit(1)
         .execute()
     )
     if res.data:
-        return _found(res.data[0]["id"])
+        return _found(res.data[0]["id"], res.data[0])
 
     # 5. Fully-normalized match: handles accents, smart quotes, emoji, trailing
     #    spaces. Fetch candidates by the first non-article word of canonical.
@@ -181,7 +184,7 @@ def upsert_restaurant(data: dict) -> str:
     if len(prefix) >= 3:
         candidates = (
             client.table("restaurants")
-            .select("id, name")
+            .select(f"name, {_MATCH_COLS}")
             .ilike("name", f"{prefix}%")
             .execute()
         )
@@ -189,7 +192,7 @@ def upsert_restaurant(data: dict) -> str:
             cand_norm = _normalize_for_match(cand["name"])
             cand_norm_can = _normalize_for_match(_canonical(cand["name"]))
             if cand_norm in (norm, norm_canonical) or cand_norm_can in (norm, norm_canonical):
-                return _found(cand["id"])
+                return _found(cand["id"], cand)
 
     # Not found — insert new row
     res = client.table("restaurants").upsert(data, on_conflict="slug").execute()

@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import { ExternalLink, List, Globe, Phone } from 'lucide-react'
 import { RestaurantSummary } from '@/lib/queries'
 import { centsToEuro, PLATFORM_COLORS, type Platform } from '@/lib/basket'
@@ -27,12 +28,13 @@ export default function RestaurantCard({ restaurant, isLast, directBadge, maxFee
     <div className={`py-4 ${!isLast ? 'border-b border-stone-100' : ''}`}>
       <div className="flex items-start gap-3 mb-3">
         {image_url && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={image_url}
             alt=""
-            className="w-12 h-12 rounded-lg object-cover shrink-0 bg-stone-100"
-            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+            width={48}
+            height={48}
+            className="rounded-lg object-cover shrink-0 bg-stone-100"
+            unoptimized
           />
         )}
         <div className="min-w-0 flex-1">

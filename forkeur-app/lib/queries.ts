@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { cookies } from 'next/headers'
 import { createClient } from '@/utils/supabase/server'
 import type { Platform } from '@/lib/basket'
@@ -330,9 +331,9 @@ export async function getDeals(): Promise<DealItem[]> {
   })
 }
 
-export async function getRestaurantWithListings(
+export const getRestaurantWithListings = cache(async (
   id: string
-): Promise<RestaurantDetail | null> {
+): Promise<RestaurantDetail | null> => {
   const supabase = await getSupabase()
 
   const { data, error } = await supabase
@@ -424,4 +425,4 @@ export async function getRestaurantWithListings(
     menuItems: Array.from(itemMap.values()),
     matchRate,
   }
-}
+})

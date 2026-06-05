@@ -72,6 +72,7 @@ async def new_browser(lang: str = "fr-BE", headed: bool = False) -> Browser:
         "--js-flags=--max-old-space-size=512",  # cap V8 heap per renderer (default ~1.4 GB)
         "--disk-cache-size=1",                  # kill HTTP cache in network process
         "--media-cache-size=1",
+        "--disable-backgrounding-occluded-windows",  # prevent renderer throttling when off-screen
     ]
     if not headed:
         args += ["--disable-gpu", "--disable-extensions"]
@@ -145,7 +146,7 @@ async def new_sibling_page(page: Page, block_media: bool = True) -> Page:
 async def _move_mouse_human(page: Page, x: float, y: float) -> None:
     """Move mouse to (x, y) in a curved, non-linear path with random speed."""
     cur_x, cur_y = random.uniform(100, 800), random.uniform(100, 600)
-    steps = random.randint(18, 35)
+    steps = random.randint(8, 15)
     for i in range(steps + 1):
         t = i / steps
         # ease-in-out + slight sine wobble

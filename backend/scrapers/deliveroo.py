@@ -247,21 +247,24 @@ async def _scrape_zone_listings(browser, zone_address: str, log_fn) -> list[dict
 
         await page.wait_for_selector('a[href*="/menu/"]', timeout=10000)
 
-        # Height + count stable scroll (1.5s per tick, stale=5)
+        # Height + count stable scroll (0.5s per tick, stale=3)
         prev_h, prev_count, stale = 0, 0, 0
         for _ in range(80):
-            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            await asyncio.sleep(1.5)
-            h = await page.evaluate("document.body.scrollHeight")
-            count = await page.evaluate("document.querySelectorAll('a[href*=\"/menu/\"]').length")
+            result = await page.evaluate(
+                "(function(){window.scrollTo(0,document.body.scrollHeight);"
+                "return {h:document.body.scrollHeight,"
+                "c:document.querySelectorAll('a[href*=\"/menu/\"]').length};})()"
+            )
+            await asyncio.sleep(0.5)
+            h, count = result["h"], result["c"]
             if h == prev_h and count == prev_count:
                 stale += 1
-                if stale >= 5:
+                if stale >= 3:
                     break
             else:
                 stale = 0
             prev_h, prev_count = h, count
-        await asyncio.sleep(1.5)
+        await asyncio.sleep(0.5)
 
         return await page.eval_on_selector_all('a[href*="/menu/"]', _LISTING_JS)
     except Exception as exc:
@@ -640,10 +643,10 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
             wpage = await new_page(browser, lang="fr-BE")
             try:
                 for k, (r, rid, lid) in enumerate(slice_items):
-                    # Recycle the page every 12 restaurants — Deliveroo menu pages
+                    # Recycle the page every 30 restaurants — Deliveroo menu pages
                     # are heavy (full SSR); reusing one page across a whole slice
                     # leaks renderer RSS (drove full-batch free RAM to ~300MB).
-                    if k > 0 and k % 12 == 0:
+                    if k > 0 and k % 30 == 0:
                         try:
                             await wpage.close()
                         except Exception:

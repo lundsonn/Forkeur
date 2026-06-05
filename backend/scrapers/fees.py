@@ -26,12 +26,12 @@ async def run_ubereats(log_fn: Callable[[str], None] = noop_log) -> int:
 
     async with browser_session(lang="fr-BE") as browser:
         page = await new_page(browser, lang="fr-BE")
-        feed_pages: list[str] = []
+        feed_pages: list[dict] = []
 
         async def _capture(response):
             if "getFeedV1" in response.url:
                 try:
-                    feed_pages.append(await response.text())
+                    feed_pages.append(json.loads(await response.text()))
                 except Exception:
                     pass
 
@@ -74,11 +74,7 @@ async def run_ubereats(log_fn: Callable[[str], None] = noop_log) -> int:
 
         # Parse fareInfo keyed by storeUuid
         fare_by_uuid: dict[str, dict] = {}
-        for raw in feed_pages:
-            try:
-                feed = json.loads(raw)
-            except Exception:
-                continue
+        for feed in feed_pages:
             for item in feed.get("data", {}).get("feedItems", []):
                 if item.get("type") != "REGULAR_STORE":
                     continue

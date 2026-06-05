@@ -1,4 +1,5 @@
 'use client'
+import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLocale } from 'next-intl'
 
@@ -11,11 +12,12 @@ const LANGS = [
 export default function LangToggle() {
   const locale = useLocale()
   const router = useRouter()
+  const [, startTransition] = useTransition()
 
   function switchLocale(code: string) {
     // eslint-disable-next-line react-hooks/immutability
     document.cookie = `NEXT_LOCALE=${code}; path=/; max-age=31536000; SameSite=Lax`
-    router.refresh()
+    startTransition(() => { router.refresh() })
   }
 
   return (

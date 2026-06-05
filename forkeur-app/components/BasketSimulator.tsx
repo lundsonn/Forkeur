@@ -69,11 +69,12 @@ function DishModal({
         {/* image */}
         {item.image_url ? (
           <div className="relative w-full h-56">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src={item.image_url}
               alt={item.name}
-              className="w-full h-full object-cover"
+              fill
+              className="object-cover"
+              unoptimized
             />
             <button
               onClick={onClose}

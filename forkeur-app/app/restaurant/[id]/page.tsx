@@ -1,5 +1,9 @@
 import type { Metadata } from 'next'
+import Image from 'next/image'
 import { notFound } from 'next/navigation'
+
+export const revalidate = 3600
+
 import Link from 'next/link'
 import { getTranslations } from 'next-intl/server'
 import { ExternalLink, List, Globe, Phone } from 'lucide-react'
@@ -60,12 +64,14 @@ export default async function Page({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const data = await getRestaurantWithListings(id)
-  const tDirect = await getTranslations('direct')
-  const tCard = await getTranslations('card')
-  const tDetail = await getTranslations('detail')
-  const tBadge = await getTranslations('badge')
-  const tOwners = await getTranslations('owners')
+  const [data, tDirect, tCard, tDetail, tBadge, tOwners] = await Promise.all([
+    getRestaurantWithListings(id),
+    getTranslations('direct'),
+    getTranslations('card'),
+    getTranslations('detail'),
+    getTranslations('badge'),
+    getTranslations('owners'),
+  ])
   if (!data) notFound()
 
   const { matchRate } = data
@@ -112,12 +118,16 @@ export default async function Page({
 
       {/* Hero image */}
       {data.image_url && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={data.image_url}
-          alt={data.name}
-          className="w-full h-44 object-cover"
-        />
+        <div className="relative w-full h-44">
+          <Image
+            src={data.image_url}
+            alt={data.name}
+            fill
+            className="object-cover"
+            priority
+            unoptimized
+          />
+        </div>
       )}
 
       {/* Restaurant info */}

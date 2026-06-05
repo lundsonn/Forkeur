@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { Map, Marker } from 'pigeon-maps'
 import { osm } from 'pigeon-maps/providers'
 import type { RestaurantSummary } from '@/lib/queries'
@@ -15,7 +15,7 @@ type Props = {
   height: string
 }
 
-export default function MapView({ restaurants, height }: Props) {
+function MapView({ restaurants, height }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const pinned = restaurants.filter(
@@ -90,3 +90,5 @@ export default function MapView({ restaurants, height }: Props) {
     </div>
   )
 }
+
+export default memo(MapView)

@@ -1,11 +1,16 @@
 'use client'
 import { useState, useMemo } from 'react'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import type { RestaurantSummary } from '@/lib/queries'
 import RestaurantCard from './RestaurantCard'
-import MapView from './MapView'
 import { useTranslations } from 'next-intl'
 import LangToggle from './LangToggle'
+
+const MapView = dynamic(() => import('./MapView'), {
+  ssr: false,
+  loading: () => <div className="rounded-xl border border-stone-200 bg-stone-50 animate-pulse h-[calc(100vh-240px)]" />,
+})
 
 type SortBy = 'best' | 'cheapest' | 'fastest'
 

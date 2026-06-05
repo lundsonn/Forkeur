@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useDeferredValue } from 'react'
 import Link from 'next/link'
 import type { DealItem, DealFilter } from '@/lib/deals'
 import {
@@ -22,6 +22,7 @@ type ActiveSet = Set<Exclude<DealFilter, 'all'>>
 export default function DealsClient({ deals }: { deals: DealItem[] }) {
   const [active, setActive] = useState<ActiveSet>(new Set())
   const [search, setSearch] = useState('')
+  const deferredSearch = useDeferredValue(search)
 
   const tNav = useTranslations('nav')
   const tDeals = useTranslations('deals')
@@ -50,12 +51,12 @@ export default function DealsClient({ deals }: { deals: DealItem[] }) {
   const counts = useMemo(() => filterCounts(deals), [deals])
 
   const visible = useMemo(() => {
-    const q = search.toLowerCase()
+    const q = deferredSearch.toLowerCase()
     const matched = deals.filter(
       (d) => matchesFilter(d, active) && (!q || d.restaurant_name.toLowerCase().includes(q))
     )
     return sortDeals(matched, active)
-  }, [deals, active, search])
+  }, [deals, active, deferredSearch])
 
   function toggle(key: DealFilter) {
     if (key === 'all') { setActive(new Set()); return }
