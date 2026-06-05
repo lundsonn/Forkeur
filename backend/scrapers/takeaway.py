@@ -303,31 +303,38 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
         if config.listing_only:
             return ScraperResult(records_saved=records_saved)
 
-        # Phase 2: menu per restaurant — fresh page per restaurant to avoid CF re-challenge
-
+        # Phase 2: menu per restaurant — 3 parallel workers, each with its own page.
+        # Takeaway uses CF (headed mode) but 3 concurrent pages is safe in practice.
+        WORKERS = 3
         n = len(saved)
-        for i, (r, lid) in enumerate(saved):
-            url = f"https://www.takeaway.com{r['href']}"
-            log_fn(f"Menu: {i + 1}/{n} — {r['name']}")
-            menu_page = await new_page(browser, lang="fr-BE")
-            try:
-                _, items, promo_lines = await scrape_menu_page(menu_page, lid, url)
-                if items:
-                    count = db.insert_menu_items(lid, items)
-                    menu_items_saved += count
-                    log_fn(f"  {count} items saved")
-                else:
-                    log_fn(f"  No items found")
-                if promo_lines:
-                    db.upsert_promotions(lid, parse_promo_texts(promo_lines))
-                    log_fn(f"  {len(promo_lines)} promo lines found")
-            except CloudflareBlockedError:
-                log_fn(f"  CF blocked — skipping {r['name']}")
-            except Exception as exc:
-                log_fn(f"  Error: {exc}")
-            finally:
-                await menu_page.close()
-            await asyncio.sleep(1)
+        slices = [saved[w::WORKERS] for w in range(WORKERS)]
+        log_fn(f"Phase 2: {n} menus across {WORKERS} parallel workers")
+
+        async def _worker(wid: int, slice_items: list) -> None:
+            nonlocal menu_items_saved
+            for r, lid in slice_items:
+                url = f"https://www.takeaway.com{r['href']}"
+                log_fn(f"Menu worker {wid}: {r['name']}")
+                menu_page = await new_page(browser, lang="fr-BE")
+                try:
+                    _, items, promo_lines = await scrape_menu_page(menu_page, lid, url)
+                    if items:
+                        count = db.insert_menu_items(lid, items)
+                        menu_items_saved += count
+                        log_fn(f"  {count} items saved")
+                    else:
+                        log_fn(f"  No items found")
+                    if promo_lines:
+                        db.upsert_promotions(lid, parse_promo_texts(promo_lines))
+                except CloudflareBlockedError:
+                    log_fn(f"  CF blocked — skipping {r['name']}")
+                except Exception as exc:
+                    log_fn(f"  Error: {exc}")
+                finally:
+                    await menu_page.close()
+                await asyncio.sleep(1)
+
+        await asyncio.gather(*[_worker(w, s) for w, s in enumerate(slices) if s])
 
         log_fn(f"Done — {records_saved} listings, {menu_items_saved} menu items saved")
         return ScraperResult(
