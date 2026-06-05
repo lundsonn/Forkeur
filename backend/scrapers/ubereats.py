@@ -248,16 +248,15 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                 slug_only = store_path.split("/")[0] if "/" in store_path else store_path
                 clicked = False
                 for _attempt in range(5):
-                    clicked = await wpage.evaluate(f"""
-                        (() => {{
-                            let a = document.querySelector('a[href*="/store/{store_path}"]');
-                            if (!a) {{
-                                a = document.querySelector('a[href*="/store/{slug_only}"]');
-                            }}
-                            if (a) {{ a.click(); return true; }}
+                    clicked = await wpage.evaluate(
+                        """(storePath, slugOnly) => {
+                            let a = document.querySelector('a[href*="/store/"+storePath]');
+                            if (!a) a = document.querySelector('a[href*="/store/"+slugOnly]');
+                            if (a) { a.click(); return true; }
                             return false;
-                        }})()
-                    """)
+                        }""",
+                        store_path, slug_only,
+                    )
                     if clicked:
                         break
                     await wpage.evaluate("window.scrollBy(0, 4000)")
@@ -432,14 +431,15 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                 try:
                     log_fn(f"Retry: {name}")
                     slug_only = store_path.split("/")[0] if "/" in store_path else store_path
-                    clicked = await page.evaluate(f"""
-                        (() => {{
-                            let a = document.querySelector('a[href*="/store/{store_path}"]');
-                            if (!a) a = document.querySelector('a[href*="/store/{slug_only}"]');
-                            if (a) {{ a.click(); return true; }}
+                    clicked = await page.evaluate(
+                        """(storePath, slugOnly) => {
+                            let a = document.querySelector('a[href*="/store/"+storePath]');
+                            if (!a) a = document.querySelector('a[href*="/store/"+slugOnly]');
+                            if (a) { a.click(); return true; }
                             return false;
-                        }})()
-                    """)
+                        }""",
+                        store_path, slug_only,
+                    )
                     if not clicked:
                         log_fn(f"Retry: {name} — not in DOM, skipping")
                         page.remove_listener("response", on_retry_response)

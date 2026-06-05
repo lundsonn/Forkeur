@@ -19,7 +19,7 @@ from scrapers.base import browser_session, new_page, check_cloudflare, noop_log,
 import db
 
 _BRUSSELS_ADDRESS = "Rue de la Loi 16, Bruxelles"
-_CONCURRENCY = 5  # parallel pages per platform
+_CONCURRENCY = 3  # parallel pages per platform
 
 
 # ── UberEats ────────────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ import asyncio
 import json
 
 from fastapi import WebSocket, WebSocketDisconnect
+import db
 
 # run_id -> asyncio.Queue of log-line dicts
 _queues: dict[str, asyncio.Queue] = {}
@@ -69,6 +70,9 @@ async def ws_endpoint(websocket: WebSocket, run_id: str) -> None:
         websocket: The FastAPI WebSocket connection to stream messages over.
         run_id: Unique identifier for the scraper run whose queue to consume.
     """
+    if not db.run_exists(run_id):
+        await websocket.close(code=4004)
+        return
     await websocket.accept()
     queue = get_or_create_queue(run_id)
     try:

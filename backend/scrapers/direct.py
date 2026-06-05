@@ -11,7 +11,7 @@ import re
 from typing import Callable
 import httpx
 from models import ScraperResult
-from scrapers.base import browser_session, new_page, noop_log
+from scrapers.base import browser_session, new_page, noop_log, is_safe_url
 from scrapers.direct_classify import classify_url, is_junk_url
 import db
 
@@ -121,6 +121,9 @@ def _make_slug(name: str) -> str:
 async def _check_website(page, url: str, log: Callable) -> dict:
     """Load a restaurant website and detect direct ordering + phone number."""
     out: dict = {'phone': None, 'order_url': None, 'has_delivery': False}
+    if not is_safe_url(url):
+        log(f"    ✗ skipped unsafe URL: {url[:60]}")
+        return out
     try:
         await page.goto(url, wait_until='domcontentloaded', timeout=18000)
         await asyncio.sleep(0.8)

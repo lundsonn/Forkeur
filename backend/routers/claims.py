@@ -5,10 +5,11 @@ import httpx
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, HttpUrl, model_validator
 
 import db
+from routers.auth_router import require_auth
 
 router = APIRouter(prefix="/claims", tags=["claims"])
 
@@ -83,12 +84,12 @@ async def submit_claim(body: ClaimIn):
     return {"claim_id": claim_id}
 
 
-@router.get("", response_model=list[ClaimOut])
+@router.get("", response_model=list[ClaimOut], dependencies=[Depends(require_auth)])
 async def list_claims(verified: bool | None = None):
     return db.get_claims(verified=verified)
 
 
-@router.post("/{claim_id}/approve")
+@router.post("/{claim_id}/approve", dependencies=[Depends(require_auth)])
 async def approve_claim(claim_id: str):
     try:
         db.approve_claim(claim_id)
@@ -97,7 +98,7 @@ async def approve_claim(claim_id: str):
     return {"status": "approved"}
 
 
-@router.post("/{claim_id}/reject")
+@router.post("/{claim_id}/reject", dependencies=[Depends(require_auth)])
 async def reject_claim(claim_id: str):
     try:
         db.reject_claim(claim_id)

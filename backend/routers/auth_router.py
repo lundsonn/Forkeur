@@ -1,4 +1,5 @@
 from __future__ import annotations
+import hmac
 import os
 from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
@@ -27,6 +28,6 @@ async def login(body: LoginIn):
     expected = os.environ.get("ADMIN_PASSWORD", "")
     if not expected:
         raise HTTPException(500, "ADMIN_PASSWORD not configured on the server")
-    if body.password != expected:
+    if not hmac.compare_digest(body.password, expected):
         raise HTTPException(401, "Invalid password")
     return LoginOut(token=auth.create_token())

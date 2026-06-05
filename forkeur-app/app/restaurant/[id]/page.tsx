@@ -152,7 +152,7 @@ export default async function Page({
             </span>
           </details>
         </div>
-        {data.order_url && (() => {
+        {data.order_url && /^https?:\/\//i.test(data.order_url) && (() => {
           const isActionable = !data.direct_url_type || data.direct_url_type === 'ordering' || data.direct_url_type === 'menu'
           const DirectIcon =
             data.direct_url_type === 'menu' ? List
@@ -213,7 +213,7 @@ export default async function Page({
                   return (
                     <a
                       key={l.platform}
-                      href={l.platform_url ?? undefined}
+                      href={l.platform_url && /^https?:\/\//i.test(l.platform_url) ? l.platform_url : undefined}
                       target="_blank"
                       rel="noopener noreferrer"
                       className={`rounded-xl border p-3 text-center transition-colors ${

@@ -1,7 +1,7 @@
 from __future__ import annotations
 import asyncio
 from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from models import RunTriggerOut, ScraperStatusOut, ScraperConfig, RunTriggerIn, ScraperResult
 import alerting
 import db
@@ -9,8 +9,9 @@ import ws as ws_mod
 from scrapers import ubereats, deliveroo, takeaway, fees, direct, direct_menu, match
 from scrapers import dom_menu
 from scrapers.base import CloudflareBlockedError
+from routers.auth_router import require_auth
 
-router = APIRouter(prefix="/scrapers", tags=["scrapers"])
+router = APIRouter(prefix="/scrapers", tags=["scrapers"], dependencies=[Depends(require_auth)])
 
 # Maximum wall-clock seconds each scraper is allowed to run before being killed.
 _TIMEOUTS: dict[str, int] = {

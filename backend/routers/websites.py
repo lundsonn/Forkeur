@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import asyncio
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from routers.auth_router import require_auth
 
-router = APIRouter(prefix="/find-websites", tags=["websites"])
+router = APIRouter(prefix="/find-websites", tags=["websites"], dependencies=[Depends(require_auth)])
 
 _running: bool = False
 

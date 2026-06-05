@@ -13,7 +13,8 @@ def get_client() -> Client:
     global _client
     if _client is None:
         url = os.environ["SUPABASE_URL"]
-        key = os.environ["SUPABASE_KEY"]
+        # Use the service_role key so writes bypass RLS (anon key is public).
+        key = os.environ["SUPABASE_SERVICE_KEY"]
         _client = create_client(url, key)
     return _client
 
@@ -253,6 +254,13 @@ def insert_menu_items(listing_id: str, items: list[dict]) -> int:
     rows = [{**item, "listing_id": listing_id} for item in items]
     res = client.table("menu_items").insert(rows).execute()
     return len(res.data)
+
+
+def run_exists(run_id: str) -> bool:
+    """Return True if a scraper_run with this id exists."""
+    client = get_client()
+    res = client.table("scraper_runs").select("id").eq("id", run_id).limit(1).execute()
+    return bool(res.data)
 
 
 def create_run(platform: str) -> str:

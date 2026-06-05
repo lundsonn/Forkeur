@@ -16,7 +16,11 @@ export default function StaleRefresh({ lastScrapedAt }: { lastScrapedAt: string 
     if (Date.now() - lastRefresh < COOLDOWN_MS) return
 
     localStorage.setItem(LS_KEY, String(Date.now()))
-    fetch('/api/refresh', { method: 'POST' }).catch(() => {})
+    const secret = process.env.NEXT_PUBLIC_REFRESH_SECRET ?? ''
+    fetch('/api/refresh', {
+      method: 'POST',
+      headers: secret ? { 'x-refresh-secret': secret } : {},
+    }).catch(() => {})
   }, [lastScrapedAt])
 
   return null

@@ -19,7 +19,7 @@ from typing import Callable
 from urllib.parse import quote_plus, urlparse
 
 import db
-from scrapers.base import new_browser, new_page
+from scrapers.base import new_browser, new_page, is_safe_url
 
 _SKIP_DOMAINS = {
     "facebook", "instagram", "twitter", "youtube", "wikipedia",
@@ -148,6 +148,10 @@ async def _find_website_on_maps(
 
 
 async def _detect_ordering(page, website_url: str, log: Callable) -> str | None:
+    if not is_safe_url(website_url):
+        log(f"    skipped unsafe URL: {website_url[:60]}")
+        return None
+
     if _is_order_url(website_url):
         return website_url
 

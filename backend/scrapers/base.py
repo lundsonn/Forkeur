@@ -5,6 +5,7 @@ import os
 import random
 import re as _re
 from contextlib import asynccontextmanager
+from urllib.parse import urlparse
 from playwright.async_api import async_playwright, Browser, Page
 from playwright_stealth import Stealth as _Stealth
 
@@ -16,6 +17,27 @@ _virtual_display = None
 
 class CloudflareBlockedError(Exception):
     pass
+
+
+_SSRF_BLOCKLIST = _re.compile(
+    r'localhost|127\.|0\.0\.0\.0|169\.254\.|10\.\d+\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.'
+    r'|\.internal$|\.local$|oast\.|interactsh\.|burpcollaborator\.|canarytokens\.',
+    _re.IGNORECASE,
+)
+
+
+def is_safe_url(url: str) -> bool:
+    """Return True only if the URL is http/https and does not point at internal infrastructure."""
+    try:
+        p = urlparse(url)
+    except Exception:
+        return False
+    if p.scheme not in ("http", "https"):
+        return False
+    host = p.netloc.lower().split(":")[0]
+    if not host or "." not in host:
+        return False
+    return not bool(_SSRF_BLOCKLIST.search(host))
 
 
 _USER_AGENTS = [

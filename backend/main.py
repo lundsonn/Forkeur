@@ -18,13 +18,18 @@ from routers.auth_router import router as auth_router
 
 _PUBLIC_PATHS = {"/api/auth/login"}
 _PUBLIC_POST_PATHS = {"/api/claims"}
-_PUBLIC_PREFIXES = ("/dashboard/",)
+# Only paths under these prefixes require auth; everything else (static assets) is public.
+_AUTH_PREFIXES = ("/api/", "/ws/")
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
-        if path in _PUBLIC_PATHS or any(path.startswith(p) for p in _PUBLIC_PREFIXES):
+        # Static files and anything outside the API surface pass through.
+        if not any(path.startswith(p) for p in _AUTH_PREFIXES):
+            return await call_next(request)
+        # Explicitly public API paths.
+        if path in _PUBLIC_PATHS:
             return await call_next(request)
         if path in _PUBLIC_POST_PATHS and request.method == "POST":
             return await call_next(request)

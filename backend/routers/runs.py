@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from models import ScraperRunOut
 import db
+from routers.auth_router import require_auth
 
-router = APIRouter(prefix="/runs", tags=["runs"])
+router = APIRouter(prefix="/runs", tags=["runs"], dependencies=[Depends(require_auth)])
 
 
 @router.get("", response_model=list[ScraperRunOut])

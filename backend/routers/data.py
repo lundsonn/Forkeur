@@ -1,9 +1,10 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from models import RestaurantOut, MenuItemOut
 import db
+from routers.auth_router import require_auth
 
-router = APIRouter(prefix="/data", tags=["data"])
+router = APIRouter(prefix="/data", tags=["data"], dependencies=[Depends(require_auth)])
 
 
 @router.get("/restaurants", response_model=list[RestaurantOut])
