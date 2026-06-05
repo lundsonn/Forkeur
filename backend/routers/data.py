@@ -25,6 +25,15 @@ async def list_menu_items(listing_id: str):
     return await asyncio.to_thread(db.get_menu_items, listing_id)
 
 
+class SetChainIn(BaseModel):
+    is_chain: bool
+
+
+@router.patch("/restaurants/{restaurant_id}/chain", response_model=RestaurantOut)
+async def set_chain(restaurant_id: str, body: SetChainIn):
+    return await asyncio.to_thread(db.set_restaurant_chain, restaurant_id, body.is_chain)
+
+
 class ResolveIn(BaseModel):
     approve: bool
 

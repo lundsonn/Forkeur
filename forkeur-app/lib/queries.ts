@@ -19,6 +19,7 @@ export type RestaurantSummary = {
   image_url: string | null
   rating: number | null
   direct_url_type: string | null
+  is_chain: boolean
   listings: { platform: Platform; delivery_fee_cents: number | null; eta_min: number | null; is_available: boolean; opening_hours: OpeningHours | null }[]
   cheapest: {
     platform: Platform
@@ -97,6 +98,7 @@ type RawRestaurantRow = {
   lng: number | null
   order_url: string | null
   image_url: string | null
+  is_chain: boolean
   platform_listings: RawListingShort[]
 }
 
@@ -181,7 +183,7 @@ export async function getRestaurants(): Promise<{
   const { data, error } = await supabase
     .from('restaurants')
     .select(`
-      id, name, cuisine, neighborhood, lat, lng, order_url, image_url,
+      id, name, cuisine, neighborhood, lat, lng, order_url, image_url, is_chain,
       platform_listings ( platform, delivery_fee, eta_min, rating, url_type, is_available, opening_hours, last_scraped_at )
     `)
 
@@ -234,6 +236,7 @@ export async function getRestaurants(): Promise<{
           image_url,
           rating: bestRating,
           direct_url_type,
+          is_chain: r.is_chain ?? false,
           listings,
           cheapest: null,
         }
@@ -256,6 +259,7 @@ export async function getRestaurants(): Promise<{
         image_url,
         rating: bestRating,
         direct_url_type,
+        is_chain: r.is_chain ?? false,
         listings,
         cheapest: {
           platform: cheapest.platform,
@@ -268,17 +272,14 @@ export async function getRestaurants(): Promise<{
       }
     })
     .sort((a, b) => {
-      // Tier 1: self-delivery (order_url) restaurants float to the top
-      const selfA = a.order_url ? 1 : 0
-      const selfB = b.order_url ? 1 : 0
-      if (selfA !== selfB) return selfB - selfA
-
-      // Tier 2-4: more platform coverage first (3 > 2 > 1 > 0)
       const countA = a.listings.filter((l) => l.delivery_fee_cents !== null).length
       const countB = b.listings.filter((l) => l.delivery_fee_cents !== null).length
       if (countA !== countB) return countB - countA
 
-      // Within a tier: biggest delivery-fee savings first
+      // Within same platform-count tier: chains sink to the bottom
+      if (a.is_chain !== b.is_chain) return a.is_chain ? 1 : -1
+
+      // Within same tier + chain status: biggest delivery-fee savings first
       return (b.cheapest?.savings_cents ?? 0) - (a.cheapest?.savings_cents ?? 0)
     })
 

@@ -84,6 +84,7 @@ export default function HomepageClient({
       const mb = metrics.get(b.id)!
       if (sortBy === 'best') {
         if (mb.platformCount !== ma.platformCount) return mb.platformCount - ma.platformCount
+        if (a.is_chain !== b.is_chain) return a.is_chain ? 1 : -1
         return mb.savings - ma.savings
       }
       if (sortBy === 'cheapest') {

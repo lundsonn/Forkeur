@@ -82,6 +82,15 @@ export async function getRestaurants(params?: { limit?: number; offset?: number;
   return res.json()
 }
 
+export async function setChain(restaurantId: string, isChain: boolean): Promise<void> {
+  const res = await apiFetch(`${BASE}/data/restaurants/${restaurantId}/chain`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ is_chain: isChain }),
+  })
+  if (!res.ok) throw new Error(await res.text())
+}
+
 export async function getMenuItems(listingId: string): Promise<MenuItem[]> {
   const res = await apiFetch(`${BASE}/data/menu-items/${listingId}`)
   if (!res.ok) throw new Error(await res.text())

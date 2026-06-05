@@ -31,6 +31,7 @@ export interface Restaurant {
   slug: string
   cuisine: string | null
   neighborhood: string | null
+  is_chain: boolean
 }
 
 export interface MenuItem {

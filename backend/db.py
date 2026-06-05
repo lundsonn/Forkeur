@@ -489,6 +489,17 @@ def get_restaurants(
     return q.execute().data
 
 
+def set_restaurant_chain(restaurant_id: str, is_chain: bool) -> dict:
+    client = get_client()
+    result = (
+        client.table("restaurants")
+        .update({"is_chain": is_chain})
+        .eq("id", restaurant_id)
+        .execute()
+    )
+    return result.data[0]
+
+
 def get_menu_items(listing_id: str) -> list[dict]:
     client = get_client()
     return (
@@ -834,9 +845,17 @@ def load_slugs_for_match() -> dict[str, list[str]]:
                 continue
             try:
                 path = urlparse(url).path.rstrip("/")
-                segment = path.split("/")[-1] if path else ""
-                if segment and len(segment) >= 3:
-                    result.setdefault(rid, []).append(segment)
+                segments = [s for s in path.split("/") if s]
+                # Skip UUID/hash-like final segments (e.g. UberEats
+                # /store/{slug}/{UUID} — last segment is opaque, second-to-last
+                # is the human-readable slug).
+                slug = None
+                for seg in reversed(segments):
+                    if len(seg) >= 3 and not re.match(r'^[A-Za-z0-9_\-]{20,}$', seg):
+                        slug = seg
+                        break
+                if slug:
+                    result.setdefault(rid, []).append(slug)
             except Exception:
                 continue
         if len(batch) < page:

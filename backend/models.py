@@ -71,6 +71,7 @@ class RestaurantOut(BaseModel):
     slug: str
     cuisine: str | None = None
     neighborhood: str | None = None
+    is_chain: bool = False
 
 
 class MenuItemOut(BaseModel):

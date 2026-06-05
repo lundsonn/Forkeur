@@ -8,6 +8,7 @@ import Schedule from './pages/Schedule'
 import Data from './pages/Data'
 import Claims from './pages/Claims'
 import MatchQueue from './pages/MatchQueue'
+import Restaurants from './pages/Restaurants'
 import Login from './pages/Login'
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="/data" element={<Data />} />
             <Route path="/claims" element={<Claims />} />
             <Route path="/match-queue" element={<MatchQueue />} />
+            <Route path="/restaurants" element={<Restaurants />} />
           </Routes>
         </main>
       </div>
