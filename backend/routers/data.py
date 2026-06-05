@@ -27,7 +27,6 @@ async def list_menu_items(listing_id: str):
 
 class ResolveIn(BaseModel):
     approve: bool
-    resolved_by: str = "admin"
 
 
 @router.get("/match-queue")
@@ -39,11 +38,18 @@ async def match_queue(
 
 
 @router.post("/match-queue/{decision_id}/resolve")
-async def resolve_match(decision_id: str, body: ResolveIn):
+async def resolve_match(
+    decision_id: str,
+    body: ResolveIn,
+    identity: str = Depends(require_auth),
+):
+    # resolved_by is authoritatively the authenticated admin's JWT sub —
+    # not a request-body field — so the audit trail can't be spoofed by a
+    # legitimate but curious caller.
     await asyncio.to_thread(
         db.resolve_decision,
         decision_id,
         approve=body.approve,
-        resolved_by=body.resolved_by,
+        resolved_by=identity,
     )
     return {"status": "ok"}

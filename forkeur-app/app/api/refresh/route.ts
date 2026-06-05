@@ -1,17 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { checkSameOrigin } from '@/lib/same-origin'
+import { createClient } from '@/utils/supabase/server'
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8000'
 const JWT_SECRET = process.env.BACKEND_ADMIN_TOKEN ?? ''
 
-// In-memory throttle so a single tab can't hammer the backend even if it
-// bypasses the localStorage cooldown on the client. NOTE: per-process state —
-// a multi-instance deploy multiplies the effective rate by instance count.
+// Cross-instance throttle: a fees run that started within this window means
+// either it's still running OR it just finished — either way, don't fire
+// another one. Backed by scraper_runs so horizontal scaling can't multiply
+// the rate (the previous per-process `lastFire` did exactly that).
 const COOLDOWN_MS = 60 * 60 * 1000
-let lastFire = 0
 
-// Fire-and-forget: trigger a fees scrape when a restaurant page is stale.
-// Auth model: same-origin (Origin/Referer) + server-side cooldown.
+// Belt-and-suspenders local throttle: protects the DB from being asked the
+// cooldown question hundreds of times a second from the same instance.
+const LOCAL_DEBOUNCE_MS = 5_000
+let lastLocalFire = 0
+
 export async function POST(req: NextRequest) {
   if (!JWT_SECRET) return NextResponse.json({ ok: false }, { status: 503 })
 
@@ -19,10 +24,34 @@ export async function POST(req: NextRequest) {
   if (reason) return NextResponse.json({ ok: false }, { status: 403 })
 
   const now = Date.now()
-  if (now - lastFire < COOLDOWN_MS) {
-    return NextResponse.json({ ok: true, throttled: true })
+  if (now - lastLocalFire < LOCAL_DEBOUNCE_MS) {
+    return NextResponse.json({ ok: true, throttled: 'local' })
   }
-  lastFire = now
+
+  // DB-backed cooldown — anyone with the supabase URL/anon key can read
+  // scraper_runs (it has a public SELECT policy), so we don't need the
+  // service-role key here.
+  try {
+    const supabase = createClient(await cookies())
+    const cutoff = new Date(now - COOLDOWN_MS).toISOString()
+    const { data, error } = await supabase
+      .from('scraper_runs')
+      .select('started_at')
+      .eq('platform', 'fees')
+      .gte('started_at', cutoff)
+      .limit(1)
+    if (error) {
+      console.warn('[refresh] cooldown lookup failed:', error.message)
+      // fail-open on infrastructure failure: better to allow a duplicate
+      // run than to permanently block refreshes when supabase is down
+    } else if (data && data.length > 0) {
+      return NextResponse.json({ ok: true, throttled: 'cooldown' })
+    }
+  } catch (err) {
+    console.warn('[refresh] supabase client init failed:', err)
+  }
+
+  lastLocalFire = now
 
   // Non-blocking — we don't await the scraper finishing.
   fetch(`${BACKEND}/api/scrapers/fees/run`, {

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import html
 import ipaddress
+import logging
 import os
 import time
 from collections import deque
@@ -15,6 +16,8 @@ from pydantic import BaseModel, EmailStr, HttpUrl, model_validator
 
 import db
 from routers.auth_router import require_auth
+
+logger = logging.getLogger("forkeur.audit")
 
 
 def _parse_trusted_proxies() -> list:
@@ -167,19 +170,24 @@ async def list_claims(verified: bool | None = None):
     return await asyncio.to_thread(db.get_claims, verified=verified)
 
 
-@router.post("/{claim_id}/approve", dependencies=[Depends(require_auth)])
-async def approve_claim(claim_id: str):
+@router.post("/{claim_id}/approve")
+async def approve_claim(claim_id: str, identity: str = Depends(require_auth)):
     try:
         await asyncio.to_thread(db.approve_claim, claim_id)
     except (IndexError, KeyError, ValueError):
         raise HTTPException(404, "Claim not found")
+    # Audit log entry — admin identity comes from JWT sub. Searchable in
+    # journalctl as `forkeur.audit`. Newlines in claim_id can't happen
+    # because the path is a UUID-ish string, but escape just in case.
+    logger.info("claim approve claim_id=%s by=%s", claim_id, identity)
     return {"status": "approved"}
 
 
-@router.post("/{claim_id}/reject", dependencies=[Depends(require_auth)])
-async def reject_claim(claim_id: str):
+@router.post("/{claim_id}/reject")
+async def reject_claim(claim_id: str, identity: str = Depends(require_auth)):
     try:
         await asyncio.to_thread(db.reject_claim, claim_id)
     except (IndexError, KeyError, ValueError):
         raise HTTPException(404, "Claim not found")
+    logger.info("claim reject claim_id=%s by=%s", claim_id, identity)
     return {"status": "rejected"}
