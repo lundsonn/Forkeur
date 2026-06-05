@@ -167,6 +167,12 @@ def run_sync(*, dry_run: bool, log_fn) -> dict:
     all_queued = db.get_queued_decisions(limit=500, offset=0)
     to_prune: list[str] = []
     for dec in all_queued:
+        # loser_id=None means the loser was already merged/deleted in a
+        # prior run before the enqueue-before-merge fix — decision is stale.
+        if dec.get("loser_id") is None:
+            to_prune.append(dec["id"])
+            log_fn(f"  prune orphan: {dec.get('id')} loser_id=NULL (already merged)")
+            continue
         sid = str(dec["survivor_id"])
         lid = str(dec["loser_id"])
         ra = rows_by_id.get(sid)
@@ -179,7 +185,7 @@ def run_sync(*, dry_run: bool, log_fn) -> dict:
             log_fn(f"  prune queued: {ra['name']} / {rb['name']} → now SEPARATE")
     if to_prune and not dry_run:
         db.delete_decisions(to_prune)
-    log_fn(f"Prune: removed {len(to_prune)} stale SEPARATE decisions from queue")
+    log_fn(f"Prune: removed {len(to_prune)} stale/orphan decisions from queue")
 
     if dry_run:
         out_dir = os.path.join(os.path.dirname(__file__), "..", "match_output")
