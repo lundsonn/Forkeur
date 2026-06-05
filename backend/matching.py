@@ -339,7 +339,7 @@ def decide(f: MatchFeatures) -> Decision:
         or (f.geo_dist is not None and f.geo_dist <= GEO_CONFIRM_M)
         or (f.website_match and f.name_sim >= NAME_SIM_WEBSITE_AUTO)
         or (f.menu_overlap is not None and f.menu_overlap >= MENU_OVERLAP_CONFIRM)
-        or f.slug_match  # same URL slug on different platforms = same venue
+        or (f.slug_match and not f.is_chain_name)  # slug only confirms non-chains
     )
 
     # Chain guard: don't auto-merge or queue chain branches without evidence
