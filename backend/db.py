@@ -134,18 +134,22 @@ def upsert_restaurant(data: dict) -> str:
 
     def _found(rid: str, row: dict | None = None) -> str:
         if row is None:
-            existing = client.table("restaurants").select("cuisine, image_url, lat, lng, geo_source").eq("id", rid).limit(1).execute()
+            existing = client.table("restaurants").select("cuisine, image_url, lat, lng, geo_source, phone, neighborhood").eq("id", rid).limit(1).execute()
             row = existing.data[0] if existing.data else {}
         updates: dict = {}
         if data.get("cuisine") and not row.get("cuisine"):
             updates["cuisine"] = data["cuisine"]
         if data.get("image_url") and not row.get("image_url"):
             updates["image_url"] = data["image_url"]
-        # Geo provenance hierarchy: uber_eats/direct > deliveroo_venue > deliveroo (zone centroid).
+        if data.get("phone") and not row.get("phone"):
+            updates["phone"] = data["phone"]
+        if data.get("neighborhood") and not row.get("neighborhood"):
+            updates["neighborhood"] = data["neighborhood"]
+        # Geo provenance hierarchy: uber_eats/direct/takeaway > deliveroo_venue > deliveroo (zone centroid).
         # venue-grade always overwrites; deliveroo_venue upgrades over zone centroid only;
         # plain deliveroo only fills when row has no coords.
         incoming_src = data.get("geo_source")
-        _VENUE = {"uber_eats", "direct"}
+        _VENUE = {"uber_eats", "direct", "takeaway"}
         if data.get("lat") is not None and data.get("lng") is not None:
             if incoming_src in _VENUE:
                 updates["lat"] = data["lat"]

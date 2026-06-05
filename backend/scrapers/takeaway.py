@@ -34,6 +34,26 @@ LISTING_ZONES = [
 
 _CARD_JS = "document.querySelectorAll('[data-qa=\"card-element\"]').length"
 
+_JSONLD_EVAL = """
+() => {
+    try {
+        const s = document.querySelector('script[type="application/ld+json"]');
+        if (!s) return null;
+        const d = JSON.parse(s.textContent);
+        if (d['@type'] !== 'Restaurant') return null;
+        return {
+            lat: d.geo ? d.geo.latitude : null,
+            lng: d.geo ? d.geo.longitude : null,
+            street_address: d.address ? d.address.streetAddress : null,
+            postal_code: d.address ? d.address.postalCode : null,
+            neighborhood: d.address ? d.address.addressLocality : null,
+            cuisine: (d.servesCuisine || []).filter(Boolean).join(', ') || null,
+            phone: d.telephone || null,
+        };
+    } catch(e) { return null; }
+}
+"""
+
 _MENU_EVAL = """
 () => {
     const sections = [];
@@ -149,8 +169,12 @@ _PROMO_EVAL = """
 """
 
 
-async def scrape_menu_page(page, listing_id: str, url: str) -> tuple[str, list[dict], list[str]]:
-    """Navigate to menu page, scroll fully, extract items. Returns (listing_id, items)."""
+async def scrape_menu_page(page, listing_id: str, url: str) -> tuple[str, list[dict], list[str], dict | None]:
+    """Navigate to menu page, scroll fully, extract items and JSON-LD venue data.
+
+    Returns (listing_id, items, promo_lines, restaurant_info).
+    restaurant_info is a dict with lat/lng/cuisine/phone/neighborhood or None.
+    """
     try:
         try:
             await page.goto(url, wait_until="domcontentloaded", timeout=60000)
@@ -163,10 +187,13 @@ async def scrape_menu_page(page, listing_id: str, url: str) -> tuple[str, list[d
             if not cleared:
                 raise CloudflareBlockedError("CF not cleared on menu page")
 
+        # Extract JSON-LD venue data (server-rendered, available immediately)
+        restaurant_info: dict | None = await page.evaluate(_JSONLD_EVAL)
+
         try:
             await page.wait_for_selector('[data-qa="card-element"]', timeout=20000)
         except Exception:
-            return (listing_id, [], [])
+            return (listing_id, [], [], restaurant_info)
 
         # Height-stable scroll
         prev_h = 0
@@ -202,12 +229,12 @@ async def scrape_menu_page(page, listing_id: str, url: str) -> tuple[str, list[d
         promo_dom = await page.evaluate(_PROMO_EVAL)
         promo_lines = promo_dom.get("promoLines") or []
 
-        return (listing_id, items, promo_lines)
+        return (listing_id, items, promo_lines, restaurant_info)
 
     except CloudflareBlockedError:
         raise
     except Exception:
-        return (listing_id, [], [])
+        return (listing_id, [], [], None)
 
 
 async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -> ScraperResult:
@@ -317,7 +344,24 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 log_fn(f"Menu worker {wid}: {r['name']}")
                 menu_page = await new_page(browser, lang="fr-BE")
                 try:
-                    _, items, promo_lines = await scrape_menu_page(menu_page, lid, url)
+                    _, items, promo_lines, rinfo = await scrape_menu_page(menu_page, lid, url)
+                    if rinfo and (rinfo.get("lat") is not None or rinfo.get("neighborhood")):
+                        enriched: dict = {"name": r["name"], "slug": r["slug"]}
+                        if rinfo.get("lat") is not None:
+                            enriched["lat"] = rinfo["lat"]
+                            enriched["lng"] = rinfo["lng"]
+                            enriched["geo_source"] = "takeaway"
+                        if rinfo.get("neighborhood") and not enriched.get("neighborhood"):
+                            enriched["neighborhood"] = rinfo["neighborhood"]
+                        if rinfo.get("cuisine"):
+                            enriched["cuisine"] = rinfo["cuisine"]
+                        if rinfo.get("phone"):
+                            enriched["phone"] = rinfo["phone"]
+                        try:
+                            db.upsert_restaurant(enriched)
+                        except ValueError:
+                            pass
+                        log_fn(f"  geo: {rinfo.get('lat')},{rinfo.get('lng')}")
                     if items:
                         count = db.insert_menu_items(lid, items)
                         menu_items_saved += count
