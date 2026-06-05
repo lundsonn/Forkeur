@@ -5,6 +5,7 @@ import inspect
 import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.combining import OrTrigger
 from models import ScraperConfig, ScheduleConfigIn, ScheduleConfigOut
 from scrapers.base import CloudflareBlockedError
 import alerting
@@ -115,9 +116,11 @@ def add_or_update_schedule(config: ScheduleConfigIn) -> ScheduleConfigOut:
 
     if config.enabled:
         _persist_schedule(config)
+        parts = [p.strip() for p in config.cron.split("|") if p.strip()]
+        trigger = OrTrigger([CronTrigger.from_crontab(p) for p in parts]) if len(parts) > 1 else CronTrigger.from_crontab(parts[0])
         job = _scheduler.add_job(
             _run_scraper,
-            CronTrigger.from_crontab(config.cron),
+            trigger,
             id=job_id,
             args=[config.platform],
         )
@@ -230,9 +233,11 @@ def start() -> None:
     )
     for config in _load_persisted_schedules():
         _schedules[config.platform] = config
+        parts = [p.strip() for p in config.cron.split("|") if p.strip()]
+        trigger = OrTrigger([CronTrigger.from_crontab(p) for p in parts]) if len(parts) > 1 else CronTrigger.from_crontab(parts[0])
         _scheduler.add_job(
             _run_scraper,
-            CronTrigger.from_crontab(config.cron),
+            trigger,
             id=f"scraper_{config.platform}",
             args=[config.platform],
             replace_existing=True,
