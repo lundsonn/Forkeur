@@ -46,7 +46,7 @@ def run_sync(*, dry_run: bool, log_fn) -> dict:
     tok_counts: dict[str, int] = {}
     for r in rows:
         tok = matching.significant_first_token(r["name"])
-        if tok and len(tok) >= 4:
+        if tok and len(tok) >= 4 and tok not in matching._GENERIC_TOKENS:
             tok_counts[tok] = tok_counts.get(tok, 0) + 1
     chain_names = {tok for tok, count in tok_counts.items() if count >= 3}
     log_fn(

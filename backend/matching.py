@@ -29,6 +29,23 @@ VENUE_GRADE_SOURCES = {"uber_eats", "direct", "deliveroo_venue"}
 _ARTICLES = {"le", "la", "les", "l", "au", "aux", "un", "une", "de", "du",
              "des", "the", "a", "el", "il"}
 
+# Generic cuisine/shop-type words. These are NOT brand tokens: dozens of
+# independent "Pizza X" / "Snack Y" places share them, so they must never feed
+# the chain-name count heuristic (else every pizzeria gets flagged is_chain).
+# A real chain shares a brand first token ("quick", "panos", "carrefour").
+_GENERIC_TOKENS = {
+    "pizza", "pizzeria", "pizzas", "snack", "snacks", "sushi", "sushibar",
+    "burger", "burgers", "pasta", "pastas", "tacos", "taco", "kebab", "durum",
+    "pita", "friterie", "frituur", "friterie", "wok", "thai", "chinese",
+    "indian", "grill", "grills", "bbq", "chicken", "poke", "bagel", "bagels",
+    "sandwich", "sandwiches", "resto", "restaurant", "brasserie", "bistro",
+    "cafe", "coffee", "boulangerie", "patisserie", "librairie", "night",
+    "late", "food", "chez", "maison", "new", "royal", "star", "king", "house",
+    "express", "city", "shop", "market", "supermarket", "traiteur", "noodle",
+    "noodles", "ramen", "curry", "tandoori", "doner", "donut", "donuts",
+    "waffle", "waffles", "gelato", "glacier", "creperie", "crepe",
+}
+
 _SUFFIX_RE = re.compile(r"\s+-\s+\S.*$")  # " - Ixelles"
 
 _BRUSSELS_LOCATIONS = {
