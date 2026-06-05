@@ -448,6 +448,7 @@ def _f(**kw) -> matching.MatchFeatures:
         soft_geo_dist=None,
         is_chain_name=False,
         slug_match=False,
+        distinctive_conflict=False,
     )
     defaults.update(kw)
     return matching.MatchFeatures(**defaults)
@@ -828,8 +829,31 @@ def test_match_features_to_dict_has_all_fields():
         "name_sim", "website_match", "phone_match", "geo_dist",
         "cuisine_match", "cuisine_conflict", "location_conflict",
         "menu_overlap", "soft_geo_dist", "is_chain_name", "slug_match",
+        "distinctive_conflict",
     }
     assert expected.issubset(d.keys())
+
+
+def test_distinctive_conflict_separates_shared_prefix():
+    # "Pizza Vito" / "Pizza Mio" — generic prefix, different remainder.
+    a = _r("Pizza Vito", id="a1")
+    b = _r("Pizza Mio", id="b1")
+    f = matching.score_pair(a, b)
+    assert f.distinctive_conflict is True
+    assert matching.decide(f) == matching.Decision.SEPARATE
+
+
+def test_distinctive_conflict_not_set_for_same_remainder():
+    # "Pizza Bella" / "Pizza Bela" — typo, same venue → no conflict.
+    a = _r("Pizza Bella", id="a1")
+    b = _r("Pizza Bela", id="b1")
+    f = matching.score_pair(a, b)
+    assert f.distinctive_conflict is False
+
+
+def test_distinctive_conflict_overridden_by_slug_match():
+    f = _f(name_sim=0.93, distinctive_conflict=True, slug_match=True)
+    assert matching.decide(f) != matching.Decision.SEPARATE
 
 
 # ---------------------------------------------------------------------------

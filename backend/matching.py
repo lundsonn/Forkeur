@@ -24,7 +24,8 @@ GEO_VETO_M = 300.0         # > vetoes merge (chain branches)
 SOFT_GEO_VETO_M = 600.0    # > veto when only one side is venue-grade
 MENU_OVERLAP_VETO = 0.03   # < 3% shared items → veto (different menus)
 MENU_OVERLAP_CONFIRM = 0.15  # >= 15% shared items → strong confirm
-VENUE_GRADE_SOURCES = {"uber_eats", "direct", "deliveroo_venue"}
+DISTINCTIVE_REMAINDER_MIN = 0.84  # remainder JW below this → distinct venues
+VENUE_GRADE_SOURCES = {"uber_eats", "direct", "deliveroo_venue", "takeaway"}
 
 _ARTICLES = {"le", "la", "les", "l", "au", "aux", "un", "une", "de", "du",
              "des", "the", "a", "el", "il"}
@@ -36,7 +37,7 @@ _ARTICLES = {"le", "la", "les", "l", "au", "aux", "un", "une", "de", "du",
 _GENERIC_TOKENS = {
     "pizza", "pizzeria", "pizzas", "snack", "snacks", "sushi", "sushibar",
     "burger", "burgers", "pasta", "pastas", "tacos", "taco", "kebab", "durum",
-    "pita", "friterie", "frituur", "friterie", "wok", "thai", "chinese",
+    "pita", "friterie", "frituur", "pizzerie", "wok", "thai", "chinese",
     "indian", "grill", "grills", "bbq", "chicken", "poke", "bagel", "bagels",
     "sandwich", "sandwiches", "resto", "restaurant", "brasserie", "bistro",
     "cafe", "coffee", "boulangerie", "patisserie", "librairie", "night",
@@ -114,6 +115,23 @@ def significant_first_token(name: str) -> str:
             return tok
     toks = normalize_name(name).split()
     return toks[0] if toks else ""
+
+
+def _distinctive_remainder(name: str) -> tuple[str, bool]:
+    """Strip leading generic/article tokens; return (remainder, had_generic_prefix).
+
+    'Pizza Vito' → ('vito', True); 'Snack Tarik' → ('tarik', True);
+    'Quick' → ('quick', False). Used to compare the distinguishing part of two
+    names that share a generic prefix ("Pizza X" vs "Pizza Y").
+    """
+    toks = normalize_name(name).split()
+    had_generic = False
+    i = 0
+    while i < len(toks) and (toks[i] in _GENERIC_TOKENS or toks[i] in _ARTICLES):
+        if toks[i] in _GENERIC_TOKENS:
+            had_generic = True
+        i += 1
+    return " ".join(toks[i:]), had_generic
 
 
 @lru_cache(maxsize=None)
@@ -208,6 +226,7 @@ class MatchFeatures:
     soft_geo_dist: float | None     # metres; one venue-grade + one has any coords
     is_chain_name: bool             # normalized name appears 3+ times in corpus
     slug_match: bool                # normalized URL slug shared across platforms
+    distinctive_conflict: bool      # shared generic prefix but distinct remainder
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -295,6 +314,17 @@ def score_pair(
             b_slug_keys.add(key)
     slug_match = bool(a_slug_keys and b_slug_keys and a_slug_keys & b_slug_keys)
 
+    # Distinctive-remainder veto. JaroWinkler over-weights a shared prefix, so
+    # "Pizza Vito"/"Pizza Mio" and "Snack Tetik"/"Snack Tarik" score high despite
+    # being different venues. When both names share a generic prefix, compare the
+    # remainder: a low remainder similarity means the distinguishing word differs.
+    a_rem, a_gen = _distinctive_remainder(a["name"])
+    b_rem, b_gen = _distinctive_remainder(b["name"])
+    distinctive_conflict = (
+        a_gen and b_gen and bool(a_rem) and bool(b_rem)
+        and JaroWinkler.similarity(a_rem, b_rem) < DISTINCTIVE_REMAINDER_MIN
+    )
+
     return MatchFeatures(
         name_sim=name_sim,
         website_match=website_match,
@@ -307,6 +337,7 @@ def score_pair(
         soft_geo_dist=soft_geo_dist,
         is_chain_name=is_chain_name,
         slug_match=slug_match,
+        distinctive_conflict=distinctive_conflict,
     )
 
 
@@ -333,6 +364,11 @@ def decide(f: MatchFeatures) -> Decision:
     if f.location_conflict:
         return Decision.SEPARATE
     if f.cuisine_conflict:
+        return Decision.SEPARATE
+    # Shared generic prefix but distinct remainder ("Pizza Vito" / "Pizza Mio").
+    # Skip the veto when a hard same-venue proof exists (slug/phone) so a real
+    # typo'd branch isn't split.
+    if f.distinctive_conflict and not (f.slug_match or f.phone_match):
         return Decision.SEPARATE
 
     # Name threshold
