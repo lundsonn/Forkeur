@@ -601,7 +601,8 @@ class TestRun:
             ]
             http_instance.post.return_value = _mock_response(200, odoo_fixture)
 
-            result = run()
+            import asyncio
+            result = asyncio.run(run())
 
         assert result["listings_processed"] == 3
         assert result["total_scraped"] == 16  # 5 + 5 + 6
@@ -637,7 +638,8 @@ class TestRun:
             ]
             http_instance.post.return_value = _mock_response(200, _load_fixture("odoo_pos_response.json"))
 
-            result = run()
+            import asyncio
+            result = asyncio.run(run())
 
         assert result["listings_processed"] == 2
         assert len(result["errors"]) == 1
@@ -661,7 +663,8 @@ class TestRun:
             mock_http_cls.return_value.__enter__.return_value = http_instance
             http_instance.get.return_value = _mock_response(200, sq_fixture)
 
-            result = run(max_items=3)
+            import asyncio
+            result = asyncio.run(run(max_items=3))
 
         # delete was called for the listing before insert
         mock_delete.assert_called_once_with("listing-sq")
@@ -681,7 +684,8 @@ class TestRun:
             patch("scrapers.direct_menu.db.insert_menu_items") as mock_insert,
             patch("httpx.Client"),
         ):
-            result = run()
+            import asyncio
+            result = asyncio.run(run())
 
         assert result == {"total_scraped": 0, "listings_processed": 0, "errors": []}
         mock_delete.assert_not_called()

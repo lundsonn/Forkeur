@@ -1,118 +1,131 @@
+'use client'
+import { useState } from 'react'
 import Image from 'next/image'
-import { ExternalLink, List, Globe, Phone } from 'lucide-react'
-import { RestaurantSummary } from '@/lib/queries'
-import { centsToEuro, PLATFORM_COLORS, type Platform } from '@/lib/basket'
-import { getOpenStatus } from '@/lib/hours'
-import OpenStatusBadge from './OpenStatusBadge'
+import { ChevronUp, ChevronDown } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
+import type { RestaurantSummary } from '@/lib/queries'
+import { centsToEuro, PLATFORM_LABELS, type Platform } from '@/lib/basket'
 import PlatformLogo from './ui/PlatformLogo'
 
 type Props = {
   restaurant: RestaurantSummary
+  href: string
   isLast?: boolean
   directBadge: string
   maxFee?: number | null
 }
 
-export default function RestaurantCard({ restaurant, isLast, directBadge, maxFee }: Props) {
+export default function RestaurantCard({ restaurant, href, isLast, directBadge }: Props) {
   const { name, cuisine, listings, cheapest, order_url, direct_url_type, image_url } = restaurant
+  const tCard = useTranslations('card')
+  const router = useRouter()
+  const [collapsed, setCollapsed] = useState(false)
 
   const tiles = listings.filter((l) => l.delivery_fee_cents !== null)
+  const sortedTiles = [...tiles].sort((a, b) => {
+    if (a.platform === 'direct') return -1
+    if (b.platform === 'direct') return 1
+    const fa = a.delivery_fee_cents ?? Infinity
+    const fb = b.delivery_fee_cents ?? Infinity
+    return fa - fb
+  })
 
-  const cheapestFeeCents = cheapest
-    ? listings.find(l => l.platform === cheapest.platform)?.delivery_fee_cents ?? null
-    : null
+  const cheapestFeeCents = cheapest?.delivery_fee_cents ?? null
 
-  const showStrikethrough = maxFee != null && cheapestFeeCents != null && (maxFee - cheapestFeeCents) >= 50
+  function handleCardClick() {
+    router.push(href)
+  }
 
   return (
-    <div className={`py-4 ${!isLast ? 'border-b border-stone-100' : ''}`}>
+    <div
+      className={`py-4 cursor-pointer select-none ${!isLast ? 'border-b border-stone-100' : ''}`}
+      onClick={handleCardClick}
+    >
+      {/* Header */}
       <div className="flex items-start gap-3 mb-3">
         {image_url && (
           <Image
             src={image_url}
             alt=""
-            width={48}
-            height={48}
-            className="rounded-lg object-cover shrink-0 bg-stone-100"
+            width={44}
+            height={44}
+            className="rounded-xl object-cover shrink-0 bg-stone-100"
           />
         )}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-stone-900">{name}</p>
-              <p className="text-xs text-stone-400 mt-0.5">{cuisine.join(' · ')}</p>
-            </div>
-            <div className="flex items-center gap-2 ml-4 shrink-0 mt-0.5">
-              {cheapestFeeCents != null && (
-                <div className="flex items-baseline gap-1">
-                  <span className="text-xs text-stone-500">
-                    from <span className="font-semibold text-stone-900">€{(cheapestFeeCents / 100).toFixed(2)}</span>
-                  </span>
-                  {showStrikethrough && (
-                    <span
-                      className="text-xs text-stone-400 line-through"
-                      aria-label={`€${(maxFee! / 100).toFixed(2)} on other platforms`}
-                    >
-                      €{(maxFee! / 100).toFixed(2)}
-                    </span>
-                  )}
-                </div>
-              )}
-              <span aria-hidden="true" className="text-stone-300 text-xs">›</span>
-            </div>
-          </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-stone-900 truncate">{name}</p>
+          <p className="text-xs text-stone-400 mt-0.5 truncate">{cuisine.join(' · ')}</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0 mt-0.5">
+          {cheapestFeeCents != null && (
+            <span className="text-xs text-stone-500">
+              from <span className="font-bold text-stone-900">{centsToEuro(cheapestFeeCents)}</span>
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setCollapsed((v) => !v) }}
+            className="text-stone-300 hover:text-stone-500 p-0.5 transition-colors"
+            aria-label={collapsed ? 'Expand' : 'Collapse'}
+          >
+            {collapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
+          </button>
         </div>
       </div>
 
-      {order_url && direct_url_type && (() => {
-        const isActionable = direct_url_type === 'ordering' || direct_url_type === 'menu'
-        const pillClass = isActionable
-          ? 'bg-[#D85A30] text-white hover:bg-[#c04e28]'
-          : 'bg-[#888780] text-white hover:bg-[#7a7a73]'
-        const Icon =
-          direct_url_type === 'ordering' ? ExternalLink
-          : direct_url_type === 'menu' ? List
-          : direct_url_type === 'website' ? Globe
-          : Phone
-        return (
-          <a
-            href={order_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className={`inline-flex items-center gap-1.5 mb-2.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${pillClass}`}
-          >
-            <Icon size={12} aria-hidden="true" />
-            {directBadge}
-          </a>
-        )
-      })()}
-
-      {tiles.length > 0 && (
-        <div className={`grid gap-1.5 ${{ 1: 'grid-cols-1', 2: 'grid-cols-2', 3: 'grid-cols-3', 4: 'grid-cols-4' }[tiles.length] ?? 'grid-cols-4'}`}>
-          {tiles.map((l) => {
+      {/* Platform rows */}
+      {!collapsed && sortedTiles.length > 0 && (
+        <div className="space-y-1.5 mb-3">
+          {sortedTiles.map((l) => {
             const isCheapest = l.platform === cheapest?.platform
-            const colors = PLATFORM_COLORS[l.platform as Platform]
+            const delta =
+              !isCheapest && cheapestFeeCents !== null && l.delivery_fee_cents !== null
+                ? l.delivery_fee_cents - cheapestFeeCents
+                : null
             return (
               <div
                 key={l.platform}
-                data-testid={`fee-tile-${l.platform}`}
-                data-cheapest={isCheapest ? 'true' : undefined}
-                className={`rounded-lg px-2 py-2 text-center transition-opacity bg-stone-50 ${
-                  isCheapest ? '' : 'opacity-40'
-                } ${getOpenStatus(l.opening_hours).status === 'closed' ? 'grayscale opacity-30' : ''}`}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl ${isCheapest ? 'bg-green-50' : 'bg-stone-50'}`}
               >
-                <div className="flex justify-center mb-0.5">
-                  <PlatformLogo platform={l.platform} size={18} />
-                </div>
-                <p className="text-sm font-bold text-stone-900">
+                <PlatformLogo platform={l.platform} size={16} />
+                <span className={`text-xs flex-1 font-medium ${isCheapest ? 'text-green-700' : 'text-stone-600'}`}>
+                  {PLATFORM_LABELS[l.platform as Platform]}
+                </span>
+                <span className={`text-xs font-bold tabular-nums ${isCheapest ? 'text-green-700' : 'text-stone-700'}`}>
                   {centsToEuro(l.delivery_fee_cents)}
-                </p>
-                <OpenStatusBadge openingHours={l.opening_hours} isAvailable={l.is_available} />
+                </span>
+                {isCheapest ? (
+                  <span className="text-[10px] font-bold bg-orange-500 text-white rounded-full px-1.5 py-0.5 leading-none">
+                    {tCard('cheapest_badge')}
+                  </span>
+                ) : delta !== null && delta > 0 ? (
+                  <span className="text-[10px] text-stone-400 tabular-nums">+{centsToEuro(delta)}</span>
+                ) : null}
               </div>
             )
           })}
         </div>
+      )}
+
+      {/* Direct CTA */}
+      {order_url && direct_url_type && (
+        <a
+          href={order_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="flex items-center justify-center gap-1.5 w-full py-2.5 bg-orange-500 text-white text-sm font-semibold rounded-xl hover:bg-orange-600 active:bg-orange-700 transition-colors mb-2"
+        >
+          {directBadge}
+        </a>
+      )}
+
+      {/* Compare all */}
+      {!collapsed && sortedTiles.length > 1 && (
+        <p className="text-center text-xs text-stone-400 mt-0.5">
+          {tCard('compare_all', { count: sortedTiles.length })} ›
+        </p>
       )}
     </div>
   )

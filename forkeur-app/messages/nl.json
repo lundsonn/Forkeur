@@ -6,12 +6,13 @@
     "back_restaurants": "← Restaurants"
   },
   "hero": {
-    "heading_line1": "Waar bestelt u",
-    "heading_line2": "uw maaltijd?",
-    "subtitle": "Vergelijk leveringskosten en menuprijzen op UberEats, Deliveroo en Takeaway — en ontdek wanneer rechtstreeks bestellen voordeliger is."
+    "heading_line1": "Stop met te veel betalen",
+    "heading_line2": "voor hetzelfde gerecht.",
+    "subtitle": "Een restaurant kan <b>20–40% duurder</b> zijn afhankelijk van de app. Forkeur vergelijkt Uber Eats, Deliveroo, Takeaway &amp; rechtstreeks bestellen — kosten inbegrepen — zodat u altijd de goedkoopste kiest.",
+    "live_badge": "Live in Brussel"
   },
   "search": {
-    "placeholder": "Zoek een restaurant"
+    "placeholder": "Zoek een restaurant in Brussel"
   },
   "filters": {
     "all": "Alles",
@@ -28,7 +29,8 @@
     "none": "Geen restaurants gevonden",
     "load_more": "Toon {next, plural, one {# restaurant meer} other {# restaurants meer}} ({remaining} totaal resterend)",
     "none_query": "Geen restaurants gevonden voor \"{query}\"",
-    "clear_search": "Zoekopdracht wissen"
+    "clear_search": "Zoekopdracht wissen",
+    "popular": "Populair bij u in de buurt"
   },
   "deals": {
     "heading": "Beste aanbiedingen",
@@ -97,7 +99,15 @@
     "direct_cta_ordering": "Rechtstreeks bestellen",
     "direct_cta_menu": "Menu bekijken",
     "direct_cta_website": "Website restaurant",
-    "direct_cta_phone": "Bellen om te bestellen"
+    "direct_cta_phone": "Bellen om te bestellen",
+    "cheapest_now": "Goedkoopst nu",
+    "order_on_direct": "Bestellen bij Direct",
+    "compare_all": "Vergelijk alle {count} platforms",
+    "cheapest_badge": "GOEDKOOPST",
+    "delivery_service_fees": "bezorging + servicekosten",
+    "direct_fees": "{fee} kosten",
+    "save": "Bespaar {amount}",
+    "pct_cheaper": "{pct}% goedkoper"
   },
   "sort": {
     "best": "Beste match",
@@ -175,5 +185,16 @@
     "expand": "Bekijk alle {count} artikelen",
     "show_more": "Toon {count} meer artikelen",
     "showing_count": "Weergave van {shown} van {total} artikelen · gesorteerd op grootste besparing"
+  },
+  "howItWorks": {
+    "step1_title": "Zoeken",
+    "step1_body": "Elk Brussels restaurant",
+    "step2_title": "Vergelijken",
+    "step2_body": "Elk platform, kosten inbegrepen",
+    "step3_title": "Bestellen",
+    "step3_body": "Kies de goedkoopste"
+  },
+  "footer": {
+    "disclaimer": "Getoonde prijzen zijn de <b>bezorg- + servicekosten</b> per platform, live bijgewerkt. <b>Groen</b> is de goedkoopste. Menuprijzen worden ook vergeleken zodra u uw bestelling samenstelt."
   }
 }

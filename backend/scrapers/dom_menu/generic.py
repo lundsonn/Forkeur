@@ -192,7 +192,10 @@ async def scrape_url(url: str, browser, log: Callable) -> list[dict]:
     try:
         try:
             await page.goto(url, timeout=20_000, wait_until="domcontentloaded")
-            await asyncio.sleep(2)
+            try:
+                await page.wait_for_load_state("networkidle", timeout=5000)
+            except Exception:
+                await asyncio.sleep(0.3)
         except Exception as e:
             log(f"    load error: {e}")
             return []

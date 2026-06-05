@@ -16,7 +16,7 @@ type SortBy = 'best' | 'cheapest' | 'fastest'
 
 export default function HomepageClient({
   restaurants,
-  cuisines,
+  cuisines: _cuisines,
 }: {
   restaurants: RestaurantSummary[]
   cuisines: string[]
@@ -24,13 +24,11 @@ export default function HomepageClient({
   const PAGE_SIZE = 20
 
   const [search, setSearch] = useState('')
-  const [selectedCuisine, setSelectedCuisine] = useState<string | null>(null)
   const [selectedNeighborhood, setSelectedNeighborhood] = useState<string | null>(null)
   const [neighborhoodSheetOpen, setNeighborhoodSheetOpen] = useState(false)
   const [sortBy, setSortBy] = useState<SortBy>('best')
   const [view, setView] = useState<'list' | 'map'>('list')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
-  const [cuisineExpanded, setCuisineExpanded] = useState(false)
 
   function resetAndSet<T>(setter: (v: T) => void) {
     return (v: T) => { setter(v); setVisibleCount(PAGE_SIZE) }
@@ -39,22 +37,13 @@ export default function HomepageClient({
   const tNav = useTranslations('nav')
   const tHero = useTranslations('hero')
   const tSearch = useTranslations('search')
-  const tFilters = useTranslations('filters')
   const tResults = useTranslations('results')
   const tDirect = useTranslations('direct')
   const tCard = useTranslations('card')
   const tSort = useTranslations('sort')
   const tOwners = useTranslations('owners')
-
-  const cuisineCounts = useMemo(() => {
-    const map = new Map<string, number>()
-    for (const c of cuisines) {
-      map.set(c, restaurants.filter(r =>
-        r.cuisine.some(rc => rc.toLowerCase().includes(c.toLowerCase()))
-      ).length)
-    }
-    return map
-  }, [cuisines, restaurants])
+  const tHowItWorks = useTranslations('howItWorks')
+  const tFooter = useTranslations('footer')
 
   const neighborhoods = useMemo(() => {
     const counts = new Map<string, number>()
@@ -86,11 +75,8 @@ export default function HomepageClient({
   const filtered = useMemo(() => {
     const base = restaurants.filter((r) => {
       const matchSearch = r.name.toLowerCase().includes(search.toLowerCase())
-      const matchCuisine =
-        !selectedCuisine ||
-        r.cuisine.some((c) => c.toLowerCase().includes(selectedCuisine.toLowerCase()))
       const matchNeighborhood = !selectedNeighborhood || r.neighborhood === selectedNeighborhood
-      return matchSearch && matchCuisine && matchNeighborhood
+      return matchSearch && matchNeighborhood
     })
 
     return [...base].sort((a, b) => {
@@ -112,9 +98,9 @@ export default function HomepageClient({
       if (mb.minEta === null) return -1
       return ma.minEta - mb.minEta
     })
-  }, [restaurants, search, selectedCuisine, selectedNeighborhood, sortBy, metrics])
+  }, [restaurants, search, selectedNeighborhood, sortBy, metrics])
 
-  const hasFilter = !!(search || selectedCuisine || selectedNeighborhood)
+  const hasFilter = !!(search || selectedNeighborhood)
 
   return (
     <div className="max-w-md mx-auto px-5">
@@ -166,12 +152,17 @@ export default function HomepageClient({
       </div>
 
       {/* Hero */}
+      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-3 py-1 mb-3">
+        <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0" />
+        {tHero('live_badge')}
+      </span>
       <h1 className="text-[1.65rem] font-bold text-stone-900 leading-tight mb-2">
         {tHero('heading_line1')}<br />{tHero('heading_line2')}
       </h1>
-      <p className="text-sm text-stone-500 mb-4 leading-relaxed">
-        {tHero('subtitle')}
-      </p>
+      <p
+        className="text-sm text-stone-500 mb-5 leading-relaxed"
+        dangerouslySetInnerHTML={{ __html: tHero.raw('subtitle') }}
+      />
 
       {/* Search */}
       <div className="flex items-center gap-2.5 border border-stone-200 rounded-xl px-4 py-3 mb-5">
@@ -187,49 +178,28 @@ export default function HomepageClient({
         )}
       </div>
 
-      {/* Cuisine filters */}
-      <div className="relative mb-3">
-        <div className={`flex gap-2 pb-1 ${cuisineExpanded ? 'flex-wrap' : 'overflow-x-auto'}`}>
-          <button
-            type="button"
-            onClick={() => resetAndSet(setSelectedCuisine)(null)}
-            className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              !selectedCuisine ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600'
-            }`}
-          >{tFilters('all')}</button>
-          {cuisines.map((c) => (
-            <button
-              type="button"
-              key={c}
-              onClick={() => resetAndSet(setSelectedCuisine)(selectedCuisine === c ? null : c)}
-              className={`shrink-0 flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                selectedCuisine === c ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600'
-              }`}
-            >
-              {c}
-              {(cuisineCounts.get(c) ?? 0) > 0 && (
-                <span className={`text-[10px] ${selectedCuisine === c ? 'text-stone-300' : 'text-stone-400'}`}>
-                  {cuisineCounts.get(c)}
-                </span>
-              )}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => setCuisineExpanded((v) => !v)}
-            className="shrink-0 rounded-full px-3 py-1 text-xs font-medium bg-white border border-stone-200 text-stone-500 hover:text-stone-800 hover:border-stone-400 transition-colors"
-          >
-            {cuisineExpanded ? tFilters('less') : tFilters('more')}
-          </button>
-        </div>
-        {!cuisineExpanded && (
-          <div className="pointer-events-none absolute inset-y-0 right-0 w-16 bg-gradient-to-l from-stone-50 to-transparent" />
-        )}
+      {/* How it works */}
+      <div className="flex items-start gap-0 mb-6">
+        {([
+          { num: 1, title: tHowItWorks('step1_title'), body: tHowItWorks('step1_body') },
+          { num: 2, title: tHowItWorks('step2_title'), body: tHowItWorks('step2_body') },
+          { num: 3, title: tHowItWorks('step3_title'), body: tHowItWorks('step3_body') },
+        ] as const).map(({ num, title, body }, i, arr) => (
+          <div key={num} className="flex-1 flex flex-col items-center text-center relative">
+            <div className="w-7 h-7 rounded-full bg-stone-900 text-white text-xs font-bold flex items-center justify-center mb-1.5 z-10">
+              {num}
+            </div>
+            {i < arr.length - 1 && (
+              <div className="absolute top-3.5 left-1/2 w-full h-px bg-stone-200" />
+            )}
+            <p className="text-xs font-semibold text-stone-800">{title}</p>
+            <p className="text-[11px] text-stone-400 mt-0.5 leading-tight">{body}</p>
+          </div>
+        ))}
       </div>
 
       {/* Toolbar: area filter + sort */}
       <div className="flex items-center justify-between py-2 mb-1">
-        {/* Area filter button */}
         <div className="flex items-center">
           {selectedNeighborhood ? (
             <>
@@ -287,7 +257,7 @@ export default function HomepageClient({
         <>
           {/* List label */}
           <p className="text-[10px] font-semibold tracking-widest text-stone-400 uppercase mb-3">
-            {hasFilter ? tResults('count', { count: filtered.length }) : tResults('restaurants')}
+            {hasFilter ? tResults('count', { count: filtered.length }) : tResults('popular')}
           </p>
 
           {/* Restaurant list */}
@@ -295,24 +265,24 @@ export default function HomepageClient({
             {filtered.slice(0, visibleCount).map((r, i) => {
               const m = metrics.get(r.id)
               return (
-                <Link key={r.id} href={`/restaurant/${r.id}`}>
-                  <RestaurantCard
-                    restaurant={r}
-                    isLast={i === Math.min(visibleCount, filtered.length) - 1}
-                    maxFee={m?.maxFee}
-                    directBadge={
-                      r.direct_url_type === 'ordering'
-                        ? tCard('direct_cta_ordering')
-                        : r.direct_url_type === 'menu'
-                          ? tCard('direct_cta_menu')
-                          : r.direct_url_type === 'website'
-                            ? tCard('direct_cta_website')
-                            : r.direct_url_type === 'phone'
-                              ? tCard('direct_cta_phone')
-                              : tDirect('badge')
-                    }
-                  />
-                </Link>
+                <RestaurantCard
+                  key={r.id}
+                  restaurant={r}
+                  href={`/restaurant/${r.id}`}
+                  isLast={i === Math.min(visibleCount, filtered.length) - 1}
+                  maxFee={m?.maxFee}
+                  directBadge={
+                    r.direct_url_type === 'ordering'
+                      ? tCard('direct_cta_ordering')
+                      : r.direct_url_type === 'menu'
+                        ? tCard('direct_cta_menu')
+                        : r.direct_url_type === 'website'
+                          ? tCard('direct_cta_website')
+                          : r.direct_url_type === 'phone'
+                            ? tCard('direct_cta_phone')
+                            : tDirect('badge')
+                  }
+                />
               )
             })}
             {filtered.length === 0 && (
@@ -325,7 +295,6 @@ export default function HomepageClient({
                     type="button"
                     onClick={() => {
                       resetAndSet(setSearch)('')
-                      resetAndSet(setSelectedCuisine)(null)
                       resetAndSet(setSelectedNeighborhood)(null)
                     }}
                     className="text-sm text-[#2E86D8] font-medium"
@@ -346,6 +315,11 @@ export default function HomepageClient({
             )}
           </div>
 
+          {/* Footer disclaimer */}
+          <p
+            className="text-[11px] text-stone-400 leading-relaxed text-center mt-8 mb-6 [&_b]:font-semibold [&_b]:text-stone-600"
+            dangerouslySetInnerHTML={{ __html: tFooter.raw('disclaimer') }}
+          />
         </>
       )}
 

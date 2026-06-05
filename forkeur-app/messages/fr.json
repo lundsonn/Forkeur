@@ -6,12 +6,13 @@
     "back_restaurants": "← Restaurants"
   },
   "hero": {
-    "heading_line1": "Où commandez-vous",
-    "heading_line2": "votre repas ?",
-    "subtitle": "Comparez les frais de livraison et les prix des menus sur UberEats, Deliveroo et Takeaway — et voyez quand commander directement vous fait économiser."
+    "heading_line1": "Stop de payer trop cher",
+    "heading_line2": "pour le même repas.",
+    "subtitle": "Un restaurant peut coûter <b>20–40% plus cher</b> selon l'appli. Forkeur compare Uber Eats, Deliveroo, Takeaway &amp; la commande directe — frais inclus — pour toujours choisir le moins cher.",
+    "live_badge": "En direct à Bruxelles"
   },
   "search": {
-    "placeholder": "Rechercher un restaurant"
+    "placeholder": "Rechercher un restaurant à Bruxelles"
   },
   "filters": {
     "all": "Tout",
@@ -28,7 +29,8 @@
     "none": "Aucun restaurant trouvé",
     "load_more": "Afficher {next, plural, one {# restaurant de plus} other {# restaurants de plus}} ({remaining} au total)",
     "none_query": "Aucun restaurant trouvé pour \"{query}\"",
-    "clear_search": "Effacer la recherche"
+    "clear_search": "Effacer la recherche",
+    "popular": "Populaires près de vous"
   },
   "deals": {
     "heading": "Meilleures promos",
@@ -97,7 +99,15 @@
     "direct_cta_ordering": "Commander directement",
     "direct_cta_menu": "Voir le menu",
     "direct_cta_website": "Site du restaurant",
-    "direct_cta_phone": "Appeler pour commander"
+    "direct_cta_phone": "Appeler pour commander",
+    "cheapest_now": "Moins cher maintenant",
+    "order_on_direct": "Commander sur Direct",
+    "compare_all": "Comparer les {count} plateformes",
+    "cheapest_badge": "MOINS CHER",
+    "delivery_service_fees": "livraison + frais de service",
+    "direct_fees": "frais {fee}",
+    "save": "Économie {amount}",
+    "pct_cheaper": "{pct}% moins cher"
   },
   "sort": {
     "best": "Meilleur match",
@@ -175,5 +185,16 @@
     "expand": "Voir les {count} articles",
     "show_more": "Afficher {count} articles de plus",
     "showing_count": "Affichage de {shown} sur {total} articles · triés par économies"
+  },
+  "howItWorks": {
+    "step1_title": "Rechercher",
+    "step1_body": "N'importe quel restaurant",
+    "step2_title": "Comparer",
+    "step2_body": "Toutes les plateformes, frais inclus",
+    "step3_title": "Commander",
+    "step3_body": "Choisissez le moins cher"
+  },
+  "footer": {
+    "disclaimer": "Les prix affichés sont les <b>frais de livraison + service</b> de chaque plateforme, mis à jour en direct. <b>Vert</b> = le moins cher. Les prix du menu sont aussi comparés une fois votre commande constituée."
   }
 }

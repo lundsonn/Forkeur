@@ -1,11 +1,13 @@
 from __future__ import annotations
 from constants import DEFAULT_ADDRESS
 import asyncio
+import inspect
 import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from models import ScraperConfig, ScheduleConfigIn, ScheduleConfigOut
 from scrapers.base import CloudflareBlockedError
+import alerting
 import db
 
 _log = logging.getLogger("forkeur.scheduler")
@@ -30,48 +32,56 @@ def _noop(line: str) -> None:
 
 async def _run_scraper(platform: str) -> None:
     # Skip if the same platform is already running (triggered manually via API).
-    from routers.scrapers import _running
+    from routers.scrapers import _running, _tasks
     if platform in _running:
         _noop(f"Scheduler: {platform} already running, skipping")
         return
 
-    from scrapers import ubereats, deliveroo, takeaway, direct, direct_menu
-    from scrapers import dom_menu
+    # Fix D: mark platform as running so the status endpoint reflects it and
+    # the stop endpoint can cancel it; always discard in the finally block.
+    _running.add(platform)
+    _tasks[platform] = asyncio.current_task()
+    try:
+        from scrapers import ubereats, deliveroo, takeaway, direct, direct_menu
+        from scrapers import dom_menu
 
-    if platform == "direct_menu":
+        if platform == "direct_menu":
+            run_id = db.create_run(platform)
+            try:
+                result = await direct_menu.run()
+                db.finish_run(run_id, "success", records_saved=result.get("total_scraped", 0))
+            except Exception as e:
+                db.finish_run(run_id, "failed", error_msg=str(e))
+                alerting.send_failure_alert(platform, str(e), run_id)
+            return
+
+        SCRAPERS = {
+            "ubereats":  ubereats.run,
+            "deliveroo": deliveroo.run,
+            "takeaway":  takeaway.run,
+            "direct":    direct.run,
+            "dom_menu":  dom_menu.run,
+        }
+        if platform not in SCRAPERS:
+            return
+
+        # No semaphore — all scrapers share one Chromium via base.browser_session();
+        # their asyncio waits interleave so concurrent runs are safe.
         run_id = db.create_run(platform)
+        scraper_fn = SCRAPERS[platform]
+        kwargs = {"run_id": run_id} if "run_id" in inspect.signature(scraper_fn).parameters else {}
         try:
-            result = direct_menu.run()
-            db.finish_run(run_id, "success", records_saved=result.get("total_scraped", 0))
+            result = await scraper_fn(ScraperConfig(), _noop, **kwargs)
+            db.finish_run(run_id, "success", records_saved=result.records_saved)
+        except CloudflareBlockedError as e:
+            db.finish_run(run_id, "blocked", error_msg=str(e))
+            alerting.send_failure_alert(platform, str(e), run_id)
         except Exception as e:
             db.finish_run(run_id, "failed", error_msg=str(e))
-            import alerting; alerting.send_failure_alert(platform, str(e), run_id)
-        return
-
-    SCRAPERS = {
-        "ubereats":  ubereats.run,
-        "deliveroo": deliveroo.run,
-        "takeaway":  takeaway.run,
-        "direct":    direct.run,
-        "dom_menu":  dom_menu.run,
-    }
-    if platform not in SCRAPERS:
-        return
-
-    # No semaphore — all scrapers share one Chromium via base.browser_session();
-    # their asyncio waits interleave so concurrent runs are safe.
-    run_id = db.create_run(platform)
-    try:
-        import inspect
-        kwargs = {"run_id": run_id} if "run_id" in inspect.signature(SCRAPERS[platform]).parameters else {}
-        result = await SCRAPERS[platform](ScraperConfig(), _noop, **kwargs)
-        db.finish_run(run_id, "success", records_saved=result.records_saved)
-    except CloudflareBlockedError as e:
-        db.finish_run(run_id, "blocked", error_msg=str(e))
-        import alerting; alerting.send_failure_alert(platform, str(e), run_id)
-    except Exception as e:
-        db.finish_run(run_id, "failed", error_msg=str(e))
-        import alerting; alerting.send_failure_alert(platform, str(e), run_id)
+            alerting.send_failure_alert(platform, str(e), run_id)
+    finally:
+        _running.discard(platform)
+        _tasks.pop(platform, None)
 
 
 def _persist_schedule(config: ScheduleConfigIn) -> None:
@@ -158,11 +168,11 @@ async def _run_batch_all() -> None:
         from scrapers import direct_menu as _dm
         run_id = db.create_run("direct_menu")
         try:
-            result = await asyncio.to_thread(_dm.run)
+            result = await _dm.run()
             db.finish_run(run_id, "success", records_saved=result.get("total_scraped", 0))
         except Exception as e:
             db.finish_run(run_id, "failed", error_msg=str(e))
-            import alerting; alerting.send_failure_alert("direct_menu", str(e), run_id)
+            alerting.send_failure_alert("direct_menu", str(e), run_id)
 
     # ── Phase 1: platform scrapers (no dom_menu) ──────────────────────────────
     phase1 = [p for p in ("ubereats", "deliveroo", "takeaway", "direct") if p not in _running]
@@ -186,7 +196,7 @@ async def _run_match() -> None:
         db.finish_run(run_id, "success", records_saved=result["auto_merge"])
     except Exception as e:
         db.finish_run(run_id, "failed", error_msg=str(e))
-        import alerting; alerting.send_failure_alert("match", str(e), run_id)
+        alerting.send_failure_alert("match", str(e), run_id)
 
 
 async def _run_daily_cleanup() -> None:
@@ -196,7 +206,6 @@ async def _run_daily_cleanup() -> None:
 
 
 async def _run_daily_digest() -> None:
-    import alerting
     alerting.send_daily_digest()
 
 
@@ -232,6 +241,4 @@ def start() -> None:
 
 
 def shutdown() -> None:
-    _scheduler.shutdown(wait=False)
-
-
+    _scheduler.shutdown(wait=True)

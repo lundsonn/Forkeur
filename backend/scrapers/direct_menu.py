@@ -11,6 +11,7 @@ Each adapter returns a list of dicts with keys:
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from typing import Any
@@ -412,8 +413,11 @@ def fetch_items(
 # Main entry point
 # ---------------------------------------------------------------------------
 
-def run(max_items: int | None = None) -> dict[str, Any]:
+async def run(max_items: int | None = None) -> dict[str, Any]:
     """Fetch menu items for all direct listings with url_type='ordering'.
+
+    Runs up to 10 listings concurrently using asyncio.Semaphore(10) +
+    asyncio.to_thread so the sync HTTP fetchers don't block the event loop.
 
     Args:
         max_items: If set, cap total items inserted (useful for testing).
@@ -431,47 +435,66 @@ def run(max_items: int | None = None) -> dict[str, Any]:
         .data
     )
 
+    sem = asyncio.Semaphore(10)
+
+    def _fetch_sync(listing: dict) -> dict[str, Any]:
+        """Sync worker: opens its own httpx.Client and fetches items."""
+        lid = listing["id"]
+        url = listing.get("url") or ""
+        if not url:
+            return {"lid": lid, "items": [], "error": None, "skipped": True}
+        try:
+            with httpx.Client(follow_redirects=True) as http:
+                items = fetch_items(url, http)
+            return {"lid": lid, "url": url, "items": items, "error": None}
+        except Exception as exc:
+            return {"lid": lid, "url": url, "items": [], "error": str(exc)}
+
+    async def _fetch_one(listing: dict) -> dict[str, Any]:
+        async with sem:
+            return await asyncio.to_thread(_fetch_sync, listing)
+
+    tasks = [asyncio.ensure_future(_fetch_one(l)) for l in listings]
+    results = await asyncio.gather(*tasks)
+
     total_scraped = 0
     listings_processed = 0
     errors: list[str] = []
 
-    with httpx.Client(follow_redirects=True) as http:
-        for listing in listings:
-            lid: str = listing["id"]
-            url: str = listing.get("url") or ""
-            if not url:
-                continue
-
-            try:
-                items = fetch_items(url, http)
-                if max_items is not None:
-                    remaining = max_items - total_scraped
-                    if remaining <= 0:
-                        break
-                    items = items[:remaining]
-
-                if not items:
-                    # API returned nothing — downgrade to 'menu' so dom_menu can try Playwright
-                    db.get_client().table("platform_listings").update(
-                        {"url_type": "menu"}
-                    ).eq("id", lid).execute()
-                    logger.info("direct_menu: no items from %s — downgraded to menu", url[:60])
-                    continue
-
-                db.delete_menu_items(lid)
-                saved = db.insert_menu_items(lid, items)
-                total_scraped += saved
-                listings_processed += 1
-                logger.info(
-                    "direct_menu: listing %s — saved %d items from %s",
-                    lid,
-                    saved,
-                    url[:60],
-                )
-            except Exception as exc:
-                msg = f"listing {lid} ({url[:60]}): {exc}"
-                logger.error("direct_menu: error — %s", msg)
-                errors.append(msg)
+    for r in results:
+        if r.get("skipped"):
+            continue
+        lid = r["lid"]
+        url = r.get("url", "")
+        if r["error"]:
+            msg = f"listing {lid} ({url[:60]}): {r['error']}"
+            logger.error("direct_menu: error — %s", msg)
+            errors.append(msg)
+            continue
+        items = r["items"]
+        if max_items is not None:
+            remaining = max_items - total_scraped
+            if remaining <= 0:
+                break
+            items = items[:remaining]
+        if not items:
+            # API returned nothing — downgrade to 'menu' so dom_menu can try Playwright
+            db.get_client().table("platform_listings").update(
+                {"url_type": "menu"}
+            ).eq("id", lid).execute()
+            logger.info("direct_menu: no items from %s — downgraded to menu", url[:60])
+            continue
+        try:
+            db.delete_menu_items(lid)
+            saved = db.insert_menu_items(lid, items)
+        except Exception as exc:
+            msg = f"listing {lid} ({url[:60]}): {exc}"
+            logger.error("direct_menu: error — %s", msg)
+            errors.append(msg)
+            continue
+        total_scraped += saved
+        listings_processed += 1
+        logger.info("direct_menu: listing %s — saved %d items from %s", lid, saved, url[:60])
 
     return {
         "total_scraped": total_scraped,

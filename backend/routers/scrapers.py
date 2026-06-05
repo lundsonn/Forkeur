@@ -1,5 +1,7 @@
 from __future__ import annotations
 import asyncio
+import inspect
+import time
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from models import RunTriggerOut, ScraperStatusOut, ScraperConfig, RunTriggerIn, ScraperResult
@@ -26,8 +28,7 @@ _TIMEOUTS: dict[str, int] = {
 
 
 async def _direct_menu_adapter(config: ScraperConfig, log_fn) -> ScraperResult:
-    """Adapter to run direct_menu.run() (sync) via the standard async interface."""
-    result = direct_menu.run(max_items=config.max_items)
+    result = await direct_menu.run(max_items=config.max_items)
     return ScraperResult(records_saved=result.get("total_scraped", 0))
 
 
@@ -94,18 +95,23 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
         body = RunTriggerIn()
     _ws_log = ws_mod.make_log_fn(run_id)
     _log_path = f"/tmp/fk_{platform}_{run_id[:8]}.log"
+    # Fix A: open the log file once; close it in the _run() finally block.
+    _log_fh = open(_log_path, "a")  # noqa: SIM115  (intentionally held open)
     def log_fn(msg: str) -> None:
         _ws_log(msg)
         try:
-            with open(_log_path, "a") as _f:
-                import time as _t
-                # Collapse newlines so a scraper exception cannot inject fake
-                # log lines into the audit file via embedded "\n".
-                safe = msg.replace("\r", " ").replace("\n", " | ")
-                _f.write(f"{_t.strftime('%H:%M:%S')} {safe}\n")
+            # Collapse newlines so a scraper exception cannot inject fake
+            # log lines into the audit file via embedded "\n".
+            safe = msg.replace("\r", " ").replace("\n", " | ")
+            _log_fh.write(f"{time.strftime('%H:%M:%S')} {safe}\n")
+            _log_fh.flush()
         except Exception:
             pass
     timeout = _TIMEOUTS.get(platform, 60 * 60)
+
+    # Fix B: precompute scraper_fn and kwargs once, before the retry loop.
+    scraper_fn = SCRAPERS[platform]
+    kwargs = {"run_id": run_id} if "run_id" in inspect.signature(scraper_fn).parameters else {}
 
     async def _run():
         try:
@@ -119,9 +125,6 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
             last_exc: Exception | None = None
             for attempt in range(2):
                 try:
-                    scraper_fn = SCRAPERS[platform]
-                    import inspect
-                    kwargs = {"run_id": run_id} if "run_id" in inspect.signature(scraper_fn).parameters else {}
                     result = await asyncio.wait_for(
                         scraper_fn(config, log_fn, **kwargs),
                         timeout=timeout,
@@ -160,8 +163,16 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
         finally:
             _running.discard(platform)
             _tasks.pop(platform, None)
+            try:
+                _log_fh.close()
+            except Exception:
+                pass
 
-    task = asyncio.create_task(_run())
+    try:
+        task = asyncio.create_task(_run())
+    except Exception:
+        _log_fh.close()
+        raise
     _tasks[platform] = task
     return RunTriggerOut(run_id=run_id)
 
@@ -185,9 +196,11 @@ async def get_status():
 async def health_check():
     """Returns degraded if any core platform hasn't had a successful run in 25 hours."""
     cutoff = datetime.now(timezone.utc) - timedelta(hours=25)
+    platforms = ("ubereats", "deliveroo", "takeaway")
+    last_runs = db.get_last_successful_run_batch(list(platforms))
     statuses: dict[str, str] = {}
-    for platform in ("ubereats", "deliveroo", "takeaway"):
-        run = db.get_last_successful_run(platform)
+    for platform in platforms:
+        run = last_runs.get(platform)
         if run is None:
             statuses[platform] = "never_run"
         else:

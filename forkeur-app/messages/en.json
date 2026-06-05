@@ -6,12 +6,13 @@
     "back_restaurants": "← Restaurants"
   },
   "hero": {
-    "heading_line1": "Where are you",
-    "heading_line2": "ordering from?",
-    "subtitle": "Compare delivery fees and menu prices across UberEats, Deliveroo and Takeaway — and see when ordering directly saves you more."
+    "heading_line1": "Stop overpaying for",
+    "heading_line2": "the same meal.",
+    "subtitle": "A restaurant can cost <b>20–40% more</b> depending on the app. Forkeur compares Uber Eats, Deliveroo, Takeaway &amp; ordering direct — fees in — so you always pick the cheapest.",
+    "live_badge": "Live across Brussels"
   },
   "search": {
-    "placeholder": "Search a restaurant"
+    "placeholder": "Search a restaurant in Brussels"
   },
   "filters": {
     "all": "All",
@@ -28,7 +29,8 @@
     "none": "No restaurants found",
     "load_more": "Show {next, plural, one {# more restaurant} other {# more restaurants}} ({remaining} total remaining)",
     "none_query": "No restaurants found for \"{query}\"",
-    "clear_search": "Clear search"
+    "clear_search": "Clear search",
+    "popular": "Popular near you"
   },
   "deals": {
     "heading": "Best deals",
@@ -97,7 +99,15 @@
     "direct_cta_ordering": "Order directly",
     "direct_cta_menu": "View menu",
     "direct_cta_website": "Restaurant website",
-    "direct_cta_phone": "Call to order"
+    "direct_cta_phone": "Call to order",
+    "cheapest_now": "Cheapest right now",
+    "order_on_direct": "Order on Direct",
+    "compare_all": "Compare all {count} platforms",
+    "cheapest_badge": "CHEAPEST",
+    "delivery_service_fees": "delivery + service fees",
+    "direct_fees": "{fee} fees",
+    "save": "Save {amount}",
+    "pct_cheaper": "{pct}% cheaper"
   },
   "sort": {
     "best": "Best match",
@@ -175,5 +185,16 @@
     "expand": "See all {count} items",
     "show_more": "Show {count} more items",
     "showing_count": "Showing {shown} of {total} items · sorted by biggest savings"
+  },
+  "howItWorks": {
+    "step1_title": "Search",
+    "step1_body": "Any Brussels restaurant",
+    "step2_title": "Compare",
+    "step2_body": "Every platform, fees in",
+    "step3_title": "Order",
+    "step3_body": "Tap the cheapest"
+  },
+  "footer": {
+    "disclaimer": "Prices shown are each platform's <b>delivery + service fees</b>, updated live. <b>Green</b> is the cheapest. Menu prices are compared too once you build your order."
   }
 }
