@@ -138,15 +138,21 @@ def list_schedules() -> list[ScheduleConfigOut]:
 
 
 async def _run_batch_all() -> None:
-    """Run all scrapers concurrently; asyncio sleeps interleave on shared browser.
-    Takeaway (headed) gets its own browser automatically — fully parallel.
-    direct_menu (sync httpx) runs in a thread to avoid blocking the event loop.
-    Fees are triggered automatically after all scrapers finish.
+    """Two-phase batch to bound peak RAM on 4vCPU/8GB.
+
+    A flat Semaphore(4) cap was not enough: it limits scraper COUNT but not page
+    WEIGHT. When the 4 slots happened to hold the 4 heaviest at once —
+    ubereats(3 menu pages) + deliveroo(3) + dom_menu(5) + takeaway(own browser)
+    ≈ 12 browser pages — RAM hit 7.6GB / 85MB free (near-OOM).
+
+    Fix: run the platform scrapers first, THEN the menu scrapers. dom_menu's 5
+    concurrent pages never overlap the ube/del parallel menu workers.
+
+      Phase 1: ubereats, deliveroo, takeaway, direct   (concurrent)
+      Phase 2: dom_menu, direct_menu                    (concurrent, field clear)
+      then: fees, then: cross-platform match
     """
     from routers.scrapers import _running
-
-    PLATFORMS = ["ubereats", "deliveroo", "takeaway", "direct", "dom_menu"]
-    to_run = [p for p in PLATFORMS if p not in _running]
 
     async def _run_direct_menu_threaded():
         from scrapers import direct_menu as _dm
@@ -158,17 +164,15 @@ async def _run_batch_all() -> None:
             db.finish_run(run_id, "failed", error_msg=str(e))
             import alerting; alerting.send_failure_alert("direct_menu", str(e), run_id)
 
-    # Cap concurrency at 4 scrapers — full 6-way overlap pushed batch RAM near OOM
-    # (dom_menu's pages + ube/del parallel menu workers). 4-at-a-time keeps a safe
-    # headroom on 4vCPU/8GB; the rest queue and start as slots free.
-    sem = asyncio.Semaphore(4)
+    # ── Phase 1: platform scrapers (no dom_menu) ──────────────────────────────
+    phase1 = [p for p in ("ubereats", "deliveroo", "takeaway", "direct") if p not in _running]
+    await asyncio.gather(*[_run_scraper(p) for p in phase1], return_exceptions=True)
 
-    async def _capped(coro):
-        async with sem:
-            await coro
-
-    tasks = [_capped(_run_scraper(p)) for p in to_run] + [_capped(_run_direct_menu_threaded())]
-    await asyncio.gather(*tasks, return_exceptions=True)
+    # ── Phase 2: menu scrapers, run with the heavy platform pages gone ────────
+    phase2 = [_run_direct_menu_threaded()]
+    if "dom_menu" not in _running:
+        phase2.append(_run_scraper("dom_menu"))
+    await asyncio.gather(*phase2, return_exceptions=True)
 
     # Fees run after all scrapers complete, no need for a separate cron.
     await _run_fee_refresh()
