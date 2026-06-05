@@ -72,6 +72,7 @@ cd forkeur-app && npm run dev   # :3000
 - **Backend API:** `http://localhost:8000` (internal only)
 - **Auth:** POST `/api/auth/login` with `{"password":"<ADMIN_PASSWORD>"}` → Bearer token (JWT, 30-day expiry; requires `JWT_SECRET` env var)
 - **Deploy:** `cd /opt/forkeur && git pull && systemctl restart forkeur-backend`
+  - **Admin dashboard changes** (`backend/dashboard/`) require a rebuild **on the server** — `index.html` is gitignored (`.gitignore` `*.html`) so the committed bundle hash never ships; the server keeps serving its old `index.html`. After `git pull`: `cd /opt/forkeur/backend/dashboard && npm install && npm run build` (regenerates `backend/static/dashboard/index.html` + assets). No backend restart needed (static files).
 - **Trigger scraper:** `POST /api/scrapers/{ubereats|deliveroo|takeaway|fees|direct|direct_menu|dom_menu}/run` with Bearer token
 
 ## Key conventions
