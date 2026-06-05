@@ -39,7 +39,7 @@ _BRUSSELS_LOCATIONS = {
     "uccle", "ukkel", "watermael", "woluwe", "laeken", "neder", "haren",
     # Major squares / neighbourhoods appearing in Brussels chain names
     "debrouckere", "bourse", "sablon", "flagey", "jourdan", "rogier",
-    "schuman", "chatelain", "bascule", "ecuyer", "toison", "midi",
+    "schuman", "chatelain", "bascule", "ecuyer", "toison", "midi", "louise",
 }
 
 
@@ -53,6 +53,9 @@ def _canonical(name: str) -> str:
     name = name.strip()
     name = re.sub(r"[^ -ɏḀ-ỿ\s\d'\"\-&\(\)\.!,]", "", name).strip()
     name = _SUFFIX_RE.sub("", name).strip()
+    # Strip trailing city noise — "brussels", "bruxelles", "bxl" at end are
+    # not differentiators within Brussels and inflate name distance.
+    name = re.sub(r"\s+(?:brussels|bruxelles|bxl|bsl)\s*$", "", name, flags=re.IGNORECASE).strip()
     return name
 
 
@@ -216,7 +219,11 @@ def score_pair(
     b_slugs = slugs.get(str(b["id"]), []) if slugs else []
     a_locs = _location_tokens(a["name"], a_slugs)
     b_locs = _location_tokens(b["name"], b_slugs)
-    location_conflict = bool(a_locs and b_locs and a_locs.isdisjoint(b_locs))
+    # Numbered branches: "Name 1" vs "Name 2" → distinct locations
+    _an = re.search(r"\b(\d+)\s*$", a["name"].strip())
+    _bn = re.search(r"\b(\d+)\s*$", b["name"].strip())
+    numbered_branches = _an is not None and _bn is not None and _an.group(1) != _bn.group(1)
+    location_conflict = numbered_branches or bool(a_locs and b_locs and a_locs.isdisjoint(b_locs))
 
     # Menu item overlap (Jaccard)
     ma = menus.get(str(a["id"]), set()) if menus else set()
@@ -280,6 +287,13 @@ def decide(f: MatchFeatures) -> Decision:
     # Menu veto (after name threshold so low-sim pairs don't reach here)
     if f.menu_overlap is not None and f.menu_overlap < MENU_OVERLAP_VETO:
         return Decision.SEPARATE
+
+    # Near-identical names with no conflicting signals → same venue.
+    # At ≥ 0.97 the only realistic source of divergence is punctuation/spacing
+    # ("Mr Cod" / "Mr. Cod", "AlloCouscous" / "Allo Couscous"). All vetos have
+    # already fired by this point so there's nothing contradicting the merge.
+    if f.name_sim >= NAME_SIM_WEBSITE_AUTO and not f.is_chain_name:
+        return Decision.AUTO_MERGE
 
     # Strong confirmation = same physical place. Phone and close geo prove it.
     # A shared website does NOT by itself — Belgian chains run every branch off

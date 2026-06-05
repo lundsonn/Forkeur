@@ -505,8 +505,14 @@ def test_decide_close_geo_auto_merges():
     assert matching.decide(f) == matching.Decision.AUTO_MERGE
 
 
-def test_decide_name_only_queues():
+def test_decide_name_only_auto_merges_at_threshold():
+    # name_sim >= 0.97 with no conflicting signals → auto_merge (no data needed)
     f = _f(name_sim=0.97)
+    assert matching.decide(f) == matching.Decision.AUTO_MERGE
+
+
+def test_decide_name_below_threshold_queues():
+    f = _f(name_sim=0.95)
     assert matching.decide(f) == matching.Decision.QUEUE
 
 
@@ -540,9 +546,9 @@ def test_decide_cuisine_conflict_after_geo_veto():
     assert matching.decide(f) == matching.Decision.SEPARATE
 
 
-def test_decide_no_cuisine_conflict_queues_normally():
+def test_decide_no_cuisine_conflict_auto_merges_at_threshold():
     f = _f(name_sim=0.97, cuisine_conflict=False)
-    assert matching.decide(f) == matching.Decision.QUEUE
+    assert matching.decide(f) == matching.Decision.AUTO_MERGE
 
 
 def test_cuisine_conflict_both_set_different():
@@ -643,10 +649,10 @@ def test_decide_menu_overlap_confirm_auto_merges():
     assert matching.decide(f) == matching.Decision.AUTO_MERGE
 
 
-def test_decide_menu_overlap_none_no_effect():
-    # None means insufficient data — no veto, no confirm
+def test_decide_menu_overlap_none_auto_merges_at_threshold():
+    # None means no menu data — doesn't block auto_merge at name_sim >= 0.97
     f = _f(name_sim=0.97, menu_overlap=None)
-    assert matching.decide(f) == matching.Decision.QUEUE
+    assert matching.decide(f) == matching.Decision.AUTO_MERGE
 
 
 def test_score_pair_menu_overlap_computed():
@@ -693,9 +699,10 @@ def test_decide_soft_geo_veto_above_threshold():
     assert matching.decide(f) == matching.Decision.SEPARATE
 
 
-def test_decide_soft_geo_below_threshold_no_veto():
+def test_decide_soft_geo_below_threshold_auto_merges():
+    # soft_geo < 600m doesn't veto; name_sim >= 0.97 → auto_merge
     f = _f(name_sim=0.97, soft_geo_dist=400.0)
-    assert matching.decide(f) == matching.Decision.QUEUE
+    assert matching.decide(f) == matching.Decision.AUTO_MERGE
 
 
 def test_score_pair_soft_geo_when_one_venue_grade():
@@ -748,9 +755,9 @@ def test_decide_chain_name_with_menu_confirm_auto_merges():
     assert matching.decide(f) == matching.Decision.AUTO_MERGE
 
 
-def test_decide_non_chain_name_still_queues():
+def test_decide_non_chain_name_auto_merges_at_threshold():
     f = _f(name_sim=0.97, is_chain_name=False)
-    assert matching.decide(f) == matching.Decision.QUEUE
+    assert matching.decide(f) == matching.Decision.AUTO_MERGE
 
 
 def test_score_pair_chain_name_detected():
