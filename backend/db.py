@@ -357,6 +357,7 @@ def get_last_run_per_platform() -> dict[str, dict]:
         .select("*")
         .in_("platform", list(platforms))
         .order("started_at", desc=True)
+        .limit(140)
         .execute()
     ).data or []
     seen: dict[str, dict] = {}
@@ -495,12 +496,13 @@ _GEO_RANK = {"uber_eats": 3, "direct": 3, "deliveroo_venue": 2, "deliveroo": 1}
 
 def patch_restaurant_geo(restaurant_id: str, lat: float, lng: float, geo_source: str) -> None:
     """Update restaurant coords only if incoming source outranks the current one."""
-    existing = get_client().table("restaurants").select("geo_source").eq("id", restaurant_id).limit(1).execute()
+    client = get_client()
+    existing = client.table("restaurants").select("geo_source").eq("id", restaurant_id).limit(1).execute()
     if existing.data:
         current_src = existing.data[0].get("geo_source")
         if _GEO_RANK.get(current_src, 0) >= _GEO_RANK.get(geo_source, 0):
             return
-    get_client().table("restaurants").update(
+    client.table("restaurants").update(
         {"lat": lat, "lng": lng, "geo_source": geo_source}
     ).eq("id", restaurant_id).execute()
 
@@ -512,6 +514,7 @@ def patch_restaurant_website(restaurant_id: str, website: str | None, order_url:
         "order_url": order_url,
         "website_searched_at": datetime.now(timezone.utc).isoformat(),
     }).eq("id", restaurant_id).execute()
+    invalidate_domain_cache()
 
 
 def mark_restaurant_searched(restaurant_id: str) -> None:
@@ -682,6 +685,18 @@ def merge_restaurants(survivor_id: str, loser_id: str) -> None:
         "merge_restaurants_atomic",
         {"p_survivor": s, "p_loser": l},
     ).execute()
+
+
+def get_stale_queued_decisions() -> list[dict]:
+    """Queued decisions where geo_dist was null at scoring time (both sides may now be venue-grade)."""
+    client = get_client()
+    res = (
+        client.table("restaurant_match_decisions")
+        .select("*")
+        .eq("status", "queued")
+        .execute()
+    )
+    return [r for r in res.data if r.get("features", {}).get("geo_dist") is None]
 
 
 def get_queued_decisions(limit: int = 100, offset: int = 0) -> list[dict]:

@@ -79,6 +79,59 @@ def run_sync(*, dry_run: bool, log_fn) -> dict:
 
     log_fn(f"auto_merge={counts['auto_merge']} queue={counts['queue']} separate={counts['separate']}")
 
+    # --- Re-score stale queued decisions ---
+    # Pairs created before venue coords were extracted have geo_dist=null.
+    # Re-score them now that both sides may be venue-grade.
+    rows_by_id = {str(r["id"]): r for r in rows}
+    stale = db.get_stale_queued_decisions()
+    log_fn(f"Re-score pass: {len(stale)} stale queued decisions with null geo_dist")
+    rescored = {"upgraded": 0, "refreshed": 0}
+
+    for dec in stale:
+        sid = str(dec["survivor_id"])
+        lid = str(dec["loser_id"])
+        ra = rows_by_id.get(sid)
+        rb = rows_by_id.get(lid)
+        if not ra or not rb:
+            continue
+        if not (matching.is_venue_grade(ra) and matching.is_venue_grade(rb)):
+            continue
+
+        features = matching.score_pair(ra, rb)
+        if features.geo_dist is None:
+            continue  # still not both venue-grade after re-check
+
+        decision = matching.decide(features)
+        feat_payload = {**features.to_dict(), "survivor_name": ra["name"], "loser_name": rb["name"]}
+
+        if dry_run:
+            rescored["refreshed"] += 1
+            log_fn(f"  DRY rescore {ra['name']} / {rb['name']}: geo_dist={features.geo_dist:.0f}m → {decision.value}")
+            continue
+
+        try:
+            if decision == matching.Decision.AUTO_MERGE and sid not in touched_ids and lid not in touched_ids:
+                db.merge_restaurants(sid, lid)
+                touched_ids.add(sid)
+                touched_ids.add(lid)
+                db.enqueue_decision(
+                    survivor_id=sid, loser_id=lid,
+                    score=float(features.name_sim), features=feat_payload, status="auto_merged",
+                )
+                counts["auto_merge"] += 1
+                rescored["upgraded"] += 1
+                log_fn(f"  upgraded {ra['name']} / {rb['name']}: geo_dist={features.geo_dist:.0f}m → auto_merged")
+            else:
+                db.enqueue_decision(
+                    survivor_id=sid, loser_id=lid,
+                    score=float(features.name_sim), features=feat_payload, status="queued",
+                )
+                rescored["refreshed"] += 1
+        except Exception as e:
+            log_fn(f"  rescore {sid}<-{lid} failed: {e}")
+
+    log_fn(f"Re-score: upgraded={rescored['upgraded']} refreshed={rescored['refreshed']}")
+
     if dry_run:
         out_dir = os.path.join(os.path.dirname(__file__), "..", "match_output")
         os.makedirs(out_dir, exist_ok=True)
