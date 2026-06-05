@@ -4,6 +4,10 @@ Fee refresh scraper — updates delivery_fee + min_order for existing platform_l
 UberEats:  load feed at Brussels address, capture fareInfo per restaurant, match by
            store UUID extracted from the stored listing URL.
 Deliveroo: visit each known menu URL via Playwright, extract fee + min_order via DOM.
+Takeaway:  same as Deliveroo.
+
+Deliveroo + Takeaway run with _CONCURRENCY parallel pages each, and both platforms
+run concurrently with each other.
 """
 from __future__ import annotations
 import asyncio
@@ -15,6 +19,7 @@ from scrapers.base import browser_session, new_page, check_cloudflare, noop_log,
 import db
 
 _BRUSSELS_ADDRESS = "Rue de la Loi 16, Bruxelles"
+_CONCURRENCY = 5  # parallel pages per platform
 
 
 # ── UberEats ────────────────────────────────────────────────────────────────
@@ -180,59 +185,65 @@ async def run_deliveroo(log_fn: Callable[[str], None] = noop_log) -> int:
 
     updated = 0
     n = len(listings)
+    sem = asyncio.Semaphore(_CONCURRENCY)
 
     async with browser_session(lang="fr-BE") as browser:
-        page = await new_page(browser, lang="fr-BE")
-
-        # Must set address first so Deliveroo shows delivery fee on menu pages
-        ok = await _setup_deliveroo_address(page, log_fn)
+        # Set address once so cookies are shared across all pages in this context
+        setup_page = await new_page(browser, lang="fr-BE")
+        ok = await _setup_deliveroo_address(setup_page, log_fn)
+        await setup_page.close()
         if not ok:
             log_fn("Fees/Deliveroo: aborting — could not set address")
             return 0
 
-        for i, listing in enumerate(listings):
+        async def scrape_one(i: int, listing: dict) -> None:
+            nonlocal updated
             url = listing.get("url")
             if not url:
-                continue
+                return
             log_fn(f"Fees/Deliveroo: {i + 1}/{n} — {url[:70]}")
-            try:
+            async with sem:
+                page = await new_page(browser, lang="fr-BE")
                 try:
-                    await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                except Exception:
-                    pass
-                try:
-                    await page.wait_for_url("**/menu/**", timeout=8000)
-                except Exception:
-                    pass
-                try:
-                    await page.wait_for_load_state("networkidle", timeout=15000)
-                except Exception:
-                    pass
-                await asyncio.sleep(1.5)
-                check_cloudflare(await page.title())
+                    try:
+                        await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                    except Exception:
+                        pass
+                    try:
+                        await page.wait_for_url("**/menu/**", timeout=8000)
+                    except Exception:
+                        pass
+                    try:
+                        await page.wait_for_load_state("networkidle", timeout=15000)
+                    except Exception:
+                        pass
+                    await asyncio.sleep(1.5)
+                    check_cloudflare(await page.title())
 
-                fee_text, min_text = await page.evaluate(_DOM_FEE_SCRIPT)
+                    fee_text, min_text = await page.evaluate(_DOM_FEE_SCRIPT)
+                    upd: dict = {}
+                    fee = _parse_money(fee_text)
+                    if fee is not None:
+                        upd["delivery_fee"] = fee
+                    min_val = _parse_money(min_text)
+                    if min_val is not None:
+                        upd["min_order"] = min_val
 
-                updates: dict = {}
-                fee = _parse_money(fee_text)
-                if fee is not None:
-                    updates["delivery_fee"] = fee
-                min_val = _parse_money(min_text)
-                if min_val is not None:
-                    updates["min_order"] = min_val
+                    if upd:
+                        db.patch_listing(listing["id"], upd)
+                        updated += 1
+                        log_fn(f"  → DR fee={upd.get('delivery_fee')} min={upd.get('min_order')}")
+                    else:
+                        log_fn("  → DR no fee data found")
 
-                if updates:
-                    db.patch_listing(listing["id"], updates)
-                    updated += 1
-                    log_fn(f"  → fee={updates.get('delivery_fee')} min={updates.get('min_order')}")
-                else:
-                    log_fn("  → no fee data found")
+                except CloudflareBlockedError:
+                    log_fn("  → DR CF blocked, skipping")
+                except Exception as exc:
+                    log_fn(f"  → DR error: {exc}")
+                finally:
+                    await page.close()
 
-            except CloudflareBlockedError:
-                log_fn("  → CF blocked, skipping")
-            except Exception as exc:
-                log_fn(f"  → error: {exc}")
-
+        await asyncio.gather(*[scrape_one(i, l) for i, l in enumerate(listings)])
         log_fn(f"Fees/Deliveroo: updated {updated} listings")
         return updated
 
@@ -270,57 +281,61 @@ async def run_takeaway(log_fn: Callable[[str], None] = noop_log) -> int:
 
     updated = 0
     n = len(listings)
+    sem = asyncio.Semaphore(_CONCURRENCY)
 
     async with browser_session(lang="fr-BE") as browser:
-        page = await new_page(browser, lang="fr-BE")
 
-        for i, listing in enumerate(listings):
+        async def scrape_one(i: int, listing: dict) -> None:
+            nonlocal updated
             url = listing.get("url")
             if not url:
-                continue
+                return
             log_fn(f"Fees/Takeaway: {i + 1}/{n} — {url[:70]}")
-            try:
+            async with sem:
+                page = await new_page(browser, lang="fr-BE")
                 try:
-                    await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                except Exception:
-                    pass
-                try:
-                    await page.wait_for_load_state("networkidle", timeout=12000)
-                except Exception:
-                    pass
-                await asyncio.sleep(1.5)
+                    try:
+                        await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                    except Exception:
+                        pass
+                    try:
+                        await page.wait_for_load_state("networkidle", timeout=12000)
+                    except Exception:
+                        pass
+                    await asyncio.sleep(1.5)
 
-                # Accept cookie banner if present
-                try:
-                    await page.click(
-                        'button:has-text("Accept"), button:has-text("Accepter"), '
-                        'button[data-testid*="accept"]',
-                        timeout=3000,
-                    )
-                    await asyncio.sleep(0.5)
-                except Exception:
-                    pass
+                    try:
+                        await page.click(
+                            'button:has-text("Accept"), button:has-text("Accepter"), '
+                            'button[data-testid*="accept"]',
+                            timeout=3000,
+                        )
+                        await asyncio.sleep(0.5)
+                    except Exception:
+                        pass
 
-                fee_text, min_text = await page.evaluate(_DOM_TAKEAWAY_SCRIPT)
+                    fee_text, min_text = await page.evaluate(_DOM_TAKEAWAY_SCRIPT)
+                    upd: dict = {}
+                    fee = _parse_money(fee_text)
+                    if fee is not None:
+                        upd["delivery_fee"] = fee
+                    min_val = _parse_money(min_text)
+                    if min_val is not None:
+                        upd["min_order"] = min_val
 
-                updates: dict = {}
-                fee = _parse_money(fee_text)
-                if fee is not None:
-                    updates["delivery_fee"] = fee
-                min_val = _parse_money(min_text)
-                if min_val is not None:
-                    updates["min_order"] = min_val
+                    if upd:
+                        db.patch_listing(listing["id"], upd)
+                        updated += 1
+                        log_fn(f"  → TW fee={upd.get('delivery_fee')} min={upd.get('min_order')}")
+                    else:
+                        log_fn("  → TW no fee data found")
 
-                if updates:
-                    db.patch_listing(listing["id"], updates)
-                    updated += 1
-                    log_fn(f"  → fee={updates.get('delivery_fee')} min={updates.get('min_order')}")
-                else:
-                    log_fn("  → no fee data found")
+                except Exception as exc:
+                    log_fn(f"  → TW error: {exc}")
+                finally:
+                    await page.close()
 
-            except Exception as exc:
-                log_fn(f"  → error: {exc}")
-
+        await asyncio.gather(*[scrape_one(i, l) for i, l in enumerate(listings)])
         log_fn(f"Fees/Takeaway: updated {updated} listings")
         return updated
 
@@ -330,8 +345,8 @@ async def run_takeaway(log_fn: Callable[[str], None] = noop_log) -> int:
 async def run(log_fn: Callable[[str], None] = noop_log) -> dict[str, int]:
     """Run fee refresh for all platforms. Returns {platform: updated_count}."""
     ue = await run_ubereats(log_fn)
-    dr = await run_deliveroo(log_fn)
-    tw = await run_takeaway(log_fn)
+    # Run Deliveroo and Takeaway concurrently
+    dr, tw = await asyncio.gather(run_deliveroo(log_fn), run_takeaway(log_fn))
     return {"uber_eats": ue, "deliveroo": dr, "takeaway": tw}
 
 
