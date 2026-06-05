@@ -633,22 +633,27 @@ def merge_restaurants(survivor_id: str, loser_id: str) -> None:
         "id, platform, last_scraped_at"
     ).eq("restaurant_id", loser_id).execute().data
 
+    from postgrest.exceptions import APIError
     surv_by_platform = {l["platform"]: l for l in surv_listings}
     for ll in lose_listings:
         clash = surv_by_platform.get(ll["platform"])
-        if clash is None:
+        if clash is not None:
+            # Keep the row with the newer scrape; drop the other.
+            keep_loser = (ll.get("last_scraped_at") or "") > (clash.get("last_scraped_at") or "")
+            if not keep_loser:
+                client.table("platform_listings").delete().eq("id", ll["id"]).execute()
+                continue
+            client.table("platform_listings").delete().eq("id", clash["id"]).execute()
+        # Move the loser's listing to the survivor. Guard against any residual
+        # (restaurant_id, platform) collision the pre-scan didn't catch — on a
+        # unique-violation just drop the duplicate loser listing instead of
+        # aborting the whole merge.
+        try:
             client.table("platform_listings").update(
                 {"restaurant_id": survivor_id}
             ).eq("id", ll["id"]).execute()
-        else:
-            keep_loser = (ll.get("last_scraped_at") or "") > (clash.get("last_scraped_at") or "")
-            if keep_loser:
-                client.table("platform_listings").delete().eq("id", clash["id"]).execute()
-                client.table("platform_listings").update(
-                    {"restaurant_id": survivor_id}
-                ).eq("id", ll["id"]).execute()
-            else:
-                client.table("platform_listings").delete().eq("id", ll["id"]).execute()
+        except APIError:
+            client.table("platform_listings").delete().eq("id", ll["id"]).execute()
 
     # 2. Fill survivor null fields from loser.
     fill = {}

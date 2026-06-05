@@ -53,23 +53,29 @@ def run_sync(*, dry_run: bool, log_fn) -> dict:
         if dry_run:
             continue
 
-        if decision == matching.Decision.AUTO_MERGE:
-            db.merge_restaurants(survivor["id"], loser["id"])
-            touched_ids.add(survivor["id"])
-            touched_ids.add(loser["id"])
-            db.enqueue_decision(
-                survivor_id=survivor["id"], loser_id=loser["id"],
-                score=float(features.name_sim),
-                features={**features.to_dict(), "survivor_name": survivor["name"], "loser_name": loser["name"]},
-                status="auto_merged",
-            )
-        else:  # QUEUE
-            db.enqueue_decision(
-                survivor_id=survivor["id"], loser_id=loser["id"],
-                score=float(features.name_sim),
-                features={**features.to_dict(), "survivor_name": survivor["name"], "loser_name": loser["name"]},
-                status="queued",
-            )
+        feat_payload = {**features.to_dict(),
+                        "survivor_name": survivor["name"], "loser_name": loser["name"]}
+        # Isolate each pair: a single failed merge/enqueue must not abort the
+        # whole batch — log it and move on so the rest still reconciles.
+        try:
+            if decision == matching.Decision.AUTO_MERGE:
+                db.merge_restaurants(survivor["id"], loser["id"])
+                touched_ids.add(survivor["id"])
+                touched_ids.add(loser["id"])
+                db.enqueue_decision(
+                    survivor_id=survivor["id"], loser_id=loser["id"],
+                    score=float(features.name_sim), features=feat_payload,
+                    status="auto_merged",
+                )
+            else:  # QUEUE
+                db.enqueue_decision(
+                    survivor_id=survivor["id"], loser_id=loser["id"],
+                    score=float(features.name_sim), features=feat_payload,
+                    status="queued",
+                )
+        except Exception as e:
+            log_fn(f"  pair {survivor['id']}<-{loser['id']} failed ({decision.value}): {e}")
+            continue
 
     log_fn(f"auto_merge={counts['auto_merge']} queue={counts['queue']} separate={counts['separate']}")
 
