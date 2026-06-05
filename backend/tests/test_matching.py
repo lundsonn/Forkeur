@@ -754,8 +754,8 @@ def test_decide_non_chain_name_still_queues():
 
 
 def test_score_pair_chain_name_detected():
-    # Build a corpus where "pizzanapoli" appears 3 times → it's a chain
-    chain_names = {"pizzanapoli"}
+    # chain_names uses significant_first_token: "Pizza Napoli" → "pizza"
+    chain_names = {"pizza"}
     a = _r("Pizza Napoli", id="a1")
     b = _r("Pizza Napoli", id="b1")
     f = matching.score_pair(a, b, chain_names=chain_names)
@@ -763,6 +763,7 @@ def test_score_pair_chain_name_detected():
 
 
 def test_score_pair_non_chain_name_not_flagged():
+    # "burgerking" is not the first token of "Pizza Napoli"
     chain_names = {"burgerking"}
     a = _r("Pizza Napoli", id="a1")
     b = _r("Pizza Napoli", id="b1")

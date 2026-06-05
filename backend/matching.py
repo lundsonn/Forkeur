@@ -9,6 +9,7 @@ import re
 import unicodedata
 from dataclasses import dataclass, asdict
 from enum import Enum
+from functools import lru_cache
 from itertools import combinations
 from math import radians, sin, cos, asin, sqrt
 from urllib.parse import urlparse
@@ -31,10 +32,14 @@ _ARTICLES = {"le", "la", "les", "l", "au", "aux", "un", "une", "de", "du",
 _SUFFIX_RE = re.compile(r"\s+-\s+\S.*$")  # " - Ixelles"
 
 _BRUSSELS_LOCATIONS = {
+    # 19 communes
     "anderlecht", "auderghem", "berchem", "etterbeek", "evere", "forest",
     "ganshoren", "ixelles", "elsene", "jette", "koekelberg", "molenbeek",
     "saintgilles", "sintgillis", "saintjosse", "schaerbeek", "schaarbeek",
     "uccle", "ukkel", "watermael", "woluwe", "laeken", "neder", "haren",
+    # Major squares / neighbourhoods appearing in Brussels chain names
+    "debrouckere", "bourse", "sablon", "flagey", "jourdan", "rogier",
+    "schuman", "chatelain", "bascule", "ecuyer", "toison", "midi",
 }
 
 
@@ -51,12 +56,14 @@ def _canonical(name: str) -> str:
     return name
 
 
+@lru_cache(maxsize=None)
 def normalize_match_key(name: str) -> str:
     """Aggressive key: canonical -> lower -> strip accents -> keep [a-z0-9] only."""
     c = _strip_accents(_canonical(name)).lower()
     return re.sub(r"[^a-z0-9]", "", c)
 
 
+@lru_cache(maxsize=None)
 def normalize_name(name: str) -> str:
     """Looser normalize for fuzzy ratio: canonical, lower, accent-free, single spaces."""
     c = _strip_accents(_canonical(name)).lower()
@@ -73,6 +80,7 @@ def significant_first_token(name: str) -> str:
     return toks[0] if toks else ""
 
 
+@lru_cache(maxsize=None)
 def domain_of(url: str | None) -> str | None:
     """Registrable-ish domain: strip scheme + leading www. None if not a URL."""
     if not url or "." not in url:
@@ -90,6 +98,7 @@ def domain_of(url: str | None) -> str | None:
     return ".".join(parts[-2:]) if len(parts) >= 2 else None
 
 
+@lru_cache(maxsize=None)
 def phone_digits(phone: str | None) -> str | None:
     """Reduce to comparable digits: drop +32 / leading 0 country noise."""
     if not phone:
@@ -218,10 +227,11 @@ def score_pair(
         union = len(ma | mb)
         menu_overlap = intersection / union if union > 0 else 0.0
 
-    # Chain guard
+    # Chain guard — use significant_first_token so "McDonald's Bascule" and
+    # "McDonald's Bourse" both map to "mcdonalds", hitting the chain threshold.
     is_chain_name = (
-        normalize_match_key(a["name"]) in (chain_names or set())
-        or normalize_match_key(b["name"]) in (chain_names or set())
+        significant_first_token(a["name"]) in (chain_names or set())
+        or significant_first_token(b["name"]) in (chain_names or set())
     )
 
     return MatchFeatures(

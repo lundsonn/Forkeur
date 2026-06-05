@@ -26,18 +26,29 @@ def _survivor_loser(a: dict, b: dict) -> tuple[dict, dict]:
 def run_sync(*, dry_run: bool, log_fn) -> dict:
     rows = db.load_restaurants_for_match()
     log_fn(f"Loaded {len(rows)} restaurants")
+
+    # Warm the matching cache so each restaurant's values are computed once.
+    for _r in rows:
+        matching.normalize_name(_r["name"])
+        matching.normalize_match_key(_r["name"])
+        matching.domain_of(_r.get("website"))
+        matching.phone_digits(_r.get("phone"))
+
     pairs = matching.block_candidates(rows)
     log_fn(f"{len(pairs)} candidate pairs after blocking")
 
     # Load supplementary data for enhanced scoring
     menus_raw = db.load_menu_items_for_match()
     slugs = db.load_slugs_for_match()
-    # Build chain_names: normalized names appearing 3+ times in the restaurant corpus
-    name_counts: dict[str, int] = {}
+    # Build chain_names: significant first tokens appearing 3+ times.
+    # Uses significant_first_token (not full normalize_match_key) so
+    # "McDonald's Bascule" and "McDonald's Bourse" both count as "mcdonalds".
+    tok_counts: dict[str, int] = {}
     for r in rows:
-        k = matching.normalize_match_key(r["name"])
-        name_counts[k] = name_counts.get(k, 0) + 1
-    chain_names = {k for k, count in name_counts.items() if count >= 3}
+        tok = matching.significant_first_token(r["name"])
+        if tok and len(tok) >= 4:
+            tok_counts[tok] = tok_counts.get(tok, 0) + 1
+    chain_names = {tok for tok, count in tok_counts.items() if count >= 3}
     log_fn(
         f"Supplementary: {len(menus_raw)} restaurants with menus, "
         f"{len(chain_names)} chain names"
