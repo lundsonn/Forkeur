@@ -56,7 +56,10 @@
     "direct_order_btn": "Bestellen →",
     "dish_prices": "Prijzen",
     "dish_add": "Toevoegen aan winkelwagen",
-    "cheapest_delivery_subline": "Goedkoopste bezorging in uw buurt"
+    "cheapest_delivery_subline": "Goedkoopste bezorging in uw buurt",
+    "bottom_cheapest": "Goedkoopst voor je bestelling van {count} items",
+    "all_in": "{platform} · {amount} alles inbegrepen",
+    "order_on": "Bestel op {platform} · {amount}"
   },
   "compare": {
     "best_now": "Beste aanbieding",
@@ -131,7 +134,17 @@
     "basket_section_subtitle": "Zie welk platform het goedkoopst is voor wat je bestelt.",
     "basket_single_platform": "Prijzen alleen beschikbaar op {platform}",
     "partial_match_disclaimer": "Prijzen vergeleken voor {priced} van {total} gerechten · sommige gerechten staan maar op één platform",
-    "no_match_neutral": "Menuprijzen variëren per platform · onvoldoende gegevens om te vergelijken"
+    "no_match_neutral": "Menuprijzen variëren per platform · onvoldoende gegevens om te vergelijken",
+    "where_to_order_eyebrow": "Waar bestellen — het korte antwoord",
+    "order_direct_title": "Rechtstreeks bestellen",
+    "order_direct_sub": "menuprijzen · {fee} levering · geen platformkosten",
+    "save_vs_apps": "Bespaar ~{amount} t.o.v. de apps",
+    "order_on_site": "Bestel op de site van {name}",
+    "prefer_app": "Liever een app? Stel hieronder je bestelling samen om zeker te zijn.",
+    "order_from_restaurant": "bestel bij het restaurant",
+    "menu_prices_eyebrow": "Menuprijzen",
+    "build_order_eyebrow": "Stel je bestelling samen",
+    "build_order_sub": "Voeg toe wat je wilt — wij tonen het goedkoopste platform, kosten inbegrepen."
   },
   "hours": {
     "closed": "Gesloten",
@@ -184,7 +197,11 @@
     "disclaimer": "Prijzen vergeleken voor {x} van {y} menu-artikelen · sommige artikelen staan alleen op één platform",
     "expand": "Bekijk alle {count} artikelen",
     "show_more": "Toon {count} meer artikelen",
-    "showing_count": "Weergave van {shown} van {total} artikelen · gesorteerd op grootste besparing"
+    "showing_count": "Weergave van {shown} van {total} artikelen · gesorteerd op grootste besparing",
+    "lowest_headline": "{platform} heeft de laagste menuprijzen",
+    "cheaper_per_item": "Gemiddeld {amount} goedkoper per item dan {other}.",
+    "avg": "gem. {amount}",
+    "compared_footnote": "{compared} van {total} items vergeleken · sommige staan op slechts één platform."
   },
   "howItWorks": {
     "step1_title": "Zoeken",

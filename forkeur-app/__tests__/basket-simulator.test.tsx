@@ -62,11 +62,15 @@ describe('BasketSimulator', () => {
     expect(screen.getByText('Quattro Formaggi')).toBeInTheDocument()
   })
 
-  it('renders platform delivery fee labels', () => {
+  it('surfaces the cheapest platform in the sticky bar after adding an item', () => {
+    // The old top platform-fee bar was removed (delivery fees now live on the
+    // detail page). The cheapest platform is now surfaced via the green all-in
+    // CTA card once the basket has items.
     renderWithIntl(<BasketSimulator menuItems={menuItems} listings={listings} phone={null} />)
-    expect(screen.getByText('Uber Eats')).toBeInTheDocument()
-    expect(screen.getByText('Deliveroo')).toBeInTheDocument()
-    expect(screen.getByText('Takeaway')).toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText('Add Margherita to basket'))
+    // Margherita: Uber 899+199=1098 < Deliveroo 950+149=1099 < Takeaway 870+249=1119
+    // → Uber Eats is the cheapest complete platform and appears in the all-in CTA.
+    expect(screen.getAllByText(/Uber Eats/).length).toBeGreaterThan(0)
   })
 
   it('shows no menu message when empty', () => {
@@ -92,9 +96,11 @@ describe('BasketSimulator', () => {
   })
 
   it('basket bar shows item count after add', () => {
+    // Redesigned sticky bar shows "Cheapest for your 1-item order" (basket.bottom_cheapest)
+    // instead of the old "1 item · €subtotal" subline.
     renderWithIntl(<BasketSimulator menuItems={menuItems} listings={listings} phone={null} />)
     fireEvent.click(screen.getByLabelText('Add Margherita to basket'))
-    expect(screen.getByText(/1 item/)).toBeInTheDocument()
+    expect(screen.getByText(/1-item order/)).toBeInTheDocument()
   })
 
   it('stepper appears after adding item', () => {
@@ -122,21 +128,7 @@ describe('BasketSimulator', () => {
     expect(screen.getByText('Mains')).toBeInTheDocument()
   })
 
-  it('shows direct fee savings banner when direct listing present but no direct menu items', () => {
-    const directListing = makeListing('direct', null)
-    directListing.platform_url = 'https://myrestaurant.com/order'
-    renderWithIntl(
-      <BasketSimulator
-        menuItems={menuItems}
-        listings={[...listings, directListing]}
-        phone={null}
-      />
-    )
-    expect(screen.getByTestId('direct-fee-savings')).toBeInTheDocument()
-  })
-
-  it('does not show direct fee savings when no direct listing', () => {
-    renderWithIntl(<BasketSimulator menuItems={menuItems} listings={listings} phone={null} />)
-    expect(screen.queryByTestId('direct-fee-savings')).toBeNull()
-  })
+  // The "direct-fee-savings" bar inside BasketSimulator was removed in the detail-page
+  // redesign — the per-platform DELIVERY FEES list (with direct-savings) now lives on
+  // app/restaurant/[id]/page.tsx. Tests for that removed bar were dropped accordingly.
 })

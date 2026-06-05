@@ -56,7 +56,10 @@
     "direct_order_btn": "Commander →",
     "dish_prices": "Prix",
     "dish_add": "Ajouter au panier",
-    "cheapest_delivery_subline": "Livraison la moins chère de votre zone"
+    "cheapest_delivery_subline": "Livraison la moins chère de votre zone",
+    "bottom_cheapest": "Le moins cher pour votre commande de {count} articles",
+    "all_in": "{platform} · {amount} tout compris",
+    "order_on": "Commander sur {platform} · {amount}"
   },
   "compare": {
     "best_now": "Meilleur prix",
@@ -131,7 +134,17 @@
     "basket_section_subtitle": "Voyez quelle plateforme est la moins chère pour ce que vous commandez.",
     "basket_single_platform": "Prix disponibles sur {platform} uniquement",
     "partial_match_disclaimer": "Prix comparés pour {priced} plats sur {total} · certains plats uniquement sur une plateforme",
-    "no_match_neutral": "Les prix varient selon la plateforme · données insuffisantes pour comparer"
+    "no_match_neutral": "Les prix varient selon la plateforme · données insuffisantes pour comparer",
+    "where_to_order_eyebrow": "Où commander — la réponse courte",
+    "order_direct_title": "Commander en direct",
+    "order_direct_sub": "prix affichés · livraison {fee} · sans frais de plateforme",
+    "save_vs_apps": "Économisez ~{amount} vs les apps",
+    "order_on_site": "Commander sur le site de {name}",
+    "prefer_app": "Vous préférez une app ? Composez votre commande ci-dessous pour comparer.",
+    "order_from_restaurant": "commande au restaurant",
+    "menu_prices_eyebrow": "Prix du menu",
+    "build_order_eyebrow": "Composez votre commande",
+    "build_order_sub": "Ajoutez ce que vous voulez — on vous montre la plateforme la moins chère, frais inclus."
   },
   "hours": {
     "closed": "Fermé",
@@ -184,7 +197,11 @@
     "disclaimer": "Prix comparés pour {x} des {y} articles du menu · certains articles disponibles sur une seule plateforme",
     "expand": "Voir les {count} articles",
     "show_more": "Afficher {count} articles de plus",
-    "showing_count": "Affichage de {shown} sur {total} articles · triés par économies"
+    "showing_count": "Affichage de {shown} sur {total} articles · triés par économies",
+    "lowest_headline": "{platform} a les prix les plus bas",
+    "cheaper_per_item": "En moyenne {amount} moins cher par article que {other}.",
+    "avg": "moy. {amount}",
+    "compared_footnote": "{compared} sur {total} articles comparés · certains ne figurent que sur une plateforme."
   },
   "howItWorks": {
     "step1_title": "Rechercher",

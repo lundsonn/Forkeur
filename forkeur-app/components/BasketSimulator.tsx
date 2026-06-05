@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
 import Image from 'next/image'
+import { ArrowRight } from 'lucide-react'
 import {
   BasketItem,
   PlatformFees,
@@ -190,6 +191,7 @@ export default function BasketSimulator({ menuItems, listings, phone, matchRate 
   const [selectedItem, setSelectedItem] = useState<MenuItemWithPrices | null>(null)
 
   const tBasket = useTranslations('basket')
+  const tCard = useTranslations('card')
 
   const fees: PlatformFees = useMemo(() => {
     const result: PlatformFees = { uber_eats: null, deliveroo: null, takeaway: null, direct: null }
@@ -204,29 +206,6 @@ export default function BasketSimulator({ menuItems, listings, phone, matchRate 
     }
     return result
   }, [listings])
-
-  /**
-   * Fee-savings signal: direct listing exists but has no menu items scraped yet.
-   * Shows ~€X.XX de frais de plateforme économisés using cheapest non-direct fee.
-   */
-  const directFeeSavingsCents = useMemo<number | null>(() => {
-    const hasDirectListing = listings.some((l) => l.platform === 'direct')
-    if (!hasDirectListing) return null
-
-    const hasDirectMenuItems = menuItems.some((item) => item.prices.direct !== null)
-    if (hasDirectMenuItems) return null
-
-    // Find cheapest delivery_fee_cents among non-direct platforms
-    let cheapestFee: number | null = null
-    for (const l of listings) {
-      if (l.platform === 'direct') continue
-      if (l.delivery_fee_cents === null) continue
-      if (cheapestFee === null || l.delivery_fee_cents < cheapestFee) {
-        cheapestFee = l.delivery_fee_cents
-      }
-    }
-    return cheapestFee
-  }, [listings, menuItems])
 
   const tier = matchRate >= 0.7 ? 1 : matchRate >= 0.3 ? 2 : 3
 
@@ -310,11 +289,6 @@ export default function BasketSimulator({ menuItems, listings, phone, matchRate 
 
   const cheapestTotal = cheapestPlatform ? totals[cheapestPlatform] : null
 
-  const subtotalCents = useMemo(() => {
-    if (!cheapestPlatform || cheapestTotal === null) return 0
-    return cheapestTotal - (fees[cheapestPlatform] ?? 0)
-  }, [cheapestPlatform, cheapestTotal, fees])
-
   const sortedByTotal = useMemo(() => {
     return PLATFORMS
       .filter((p) => fees[p] !== null)
@@ -374,77 +348,8 @@ export default function BasketSimulator({ menuItems, listings, phone, matchRate 
     ? listings.find((l) => l.platform === effectiveCheapestPlatform)?.eta_label ?? null
     : null
 
-  // Build per-platform fee info for the header bar
-  const platformFeeRows = listings.map((l) => {
-    const colors = PLATFORM_COLORS[l.platform]
-    const isDirectSavings = l.platform === 'direct' && directFeeSavingsCents !== null
-    const feeText = isDirectSavings
-      ? null
-      : l.delivery_fee_cents === null
-        ? null
-        : l.delivery_fee_cents === 0
-          ? tBasket('free_delivery')
-          : tBasket('delivery', { fee: centsToEuro(l.delivery_fee_cents) })
-    const minText = isDirectSavings ? null : (l.min_order_label ?? null)
-    const isPhone = l.platform === 'direct' && !l.platform_url
-    const href = l.platform === 'direct' && phone
-      ? `tel:${phone}`
-      : l.platform_url ?? null
-    return {
-      platform: l.platform,
-      colors,
-      feeText,
-      minText,
-      href,
-      isPhone,
-      label: PLATFORM_LABELS[l.platform],
-      isDirectSavings,
-    }
-  })
-
   return (
     <div className="px-5">
-      {/* Platform delivery fee bar */}
-      {platformFeeRows.length > 0 && (
-        <div className="mb-5 -mx-5 px-5 py-3 bg-stone-50 border-y border-stone-100 flex flex-wrap gap-x-5 gap-y-2">
-          {platformFeeRows.map(({ platform, colors, feeText, minText, href, label, isDirectSavings }) => (
-            <div key={platform} className="flex items-start gap-1.5 min-w-[120px]">
-              <span className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${colors.dot}`} />
-              <div>
-                <p className={`text-xs font-semibold ${colors.label}`}>
-                  {href ? (
-                    <a href={href} target={href?.startsWith('http') ? '_blank' : undefined}
-                       rel="noopener noreferrer" className="underline underline-offset-2">
-                      {label}
-                    </a>
-                  ) : label}
-                </p>
-                {feeText && <p className="text-[11px] text-stone-500">{feeText}</p>}
-                {minText && <p className="text-[11px] text-stone-400">{minText}</p>}
-                {platform === 'direct' && phone && !href?.startsWith('http') && (
-                  <p className="text-[11px] text-stone-500">{phone}</p>
-                )}
-                {isDirectSavings && directFeeSavingsCents !== null && (
-                  <div data-testid="direct-fee-savings">
-                    <p className="text-[11px] font-semibold text-orange-600">
-                      {tBasket('direct_savings', { fee: centsToEuro(directFeeSavingsCents) })}
-                    </p>
-                    <p className="text-[11px] text-stone-500 mt-0.5">
-                      {href ? (
-                        <a href={href} target={href?.startsWith('http') ? '_blank' : undefined}
-                           rel="noopener noreferrer" className="underline underline-offset-2">
-                          {tBasket('direct_order_cta')}
-                        </a>
-                      ) : tBasket('direct_order_cta')}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* Menu items list */}
       {menuItems.length === 0 ? (
         <p className="text-sm text-stone-400 py-6">{tBasket('no_menu')}</p>
@@ -593,48 +498,76 @@ export default function BasketSimulator({ menuItems, listings, phone, matchRate 
       {basket.length > 0 && (
         <div className="fixed bottom-0 left-0 right-0 z-40 flex justify-center pointer-events-none px-5 pb-5">
           {effectiveCheapestPlatform && effectiveCheapestTotal !== null ? (
-            <button
-              data-testid="basket-bar"
-              onClick={() => setSheetOpen(true)}
-              className="w-full max-w-md pointer-events-auto text-white rounded-2xl px-5 py-3.5 flex items-center justify-between transition-transform duration-200"
-              style={{
-                backgroundColor: '#2E86D8',
-                paddingBottom: 'calc(0.875rem + env(safe-area-inset-bottom, 0px))',
-              }}
+            <div
+              className="w-full max-w-md pointer-events-auto rounded-2xl bg-green-50 border border-green-200 p-3"
+              style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
             >
-              <div>
-                <p className="text-xs text-white/70">
-                  {isFeesOnly
-                    ? tBasket('cheapest_delivery_subline')
-                    : `${tBasket('items', { count: itemCount })} · ${centsToEuro(subtotalCents)}`}
-                </p>
-                <p className="text-sm font-bold">
-                  {tBasket('best')}{' '}
-                  {PLATFORM_LABELS[effectiveCheapestPlatform]}{' '}
-                  {centsToEuro(effectiveCheapestTotal)}
-                </p>
-              </div>
-              <span className="text-lg font-bold text-white/80">↑</span>
-            </button>
+              <button
+                data-testid="basket-bar"
+                onClick={() => setSheetOpen(true)}
+                className="w-full flex items-center justify-between gap-3 text-left"
+              >
+                <div className="min-w-0">
+                  <p className="text-[11px] text-green-700">
+                    {tBasket('bottom_cheapest', { count: itemCount })}
+                  </p>
+                  <p className="text-sm font-bold text-stone-900">
+                    {tBasket('all_in', {
+                      platform: PLATFORM_LABELS[effectiveCheapestPlatform],
+                      amount: centsToEuro(effectiveCheapestTotal),
+                    })}
+                  </p>
+                </div>
+                {effectiveSavingsCents !== null && effectiveSavingsCents > 0 && (
+                  <p className="text-sm font-bold text-green-700 shrink-0">
+                    {tCard('save', { amount: centsToEuro(effectiveSavingsCents) })}
+                  </p>
+                )}
+              </button>
+              {platformUrls[effectiveCheapestPlatform] ? (
+                <a
+                  href={platformUrls[effectiveCheapestPlatform]}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white font-semibold text-sm bg-[#2E86D8] hover:bg-[#2576c2] transition-colors"
+                >
+                  {tBasket('order_on', {
+                    platform: PLATFORM_LABELS[effectiveCheapestPlatform],
+                    amount: centsToEuro(effectiveCheapestTotal),
+                  })}
+                  <ArrowRight size={16} aria-hidden="true" />
+                </a>
+              ) : (
+                <button
+                  onClick={() => setSheetOpen(true)}
+                  className="mt-2 flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white font-semibold text-sm bg-[#2E86D8] hover:bg-[#2576c2] transition-colors"
+                >
+                  {tBasket('order_on', {
+                    platform: PLATFORM_LABELS[effectiveCheapestPlatform],
+                    amount: centsToEuro(effectiveCheapestTotal),
+                  })}
+                  <ArrowRight size={16} aria-hidden="true" />
+                </button>
+              )}
+            </div>
           ) : (
             <button
               data-testid="basket-bar"
               onClick={() => setSheetOpen(true)}
-              className="w-full max-w-md pointer-events-auto rounded-2xl px-5 py-3.5 flex items-center justify-between transition-transform duration-200 bg-white border"
+              className="w-full max-w-md pointer-events-auto rounded-2xl p-3 flex items-center justify-between transition-transform duration-200 bg-green-50 border border-green-200"
               style={{
-                borderColor: '#888780',
-                paddingBottom: 'calc(0.875rem + env(safe-area-inset-bottom, 0px))',
+                paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))',
               }}
             >
               <div>
-                <p className="text-xs" style={{ color: '#888780' }}>
+                <p className="text-[11px] text-green-700">
                   {tBasket('items', { count: itemCount })}
                 </p>
-                <p className="text-sm font-bold" style={{ color: '#1A1A1A' }}>
+                <p className="text-sm font-bold text-stone-900">
                   {tBasket('compare_platforms')}
                 </p>
               </div>
-              <span className="text-lg font-bold" style={{ color: '#888780' }}>↑</span>
+              <span className="text-lg font-bold text-green-700">↑</span>
             </button>
           )}
         </div>

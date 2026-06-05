@@ -420,7 +420,9 @@ export const getRestaurantWithListings = cache(async (
     cuisine: raw.cuisine ? [raw.cuisine] : [],
     phone: raw.phone ?? null,
     order_url: raw.order_url ?? null,
-    direct_url_type: freshRaw.find((l) => l.platform === 'direct')?.url_type ?? null,
+    // Use unfiltered listings so url_type matches order_url (both come from the restaurants table,
+    // not staleness-gated). Without this, a stale direct listing gives url_type=null → wrong label.
+    direct_url_type: (raw.platform_listings ?? []).find((l) => l.platform === 'direct')?.url_type ?? null,
     image_url: raw.image_url ?? null,
     listings,
     menuItems: Array.from(itemMap.values()),

@@ -6,13 +6,15 @@ export const revalidate = 3600
 
 import Link from 'next/link'
 import { getTranslations } from 'next-intl/server'
-import { ExternalLink, List, Globe, Phone } from 'lucide-react'
+import { ExternalLink, List, Globe, Phone, Utensils, ArrowRight } from 'lucide-react'
 import { getRestaurantWithListings, type PromoItem } from '@/lib/queries'
-import { PLATFORM_LABELS, PLATFORM_COLORS } from '@/lib/basket'
+import { PLATFORM_LABELS, centsToEuro } from '@/lib/basket'
+import { computeFeeRows, computeDirectSavingsCents } from '@/lib/where-to-order'
 import BasketSimulator from '@/components/BasketSimulator'
-import MenuPriceComparison from '@/components/MenuPriceComparison'
+import MenuPriceBars from '@/components/MenuPriceBars'
 import StaleRefresh from '@/components/StaleRefresh'
 import OpenStatusBadge from '@/components/OpenStatusBadge'
+import PlatformLogo from '@/components/ui/PlatformLogo'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function promoBadgeText(tBadge: any, promo: PromoItem): string {
@@ -89,19 +91,12 @@ export default async function Page({
     .sort()
     .pop() ?? null
 
-  // Fee overview: aggregator platforms only, those with fee data
-  const feeListings = data.listings.filter(
-    (l) => l.platform !== 'direct' && l.delivery_fee_cents !== null
-  )
-  const sortedFeeListings = [...feeListings].sort(
-    (a, b) => (a.delivery_fee_cents ?? 0) - (b.delivery_fee_cents ?? 0)
-  )
-  const cheapestFee = sortedFeeListings[0] ?? null
-  const mostExpensiveFee = sortedFeeListings[sortedFeeListings.length - 1] ?? null
-  const feeGapCents =
-    feeListings.length >= 2 && cheapestFee && mostExpensiveFee && cheapestFee !== mostExpensiveFee
-      ? (mostExpensiveFee.delivery_fee_cents ?? 0) - (cheapestFee.delivery_fee_cents ?? 0)
-      : 0
+  // Fee overview rows (cheapest first, with deltas)
+  const feeRows = computeFeeRows(data.listings)
+
+  // "Where to order" direct-savings + the direct listing for the fee sub-line
+  const directSavings = computeDirectSavingsCents(data.listings)
+  const directListing = data.listings.find((l) => l.platform === 'direct') ?? null
 
   const allStale = data.listings.length === 0
 
@@ -139,7 +134,7 @@ export default async function Page({
           </p>
           <details className="inline-flex items-center gap-1 relative">
             <summary className="list-none flex items-center gap-1 cursor-pointer">
-              <span className="text-[10px] font-medium text-stone-400 bg-stone-100 rounded-full px-2 py-0.5">
+              <span className="text-[10px] font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
                 {tDetail('fees_included')}
               </span>
               <span className="w-4 h-4 rounded-full bg-stone-200 text-stone-500 text-[9px] font-bold flex items-center justify-center leading-none select-none">
@@ -153,6 +148,9 @@ export default async function Page({
         </div>
         {data.order_url && /^https?:\/\//i.test(data.order_url) && (() => {
           const isActionable = !data.direct_url_type || data.direct_url_type === 'ordering' || data.direct_url_type === 'menu'
+          // Actionable direct ordering is surfaced by the "Where to order" card below;
+          // only show this header CTA for non-actionable links (website / phone).
+          if (isActionable) return null
           const DirectIcon =
             data.direct_url_type === 'menu' ? List
             : data.direct_url_type === 'website' ? Globe
@@ -186,69 +184,127 @@ export default async function Page({
         </div>
       ) : (
         <>
-          {/* Platform fee overview */}
-          {feeListings.length > 0 && (
-            <div className="px-5 mb-2">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-[10px] font-semibold tracking-widest text-stone-400 uppercase">
-                  {tDetail('platform_fees')}
+          {/* Where to order — the short answer */}
+          {data.order_url && /^https?:\/\//i.test(data.order_url) &&
+            (!data.direct_url_type || data.direct_url_type === 'ordering' || data.direct_url_type === 'menu') && (
+              <div className="rounded-2xl bg-green-50 border border-green-200 p-4 mx-5 mb-4">
+                <p className="uppercase tracking-widest text-[10px] font-semibold text-green-700">
+                  {tDetail('where_to_order_eyebrow')}
                 </p>
-                {feeGapCents > 0 && cheapestFee && mostExpensiveFee && (
-                  <span className="text-[11px] font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
-                    {tDetail('cheapest_signal', {
-                      platform: PLATFORM_LABELS[cheapestFee.platform],
-                      amount: (feeGapCents / 100).toFixed(2),
-                      other: PLATFORM_LABELS[mostExpensiveFee.platform],
-                    })}
-                  </span>
-                )}
+                <div className="flex items-start gap-3 mt-2">
+                  <div className="w-10 h-10 rounded-xl bg-[#D85A30] flex items-center justify-center text-white shrink-0">
+                    <Utensils size={18} aria-hidden="true" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-stone-900">{tDetail('order_direct_title')}</p>
+                    <p className="text-xs text-stone-500 mt-0.5">
+                      {tDetail('order_direct_sub', {
+                        fee: centsToEuro(directListing?.delivery_fee_cents ?? 0),
+                      })}
+                    </p>
+                  </div>
+                  {directSavings !== null && (
+                    <p className="text-sm font-bold text-green-700 text-right shrink-0">
+                      {tDetail('save_vs_apps', { amount: centsToEuro(directSavings) })}
+                    </p>
+                  )}
+                </div>
+                <a
+                  href={data.order_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white font-semibold text-sm transition-colors bg-[#2E86D8] hover:bg-[#2576c2]"
+                >
+                  {tDetail('order_on_site', { name: data.name })}
+                  <ArrowRight size={16} aria-hidden="true" />
+                </a>
+                <p className="text-[11px] text-stone-400 text-center mt-2">
+                  {tDetail('prefer_app')}
+                </p>
               </div>
-              <div className={`grid gap-2 ${feeListings.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
-                {feeListings.map((l) => {
-                  const colors = PLATFORM_COLORS[l.platform]
-                  const isCheapest = feeListings.every(
-                    (o) => o.platform === l.platform || (o.delivery_fee_cents ?? Infinity) >= (l.delivery_fee_cents ?? 0)
+            )}
+
+          {/* Delivery fees */}
+          {feeRows.length > 0 && (
+            <div className="px-5 mb-2">
+              <p className="text-[10px] font-semibold tracking-widest text-stone-400 uppercase mb-2">
+                {tDetail('platform_fees')}
+              </p>
+              <div className="flex flex-col gap-2">
+                {feeRows.map((row) => {
+                  const listing = data.listings.find((l) => l.platform === row.platform)
+                  const href =
+                    listing?.platform_url && /^https?:\/\//i.test(listing.platform_url)
+                      ? listing.platform_url
+                      : null
+                  const rowClass = `flex items-center gap-3 rounded-xl border p-3 transition-colors ${
+                    row.isCheapest ? 'border-green-200 bg-green-50' : 'border-stone-100 bg-white'
+                  }`
+                  const inner = (
+                    <>
+                      <div className="shrink-0">
+                        <PlatformLogo platform={row.platform} size={28} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-stone-900 text-sm flex items-center">
+                          {PLATFORM_LABELS[row.platform]}
+                          {row.isCheapest && (
+                            <span className="text-[10px] font-bold text-green-700 bg-green-100 rounded px-1.5 py-0.5 ml-2">
+                              {tCard('cheapest_badge')}
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-[11px] text-stone-400">
+                          {row.platform === 'direct'
+                            ? tDetail('order_from_restaurant')
+                            : tCard('delivery_service_fees')}
+                        </p>
+                        {listing && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            <OpenStatusBadge
+                              openingHours={listing.opening_hours}
+                              isAvailable={listing.is_available}
+                            />
+                            {listing.promotions.map((p, i) => (
+                              <span
+                                key={i}
+                                className="text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5 leading-tight"
+                              >
+                                {promoBadgeText(tBadge, p)}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="ml-auto text-right shrink-0">
+                        <p className="font-bold text-stone-900">{centsToEuro(row.feeCents)}</p>
+                        {row.deltaCents > 0 && (
+                          <p className="text-[11px] text-stone-400">+{centsToEuro(row.deltaCents)}</p>
+                        )}
+                      </div>
+                    </>
                   )
-                  return (
+                  return href ? (
                     <a
-                      key={l.platform}
-                      href={l.platform_url && /^https?:\/\//i.test(l.platform_url) ? l.platform_url : undefined}
+                      key={row.platform}
+                      href={href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={`rounded-xl border p-3 text-center transition-colors ${
-                        isCheapest
-                          ? 'border-stone-300 bg-white'
-                          : 'border-stone-100 bg-stone-50 opacity-60'
-                      }`}
+                      className={rowClass}
                     >
-                      <p className={`text-[10px] font-semibold uppercase tracking-wide ${colors.label}`}>
-                        {PLATFORM_LABELS[l.platform]}
-                      </p>
-                      <p className="text-xl font-bold text-stone-900 mt-1">
-                        {l.delivery_fee_label}
-                      </p>
-                      {l.eta_label && (
-                        <p className="text-[11px] text-stone-400 mt-0.5">{l.eta_label}</p>
-                      )}
-                      {l.min_order_label && (
-                        <p className="text-[11px] text-stone-400">{l.min_order_label}</p>
-                      )}
-                      <div className="flex flex-wrap justify-center gap-1 mt-1.5">
-                        <OpenStatusBadge openingHours={l.opening_hours} isAvailable={l.is_available} />
-                        {l.promotions.map((p, i) => (
-                          <span key={i} className="text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5 leading-tight">
-                            {promoBadgeText(tBadge, p)}
-                          </span>
-                        ))}
-                      </div>
+                      {inner}
                     </a>
+                  ) : (
+                    <div key={row.platform} className={rowClass}>
+                      {inner}
+                    </div>
                   )
                 })}
               </div>
             </div>
           )}
 
-          {/* Menu price comparison */}
+          {/* Menu prices */}
           {tier === 3 ? (
             data.menuItems.length > 0 && (
               <div className="px-5 mb-2 mt-4">
@@ -258,7 +314,12 @@ export default async function Page({
               </div>
             )
           ) : (
-            <MenuPriceComparison items={data.menuItems} matchRate={matchRate} />
+            <>
+              <p className="px-5 mt-4 text-[10px] font-semibold tracking-widest text-stone-400 uppercase">
+                {tDetail('menu_prices_eyebrow')}
+              </p>
+              <MenuPriceBars items={data.menuItems} />
+            </>
           )}
 
           {/* Basket simulator section */}
@@ -276,9 +337,9 @@ export default async function Page({
               <div className="mt-4">
                 <div className="px-5 mb-3">
                   <p className="text-[10px] font-semibold tracking-widest text-stone-400 uppercase mb-0.5">
-                    {tDetail('basket_section_title')}
+                    {tDetail('build_order_eyebrow')}
                   </p>
-                  <p className="text-xs text-stone-400">{tDetail('basket_section_subtitle')}</p>
+                  <p className="text-xs text-stone-400">{tDetail('build_order_sub')}</p>
                 </div>
 
                 {platformsWithMenu.size < 2 ? (

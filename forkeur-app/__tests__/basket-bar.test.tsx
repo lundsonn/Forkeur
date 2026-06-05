@@ -98,9 +98,11 @@ describe('BasketSimulator', () => {
   })
 
   it('basket bar shows item count', async () => {
+    // Redesigned sticky bar surfaces the count via basket.bottom_cheapest
+    // ("Cheapest for your 1-item order").
     renderWithIntl(<BasketSimulator menuItems={menuItems} listings={listings} phone={null} />)
     await userEvent.click(screen.getByRole('button', { name: /add margherita/i }))
-    expect(screen.getByTestId('basket-bar')).toHaveTextContent('1 item')
+    expect(screen.getByTestId('basket-bar')).toHaveTextContent('1-item order')
   })
 
   it('removing item decreases stepper qty', async () => {
@@ -127,24 +129,11 @@ describe('BasketSimulator', () => {
   })
 })
 
+// The top "direct-fee-savings" signal bar inside BasketSimulator was removed in the
+// detail-page redesign; per-platform delivery fees (with direct savings) now render on
+// app/restaurant/[id]/page.tsx. The positive-render tests for that bar were dropped.
+// The negative ("does NOT show") cases below still hold — the testid is simply absent now.
 describe('BasketSimulator — direct fee-savings signal', () => {
-  it('shows fee-savings line when direct listing exists but has no menu items', () => {
-    renderWithIntl(<BasketSimulator menuItems={menuItems} listings={listingsWithDirect} phone={null} />)
-    expect(screen.getByTestId('direct-fee-savings')).toBeInTheDocument()
-  })
-
-  it('fee-savings line shows cheapest non-direct platform fee (€2.99 from uber_eats)', () => {
-    renderWithIntl(<BasketSimulator menuItems={menuItems} listings={listingsWithDirect} phone={null} />)
-    const savings = screen.getByTestId('direct-fee-savings')
-    expect(savings).toHaveTextContent('€2.99')
-  })
-
-  it('fee-savings line includes the CTA copy', () => {
-    renderWithIntl(<BasketSimulator menuItems={menuItems} listings={listingsWithDirect} phone={null} />)
-    const savings = screen.getByTestId('direct-fee-savings')
-    expect(savings).toHaveTextContent('Order directly →')
-  })
-
   it('does NOT show fee-savings line when direct listing has menu items', () => {
     renderWithIntl(<BasketSimulator menuItems={menuItemsWithDirect} listings={listingsWithDirectAndMenu} phone={null} />)
     expect(screen.queryByTestId('direct-fee-savings')).toBeNull()

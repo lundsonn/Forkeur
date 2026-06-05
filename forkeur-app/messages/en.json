@@ -56,7 +56,10 @@
     "direct_order_btn": "Order →",
     "dish_prices": "Prices",
     "dish_add": "Add to basket",
-    "cheapest_delivery_subline": "Cheapest delivery to your area"
+    "cheapest_delivery_subline": "Cheapest delivery to your area",
+    "bottom_cheapest": "Cheapest for your {count}-item order",
+    "all_in": "{platform} · {amount} all-in",
+    "order_on": "Order on {platform} · {amount}"
   },
   "compare": {
     "best_now": "Best right now",
@@ -131,7 +134,17 @@
     "basket_section_subtitle": "See which platform is cheapest for what you're ordering.",
     "basket_single_platform": "Prices available on {platform} only",
     "partial_match_disclaimer": "Prices compared for {priced} of {total} menu items · some items only listed on one platform",
-    "no_match_neutral": "Menu prices vary by platform · not enough data to compare"
+    "no_match_neutral": "Menu prices vary by platform · not enough data to compare",
+    "where_to_order_eyebrow": "Where to order — the short answer",
+    "order_direct_title": "Order direct",
+    "order_direct_sub": "list menu prices · {fee} delivery · no platform fees",
+    "save_vs_apps": "Save ~{amount} vs the apps",
+    "order_on_site": "Order on {name}'s site",
+    "prefer_app": "Prefer an app? Build your exact order below to be sure.",
+    "order_from_restaurant": "order from restaurant",
+    "menu_prices_eyebrow": "Menu prices",
+    "build_order_eyebrow": "Build your exact order",
+    "build_order_sub": "Add what you want — we'll show the cheapest platform for your basket, all fees in."
   },
   "hours": {
     "closed": "Closed",
@@ -184,7 +197,11 @@
     "disclaimer": "Prices compared for {x} of {y} menu items · some items only listed on one platform",
     "expand": "See all {count} items",
     "show_more": "Show {count} more items",
-    "showing_count": "Showing {shown} of {total} items · sorted by biggest savings"
+    "showing_count": "Showing {shown} of {total} items · sorted by biggest savings",
+    "lowest_headline": "{platform} has the lowest menu prices",
+    "cheaper_per_item": "On average {amount} cheaper per item than {other}.",
+    "avg": "avg {amount}",
+    "compared_footnote": "{compared} of {total} items compared · some items are listed on only one platform."
   },
   "howItWorks": {
     "step1_title": "Search",
