@@ -38,7 +38,18 @@ _JUNK_RE = re.compile(
     r'|linktr\.ee'
     r'|digilink\.io'
     r'|bit\.ly/'
-    r'|sprd\.li/',
+    r'|sprd\.li/'
+    # Bad page paths — informational, not ordering
+    r'|/terms(-of[- _]?(use|service))?(/|$)'
+    r'|/privacy(-policy)?(/|$)'
+    r'|/legal(/|$)'
+    r'|/conditions(-g[eé]n[eé]rales)?(/|$)'
+    r'|/cgv(/|$)'
+    r'|/contact(/|$)'
+    r'|/about(-us)?(/|$)'
+    r'|/faq(/|$)'
+    r'|/sitemap'
+    r'|/cookie',
     re.IGNORECASE,
 )
 

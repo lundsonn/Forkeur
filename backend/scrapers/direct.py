@@ -8,12 +8,16 @@ Two phases:
 from __future__ import annotations
 import asyncio
 import re
+from datetime import datetime, timezone, timedelta
 from typing import Callable
 import httpx
 from models import ScraperResult
 from scrapers.base import browser_session, new_page, noop_log, is_safe_url
 from scrapers.direct_classify import classify_url, is_junk_url
 import db
+
+# Re-check existing direct listings older than this many days
+_RESCRAPE_DAYS = 30
 
 # ── Belgian phone regex (mobile + landline) ───────────────────────────────────
 _PHONE_RE = re.compile(
@@ -36,6 +40,25 @@ _ORDER_PLATFORM_RE = re.compile(
 
 _AGGREGATOR_RE = re.compile(
     r'ubereats\.com|deliveroo\.|takeaway\.com|just-eat\.|thuisbezorgd\.',
+    re.IGNORECASE,
+)
+
+# Link paths to skip when scanning a restaurant's own website for ordering URLs.
+# Catches promo banners, reservation anchors, and other non-ordering links on
+# ordering platform domains (e.g. piki-app.com/vendor/.../promotional-banner).
+_BAD_LINK_PATH_RE = re.compile(
+    r'/promotional[-_]?banner'
+    r'|/promo'
+    r'|/reservat'
+    r'|/booking'
+    r'|/contact'
+    r'|/about'
+    r'|/terms'
+    r'|/privacy'
+    r'|/legal'
+    r'|/faq'
+    r'|/sitemap'
+    r'|/cookie',
     re.IGNORECASE,
 )
 
@@ -151,6 +174,10 @@ async def _check_website(page, url: str, log: Callable) -> dict:
     for link in links:
         if _AGGREGATOR_RE.search(link):
             continue
+        if _BAD_LINK_PATH_RE.search(link):
+            continue
+        if is_junk_url(link):
+            continue
         if _ORDER_PLATFORM_RE.search(link) and _validate_order_url(link):
             out['order_url'] = link
             out['has_delivery'] = True
@@ -163,6 +190,8 @@ async def _check_website(page, url: str, log: Callable) -> dict:
         for link in links:
             if _AGGREGATOR_RE.search(link):
                 continue
+            if _BAD_LINK_PATH_RE.search(link) or is_junk_url(link):
+                continue
             lw = link.lower()
             if any(kw in lw for kw in ['order', 'commande', 'bestel', 'livraison', 'delivery']):
                 if _validate_order_url(link):
@@ -173,18 +202,31 @@ async def _check_website(page, url: str, log: Callable) -> dict:
 
 
 async def _enrich_existing(browser, log: Callable) -> int:
-    """Check DB restaurants with websites that have no direct listing yet."""
+    """Check DB restaurants with websites.
+
+    Two passes:
+    - New restaurants (no direct listing yet): insert.
+    - Stale listings (scraped_at older than _RESCRAPE_DAYS or null): update.
+    """
     supabase = db.get_client()
 
-    # Only fetch restaurants with no existing direct listing — skip already-done ones
-    already_done = {
-        row['restaurant_id']
-        for row in (
-            supabase.table('platform_listings')
-            .select('restaurant_id')
-            .eq('platform', 'direct')
-            .execute()
-        ).data
+    stale_cutoff = datetime.now(timezone.utc) - timedelta(days=_RESCRAPE_DAYS)
+
+    existing_listings = (
+        supabase.table('platform_listings')
+        .select('restaurant_id, id, scraped_at')
+        .eq('platform', 'direct')
+        .execute()
+    ).data
+
+    # restaurant_id → listing id (for update) or None (new)
+    listing_by_rid: dict[str, dict] = {r['restaurant_id']: r for r in existing_listings}
+
+    # stale = null scraped_at OR older than cutoff
+    stale_rids = {
+        rid for rid, listing in listing_by_rid.items()
+        if not listing['scraped_at']
+        or datetime.fromisoformat(listing['scraped_at'].replace('Z', '+00:00')) < stale_cutoff
     }
 
     all_restaurants = (
@@ -195,10 +237,18 @@ async def _enrich_existing(browser, log: Callable) -> int:
         .execute()
     ).data
 
-    restaurants = [r for r in all_restaurants if r['id'] not in already_done]
-    log(f"Phase 1: {len(restaurants)} restaurants to check (skipped {len(already_done)} already enriched)")
+    # Process: new restaurants + stale existing listings
+    to_process = [
+        r for r in all_restaurants
+        if r['id'] not in listing_by_rid or r['id'] in stale_rids
+    ]
 
-    if not restaurants:
+    new_count = sum(1 for r in to_process if r['id'] not in listing_by_rid)
+    stale_count = len(to_process) - new_count
+    log(f"Phase 1: {new_count} new + {stale_count} stale listings to check "
+        f"(skipped {len(listing_by_rid) - stale_count} fresh)")
+
+    if not to_process:
         return 0
 
     saved = 0
@@ -217,34 +267,44 @@ async def _enrich_existing(browser, log: Callable) -> int:
                     {'phone': analysis['phone']}
                 ).eq('id', r['id']).execute()
 
-            # Always save the website so users can open it in a new tab,
-            # even if no ordering was detected. Prefer a specific order URL if found.
             order_url = analysis['order_url'] or r['website']
             if is_junk_url(order_url):
+                # Stale listing with now-junk URL: remove it
+                if r['id'] in listing_by_rid:
+                    supabase.table('platform_listings').delete().eq(
+                        'id', listing_by_rid[r['id']]['id']
+                    ).execute()
+                    log(f"  ✗ removed junk URL for {r['name']}: {order_url[:60]}")
                 return 0
 
             url_type = classify_url(order_url, analysis['phone'])
-            # If no ordering/delivery signals, treat as plain website link
             if not (analysis['has_delivery'] or analysis['order_url']):
                 url_type = 'website'
-            # Chain restaurants with corporate/global websites should not claim ordering.
-            # Exception: genuine ordering platform URLs (Odoo, sq-menu with code, etc.)
-            # are already classified as 'ordering' and must not be downgraded.
             if r.get('is_chain') and url_type != 'ordering':
                 url_type = 'website'
 
+            now = datetime.now(timezone.utc).isoformat()
             row = {
                 'restaurant_id': r['id'],
                 'platform': 'direct',
                 'url': order_url,
                 'url_type': url_type,
                 'is_available': True,
+                'scraped_at': now,
             }
-            supabase.table('platform_listings').insert(row).execute()
-            log(f"  ✓ {r['name']} [{url_type}]: {order_url[:70]}")
-            return 1
 
-    results = await asyncio.gather(*[_process(r) for r in restaurants], return_exceptions=True)
+            is_new = r['id'] not in listing_by_rid
+            if is_new:
+                supabase.table('platform_listings').insert(row).execute()
+            else:
+                supabase.table('platform_listings').update(row).eq(
+                    'id', listing_by_rid[r['id']]['id']
+                ).execute()
+
+            log(f"  {'✓' if is_new else '↻'} {r['name']} [{url_type}]: {order_url[:70]}")
+            return 1 if is_new else 0
+
+    results = await asyncio.gather(*[_process(r) for r in to_process], return_exceptions=True)
     for res in results:
         if isinstance(res, int):
             saved += res
