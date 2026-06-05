@@ -1,6 +1,7 @@
 from __future__ import annotations
 import asyncio
 import json
+import re
 from typing import Callable
 from models import ScraperConfig, ScraperResult
 from scrapers.base import browser_session, new_page, check_cloudflare, noop_log
@@ -703,7 +704,6 @@ def _parse_promotions(store: dict) -> list[dict]:
 def _parse_fee(val: str | None) -> float | None:
     if not val:
         return None
-    import re
     low = val.lower()
     if any(w in low for w in ("gratuit", "free", "gratis")):
         return 0.0
@@ -717,7 +717,6 @@ def _parse_fee(val: str | None) -> float | None:
 def _parse_float(val: str | None) -> float | None:
     if not val:
         return None
-    import re
     m = re.search(r"[\d.]+", str(val))
     return float(m.group()) if m else None
 
@@ -725,7 +724,6 @@ def _parse_float(val: str | None) -> float | None:
 def _parse_eta_min(eta: str | None) -> int | None:
     if not eta:
         return None
-    import re
     m = re.match(r"(\d+)", eta.strip())
     return int(m.group(1)) if m else None
 
@@ -733,9 +731,5 @@ def _parse_eta_min(eta: str | None) -> int | None:
 def _parse_eta_max(eta: str | None) -> int | None:
     if not eta:
         return None
-    import re
     m = re.search(r"-(\d+)", eta.strip())
     return int(m.group(1)) if m else None
-
-
-    return items

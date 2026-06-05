@@ -211,14 +211,7 @@ def noop_log(line: str) -> None:
 
 _shared_browser: Browser | None = None
 _browser_refcount: int = 0
-_browser_lock: asyncio.Lock | None = None
-
-
-def _get_lock() -> asyncio.Lock:
-    global _browser_lock
-    if _browser_lock is None:
-        _browser_lock = asyncio.Lock()
-    return _browser_lock
+_browser_lock: asyncio.Lock = asyncio.Lock()
 
 
 @asynccontextmanager
@@ -242,8 +235,7 @@ async def browser_session(lang: str = "fr-BE", headed: bool = False):
                 _log.warning("headed browser close failed: %s", exc)
         return
 
-    lock = _get_lock()
-    async with lock:
+    async with _browser_lock:
         if _shared_browser is None or not _shared_browser.is_connected():
             _shared_browser = await new_browser(lang=lang, headed=False)
             _browser_refcount = 0
@@ -252,7 +244,7 @@ async def browser_session(lang: str = "fr-BE", headed: bool = False):
     try:
         yield _shared_browser
     finally:
-        async with lock:
+        async with _browser_lock:
             _browser_refcount -= 1
             if _browser_refcount <= 0 and _shared_browser is not None:
                 try:
