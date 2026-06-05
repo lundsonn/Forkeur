@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm test *)"
+      "Bash(npm test *)",
+      "Bash(grep -n \"pass$\" /Users/geraudmarionvs/Forkeur/backend/scrapers/base.py /Users/geraudmarionvs/Forkeur/backend/routers/scrapers.py /Users/geraudmarionvs/Forkeur/backend/ws.py)"
     ]
   }
 }

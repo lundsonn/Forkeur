@@ -6,7 +6,7 @@ from models import RunTriggerOut, ScraperStatusOut, ScraperConfig, RunTriggerIn,
 import alerting
 import db
 import ws as ws_mod
-from scrapers import ubereats, deliveroo, takeaway, fees, direct, direct_menu, match
+from scrapers import ubereats, deliveroo, takeaway, direct, direct_menu, match
 from scrapers import dom_menu
 from scrapers.base import CloudflareBlockedError
 from routers.auth_router import require_auth
@@ -44,8 +44,6 @@ SCRAPERS = {
 # Track currently running platforms (also read by scheduler to skip duplicates).
 _running: set[str] = set()
 _tasks: dict[str, asyncio.Task] = {}
-_fees_running: bool = False
-
 # No semaphore needed — all Playwright scrapers share one browser instance
 # via base.browser_session(). Their asyncio sleeps/waits interleave naturally.
 
