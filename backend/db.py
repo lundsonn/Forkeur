@@ -747,7 +747,12 @@ def get_stale_queued_decisions() -> list[dict]:
 
 
 def get_queued_decisions(limit: int = 100, offset: int = 0) -> list[dict]:
-    """Pending review-queue rows, newest first. Bounded to prevent OOM."""
+    """Pending review-queue rows, newest first. Bounded to prevent OOM.
+
+    Each row is enriched with `survivor_listings` / `loser_listings`
+    (platform + url) so the reviewer can open each restaurant on every
+    platform to compare before approving/rejecting.
+    """
     client = get_client()
     res = (
         client.table("restaurant_match_decisions")
@@ -757,7 +762,38 @@ def get_queued_decisions(limit: int = 100, offset: int = 0) -> list[dict]:
         .range(offset, offset + limit - 1)
         .execute()
     )
-    return res.data
+    rows = res.data or []
+    if not rows:
+        return rows
+
+    # Collect every restaurant id involved, fetch their listings in one query.
+    rid_set: set[str] = set()
+    for d in rows:
+        if d.get("survivor_id"):
+            rid_set.add(d["survivor_id"])
+        if d.get("loser_id"):
+            rid_set.add(d["loser_id"])
+
+    listings_by_rid: dict[str, list[dict]] = {}
+    if rid_set:
+        lres = (
+            client.table("platform_listings")
+            .select("restaurant_id, platform, url")
+            .in_("restaurant_id", list(rid_set))
+            .execute()
+        )
+        for row in lres.data or []:
+            rid = row.get("restaurant_id")
+            if not rid or not row.get("url"):
+                continue
+            listings_by_rid.setdefault(rid, []).append(
+                {"platform": row.get("platform"), "url": row["url"]}
+            )
+
+    for d in rows:
+        d["survivor_listings"] = listings_by_rid.get(d.get("survivor_id"), [])
+        d["loser_listings"] = listings_by_rid.get(d.get("loser_id"), [])
+    return rows
 
 
 def resolve_decision(decision_id: str, *, approve: bool, resolved_by: str) -> None:

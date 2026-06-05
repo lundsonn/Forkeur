@@ -1,5 +1,37 @@
 import { useEffect, useState } from 'react'
-import { getMatchQueue, resolveMatch, type MatchDecision } from '../api'
+import { getMatchQueue, resolveMatch, type MatchDecision, type PlatformListingRef } from '../api'
+
+const PLATFORM_LABELS: Record<string, string> = {
+  uber_eats: 'Uber Eats',
+  deliveroo: 'Deliveroo',
+  takeaway: 'Takeaway',
+  direct: 'Direct',
+}
+
+function platformLabel(p: string): string {
+  return PLATFORM_LABELS[p] ?? p
+}
+
+function PlatformLinks({ listings }: { listings: PlatformListingRef[] | undefined }) {
+  if (!listings || listings.length === 0) {
+    return <p className="text-[10px] text-stone-300 mt-1">No links</p>
+  }
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-1.5">
+      {listings.map((l) => (
+        <a
+          key={`${l.platform}-${l.url}`}
+          href={l.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-stone-100 hover:bg-orange-100 text-stone-700 hover:text-orange-700 border border-stone-200 transition-colors"
+        >
+          {platformLabel(l.platform)} ↗
+        </a>
+      ))}
+    </div>
+  )
+}
 
 function fmt(n: number | undefined): string {
   if (n === undefined || n === null) return '—'
@@ -38,8 +70,6 @@ export default function MatchQueue() {
   useEffect(() => { load() }, [])
 
   async function handleResolve(id: string, approve: boolean) {
-    const label = approve ? 'Approve & merge' : 'Reject'
-    if (!window.confirm(`${label} this match decision?`)) return
     setActing(id)
     setError(null)
     try {
@@ -85,6 +115,7 @@ export default function MatchQueue() {
                     {f.survivor_name && (
                       <p className="text-[10px] text-stone-400 font-mono truncate">{d.survivor_id}</p>
                     )}
+                    <PlatformLinks listings={d.survivor_listings} />
                   </div>
                   <div>
                     <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-wide mb-0.5">Loser</p>
@@ -94,6 +125,7 @@ export default function MatchQueue() {
                     {f.loser_name && (
                       <p className="text-[10px] text-stone-400 font-mono truncate">{d.loser_id}</p>
                     )}
+                    <PlatformLinks listings={d.loser_listings} />
                   </div>
                 </div>
 

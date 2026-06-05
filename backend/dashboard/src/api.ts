@@ -126,6 +126,11 @@ export async function rejectClaim(id: string): Promise<void> {
   if (!res.ok) throw new Error(await res.text())
 }
 
+export interface PlatformListingRef {
+  platform: string
+  url: string
+}
+
 export interface MatchDecision {
   id: string
   survivor_id: string
@@ -140,6 +145,8 @@ export interface MatchDecision {
     loser_name?: string
     [key: string]: unknown
   } | null
+  survivor_listings?: PlatformListingRef[]
+  loser_listings?: PlatformListingRef[]
   status: string
   created_at: string
   resolved_at: string | null
