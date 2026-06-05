@@ -5,13 +5,13 @@ from scrapers.direct_classify import classify_url, _JUNK_RE
 # ── classify_url ──────────────────────────────────────────────────────────────
 
 def test_sq_menu_is_ordering():
-    assert classify_url('https://burger-palace.sq-menu.com/order') == 'ordering'
+    assert classify_url('https://www.sq-menu.com/api/fb/v4pnd') == 'ordering'
 
 def test_piki_app_is_ordering():
     assert classify_url('https://piki-app.com/vendor/pizza/categories') == 'ordering'
 
 def test_odoo_pos_self_is_ordering():
-    assert classify_url('https://restaurant.odoo.com/pos-self/menu') == 'ordering'
+    assert classify_url('https://restaurant.odoo.com/pos-self/15') == 'ordering'
 
 def test_odoo_non_pos_is_website():
     assert classify_url('https://restaurant.odoo.com/shop') == 'website'
@@ -47,7 +47,7 @@ def test_empty_string_with_phone_returns_phone():
     assert classify_url('', phone='+32471234567') == 'phone'
 
 def test_ordering_takes_precedence_over_menu_path():
-    assert classify_url('https://burger.sq-menu.com/menu') == 'ordering'
+    assert classify_url('https://www.sq-menu.com/api/menu/v4pnd') == 'ordering'
 
 
 # ── _JUNK_RE ──────────────────────────────────────────────────────────────────

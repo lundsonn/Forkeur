@@ -47,12 +47,13 @@ def _normalize_for_match(name: str) -> str:
     """Fully normalize for fuzzy duplicate detection.
     Handles mixed case, accents, smart quotes, emoji, extra whitespace.
     """
+    # Normalize smart quotes to straight apostrophe BEFORE _canonical so they
+    # aren't stripped by the Unicode-range filter (U+2018/U+2019 > U+024F).
+    name = re.sub(r"[‘’ʼ´`]", "'", name)
     c = _canonical(name).lower()
     # Remove accents via NFD decomposition
     c = unicodedata.normalize('NFD', c)
     c = ''.join(ch for ch in c if unicodedata.category(ch) != 'Mn')
-    # Normalize all apostrophe/quote variants to straight single quote
-    c = re.sub(r"[''`ʼ´]", "'", c)
     # Collapse whitespace
     return re.sub(r'\s+', ' ', c).strip()
 
