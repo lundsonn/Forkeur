@@ -228,13 +228,16 @@ async def test_check_website_no_signals_returns_empty():
 # _enrich_existing  (async, DB + Playwright mocked)
 # ---------------------------------------------------------------------------
 
-def _make_db_client(restaurants=None):
+def _make_db_client(restaurants=None, already_done_ids=None):
     client = MagicMock()
+    # already_done: .select('restaurant_id').eq('platform', 'direct').execute()
+    client.table.return_value.select.return_value \
+        .eq.return_value.execute.return_value.data = [
+        {"restaurant_id": rid} for rid in (already_done_ids or [])
+    ]
+    # all restaurants: .select(...).not_.is_(...).neq(...).execute()
     client.table.return_value.select.return_value \
         .not_.is_.return_value.neq.return_value.execute.return_value.data = restaurants or []
-    # platform_listings select (check existing)
-    client.table.return_value.select.return_value \
-        .eq.return_value.eq.return_value.execute.return_value.data = []
     return client
 
 
@@ -243,39 +246,37 @@ async def test_enrich_existing_inserts_new_listing():
     db_client = _make_db_client(restaurants=[
         {"id": "r1", "name": "My Rest", "website": "https://myrest.be", "phone": None}
     ])
-    page = _make_page(
+    mock_page = _make_page(
         text="commander en ligne",
         links=["https://order.lightspeedrestaurant.com/my-restaurant"],
     )
+    mock_page.close = AsyncMock()
+    browser = AsyncMock()
 
     with patch("scrapers.direct.db.get_client", return_value=db_client), \
-         patch("asyncio.sleep", new_callable=AsyncMock):
-        saved = await _enrich_existing(page, lambda _: None)
+         patch("scrapers.direct.new_page", new_callable=AsyncMock, return_value=mock_page):
+        saved = await _enrich_existing(browser, lambda _: None)
 
     assert saved == 1
     db_client.table.return_value.insert.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_enrich_existing_updates_existing_listing():
-    db_client = _make_db_client(restaurants=[
-        {"id": "r1", "name": "My Rest", "website": "https://myrest.be", "phone": None}
-    ])
-    # Listing already exists
-    db_client.table.return_value.select.return_value \
-        .eq.return_value.eq.return_value.execute.return_value.data = [{"id": "lid-1"}]
-    page = _make_page(
-        text="order online",
-        links=["https://order.lightspeedrestaurant.com/my-restaurant"],
+async def test_enrich_existing_skips_already_done():
+    """Restaurants that already have a direct listing are pre-filtered out."""
+    db_client = _make_db_client(
+        restaurants=[
+            {"id": "r1", "name": "My Rest", "website": "https://myrest.be", "phone": None}
+        ],
+        already_done_ids=["r1"],  # r1 already has a listing
     )
+    browser = AsyncMock()
 
     with patch("scrapers.direct.db.get_client", return_value=db_client), \
-         patch("asyncio.sleep", new_callable=AsyncMock):
-        saved = await _enrich_existing(page, lambda _: None)
+         patch("scrapers.direct.new_page", new_callable=AsyncMock):
+        saved = await _enrich_existing(browser, lambda _: None)
 
-    # Updated, not inserted
     assert saved == 0
-    db_client.table.return_value.update.assert_called()
     db_client.table.return_value.insert.assert_not_called()
 
 
@@ -284,11 +285,13 @@ async def test_enrich_existing_saves_phone_when_new():
     db_client = _make_db_client(restaurants=[
         {"id": "r1", "name": "My Rest", "website": "https://myrest.be", "phone": None}
     ])
-    page = _make_page(text="0472 12 34 56", links=[])
+    mock_page = _make_page(text="0472 12 34 56", links=[])
+    mock_page.close = AsyncMock()
+    browser = AsyncMock()
 
     with patch("scrapers.direct.db.get_client", return_value=db_client), \
-         patch("asyncio.sleep", new_callable=AsyncMock):
-        await _enrich_existing(page, lambda _: None)
+         patch("scrapers.direct.new_page", new_callable=AsyncMock, return_value=mock_page):
+        await _enrich_existing(browser, lambda _: None)
 
     update_calls = [c[0][0] for c in db_client.table.return_value.update.call_args_list]
     phone_updates = [c for c in update_calls if "phone" in c]
@@ -296,18 +299,17 @@ async def test_enrich_existing_saves_phone_when_new():
 
 
 @pytest.mark.asyncio
-async def test_enrich_existing_skips_no_delivery():
-    db_client = _make_db_client(restaurants=[
-        {"id": "r1", "name": "My Rest", "website": "https://myrest.be", "phone": None}
-    ])
-    page = _make_page(text="Welcome to our restaurant", links=[])
+async def test_enrich_existing_skips_no_restaurant():
+    """Empty restaurant list returns 0 immediately without touching the browser."""
+    db_client = _make_db_client(restaurants=[])
+    browser = AsyncMock()
 
     with patch("scrapers.direct.db.get_client", return_value=db_client), \
-         patch("asyncio.sleep", new_callable=AsyncMock):
-        saved = await _enrich_existing(page, lambda _: None)
+         patch("scrapers.direct.new_page", new_callable=AsyncMock) as mock_new_page:
+        saved = await _enrich_existing(browser, lambda _: None)
 
     assert saved == 0
-    db_client.table.return_value.insert.assert_not_called()
+    mock_new_page.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
