@@ -769,24 +769,31 @@ def load_menu_items_for_match() -> dict[str, set[str]]:
     import unicodedata as _ud
 
     client = get_client()
-    res = (
-        client.table("menu_items")
-        .select("title, platform_listings(restaurant_id)")
-        .execute()
-    )
     result: dict[str, set[str]] = {}
-    for row in (res.data or []):
-        rid_obj = row.get("platform_listings") or {}
-        rid = str(rid_obj.get("restaurant_id", "")) if isinstance(rid_obj, dict) else ""
-        if not rid or rid == "None":
-            continue
-        raw = row.get("title") or ""
-        # normalize: strip accents, lowercase, keep [a-z0-9]
-        nfkd = _ud.normalize("NFD", raw)
-        no_acc = "".join(ch for ch in nfkd if _ud.category(ch) != "Mn")
-        norm = _re.sub(r"[^a-z0-9]", "", no_acc.lower())
-        if norm and len(norm) >= 3:
-            result.setdefault(rid, set()).add(norm)
+    page = 1000
+    offset = 0
+    while True:
+        res = (
+            client.table("menu_items")
+            .select("title, platform_listings(restaurant_id)")
+            .range(offset, offset + page - 1)
+            .execute()
+        )
+        batch = res.data or []
+        for row in batch:
+            rid_obj = row.get("platform_listings") or {}
+            rid = str(rid_obj.get("restaurant_id", "")) if isinstance(rid_obj, dict) else ""
+            if not rid or rid == "None":
+                continue
+            raw = row.get("title") or ""
+            nfkd = _ud.normalize("NFD", raw)
+            no_acc = "".join(ch for ch in nfkd if _ud.category(ch) != "Mn")
+            norm = _re.sub(r"[^a-z0-9]", "", no_acc.lower())
+            if norm and len(norm) >= 3:
+                result.setdefault(rid, set()).add(norm)
+        if len(batch) < page:
+            break
+        offset += page
     return result
 
 
@@ -799,23 +806,31 @@ def load_slugs_for_match() -> dict[str, list[str]]:
     """
     from urllib.parse import urlparse
     client = get_client()
-    res = (
-        client.table("platform_listings")
-        .select("restaurant_id, url")
-        .not_.is_("url", "null")
-        .execute()
-    )
     result: dict[str, list[str]] = {}
-    for row in (res.data or []):
-        rid = str(row.get("restaurant_id") or "")
-        url = row.get("url") or ""
-        if not rid or rid == "None" or not url:
-            continue
-        try:
-            path = urlparse(url).path.rstrip("/")
-            segment = path.split("/")[-1] if path else ""
-            if segment and len(segment) >= 3:
-                result.setdefault(rid, []).append(segment)
-        except Exception:
-            continue
+    page = 1000
+    offset = 0
+    while True:
+        res = (
+            client.table("platform_listings")
+            .select("restaurant_id, url")
+            .not_.is_("url", "null")
+            .range(offset, offset + page - 1)
+            .execute()
+        )
+        batch = res.data or []
+        for row in batch:
+            rid = str(row.get("restaurant_id") or "")
+            url = row.get("url") or ""
+            if not rid or rid == "None" or not url:
+                continue
+            try:
+                path = urlparse(url).path.rstrip("/")
+                segment = path.split("/")[-1] if path else ""
+                if segment and len(segment) >= 3:
+                    result.setdefault(rid, []).append(segment)
+            except Exception:
+                continue
+        if len(batch) < page:
+            break
+        offset += page
     return result
