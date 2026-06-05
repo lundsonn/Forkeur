@@ -33,6 +33,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
+    // RFC-5322-lite — the backend re-validates with Pydantic EmailStr; this is
+    // just a cheap shape gate so obvious garbage never reaches the backend.
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(owner_email) || owner_email.length > 254) {
+      return NextResponse.json({ error: 'Invalid email' }, { status: 400 })
+    }
+    if (direct_order_url) {
+      try {
+        const u = new URL(direct_order_url)
+        if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('scheme')
+      } catch {
+        return NextResponse.json({ error: 'Invalid URL' }, { status: 400 })
+      }
+    }
+    const validTypes = new Set(['add_url', 'new_listing', 'remove'])
+    if (!validTypes.has(inquiry_type)) {
+      return NextResponse.json({ error: 'Invalid inquiry_type' }, { status: 400 })
+    }
+
     if (RECAPTCHA_SECRET) {
       if (!recaptcha_token || !(await verifyRecaptcha(recaptcha_token))) {
         return NextResponse.json({ error: 'reCAPTCHA verification failed' }, { status: 400 })

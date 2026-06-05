@@ -97,7 +97,6 @@ export default function MapPreviewCard({ restaurant, onClose }: Props) {
                 width={56}
                 height={56}
                 className="w-full h-full object-cover"
-                unoptimized
                 onError={() => setImgError(true)}
               />
             ) : (

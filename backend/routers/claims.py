@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import os
-import httpx
+import time
+from collections import deque
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, HttpUrl, model_validator
 
 import db
@@ -50,15 +53,17 @@ def _notify_new_claim(body: ClaimIn, claim_id: str) -> None:
     notify_to = os.getenv("NOTIFICATION_EMAIL")
     if not api_key or not notify_to:
         return
+    admin_base = os.getenv("ADMIN_DASHBOARD_URL", "").rstrip("/")
     type_labels = {"add_url": "Add URL", "new_listing": "New listing", "remove": "Remove"}
     restaurant = body.restaurant_name_free or str(body.restaurant_id or "unknown")
     subject = f"[Forkeur] New owner inquiry — {type_labels.get(body.inquiry_type, body.inquiry_type)}: {restaurant}"
+    review_link = f"<p><a href='{admin_base}/claims'>Review in admin →</a></p>" if admin_base else ""
     html = (
         f"<p><strong>Type:</strong> {body.inquiry_type}</p>"
         f"<p><strong>Restaurant:</strong> {restaurant}</p>"
         f"<p><strong>Email:</strong> {body.owner_email}</p>"
         + (f"<p><strong>URL:</strong> {body.direct_order_url}</p>" if body.direct_order_url else "")
-        + f"<p><a href='http://178.104.57.72:5173/claims'>Review in admin →</a></p>"
+        + review_link
     )
     try:
         httpx.post(
@@ -71,9 +76,42 @@ def _notify_new_claim(body: ClaimIn, claim_id: str) -> None:
         pass  # never block the claim submission
 
 
+# Per-IP submission rate limit (in-memory; sufficient for single-process backend).
+_RATE_WINDOW_S = 3600
+_RATE_MAX = 10
+_recent: dict[str, deque[float]] = {}
+
+
+def _rate_check(ip: str) -> None:
+    now = time.monotonic()
+    bucket = _recent.setdefault(ip, deque())
+    while bucket and now - bucket[0] > _RATE_WINDOW_S:
+        bucket.popleft()
+    if len(bucket) >= _RATE_MAX:
+        raise HTTPException(429, "Too many submissions, try again later")
+    bucket.append(now)
+
+
 @router.post("", status_code=201)
-async def submit_claim(body: ClaimIn):
-    claim_id = db.insert_claim(
+async def submit_claim(body: ClaimIn, request: Request):
+    ip = (request.client.host if request.client else "?") or "?"
+    # X-Forwarded-For from a trusted proxy takes precedence — first hop is the
+    # original client.
+    fwd = request.headers.get("x-forwarded-for", "")
+    if fwd:
+        ip = fwd.split(",")[0].strip() or ip
+    _rate_check(ip)
+
+    # Vet the URL before persisting — previously only checked at approval time,
+    # so the DB could accumulate malicious or internal URLs.
+    if body.direct_order_url:
+        try:
+            db._validate_order_url(str(body.direct_order_url))
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+
+    claim_id = await asyncio.to_thread(
+        db.insert_claim,
         owner_email=body.owner_email,
         inquiry_type=body.inquiry_type,
         restaurant_id=str(body.restaurant_id) if body.restaurant_id else None,
@@ -86,13 +124,13 @@ async def submit_claim(body: ClaimIn):
 
 @router.get("", response_model=list[ClaimOut], dependencies=[Depends(require_auth)])
 async def list_claims(verified: bool | None = None):
-    return db.get_claims(verified=verified)
+    return await asyncio.to_thread(db.get_claims, verified=verified)
 
 
 @router.post("/{claim_id}/approve", dependencies=[Depends(require_auth)])
 async def approve_claim(claim_id: str):
     try:
-        db.approve_claim(claim_id)
+        await asyncio.to_thread(db.approve_claim, claim_id)
     except (IndexError, KeyError, ValueError):
         raise HTTPException(404, "Claim not found")
     return {"status": "approved"}
@@ -101,7 +139,7 @@ async def approve_claim(claim_id: str):
 @router.post("/{claim_id}/reject", dependencies=[Depends(require_auth)])
 async def reject_claim(claim_id: str):
     try:
-        db.reject_claim(claim_id)
+        await asyncio.to_thread(db.reject_claim, claim_id)
     except (IndexError, KeyError, ValueError):
         raise HTTPException(404, "Claim not found")
     return {"status": "rejected"}

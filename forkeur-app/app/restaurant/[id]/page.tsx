@@ -125,7 +125,6 @@ export default async function Page({
             fill
             className="object-cover"
             priority
-            unoptimized
           />
         </div>
       )}

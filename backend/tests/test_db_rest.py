@@ -152,13 +152,15 @@ def test_prune_stale_menu_items_deletes_stale(mock_get):
         .not_.is_.return_value.lt.return_value.execute.return_value.data = [
         {"id": "lid-1"}, {"id": "lid-2"}
     ]
-    # Each delete returns 3 removed rows
+    # Batched delete via .in_(...) returns the 6 removed rows in one call.
     client.table.return_value.delete.return_value \
-        .eq.return_value.execute.return_value.data = [{"id": "m1"}, {"id": "m2"}, {"id": "m3"}]
+        .in_.return_value.execute.return_value.data = [
+            {"id": f"m{i}"} for i in range(6)
+        ]
     mock_get.return_value = client
     import db
     count = db.prune_stale_menu_items(days=30)
-    assert count == 6  # 3 items × 2 listings
+    assert count == 6
 
 
 @patch("db.get_client")
@@ -336,12 +338,12 @@ def test_validate_rejects_private_10():
 
 
 def test_validate_rejects_ftp_scheme():
-    with pytest.raises(ValueError, match="http or https"):
+    with pytest.raises(ValueError, match="not allowed"):
         _validate_order_url("ftp://myrestaurant.be/order")
 
 
 def test_validate_rejects_no_domain():
-    with pytest.raises(ValueError, match="valid domain"):
+    with pytest.raises(ValueError, match="not allowed"):
         _validate_order_url("http://localhost/")
 
 

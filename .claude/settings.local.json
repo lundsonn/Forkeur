@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(npm test *)",
-      "Bash(grep -n \"pass$\" /Users/geraudmarionvs/Forkeur/backend/scrapers/base.py /Users/geraudmarionvs/Forkeur/backend/routers/scrapers.py /Users/geraudmarionvs/Forkeur/backend/ws.py)"
+      "Bash(grep -n \"pass$\" /Users/geraudmarionvs/Forkeur/backend/scrapers/base.py /Users/geraudmarionvs/Forkeur/backend/routers/scrapers.py /Users/geraudmarionvs/Forkeur/backend/ws.py)",
+      "Bash(rm _probe_*.py && ls _probe_*.py 2>&1 | head -2)",
+      "Bash(rm -f _probe_*.py && ls | grep -i probe || echo \"GONE\")",
+      "Bash(python3 -c \"import ast; [ast.parse\\(open\\(f\\).read\\(\\), filename=f\\) for f in ['db.py','main.py','auth.py','scheduler.py','ssrf_guard.py','routers/claims.py','routers/scrapers.py','routers/data.py','scrapers/base.py']]\")",
+      "mcp__supabase__get_advisors"
     ]
   }
 }

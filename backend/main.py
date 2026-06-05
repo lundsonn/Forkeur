@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -46,8 +47,20 @@ class AuthMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+_REQUIRED_ENV = ("SUPABASE_URL", "SUPABASE_SERVICE_KEY", "JWT_SECRET", "ADMIN_PASSWORD")
+
+
+def _check_required_env() -> None:
+    missing = [k for k in _REQUIRED_ENV if not os.environ.get(k)]
+    if missing:
+        raise RuntimeError(
+            f"Missing required environment variables: {', '.join(missing)}"
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _check_required_env()
     import db
     # On a fresh process start, any run still marked 'running' is orphaned —
     # the previous process was killed and those runs will never finish.
@@ -57,16 +70,19 @@ async def lifespan(app: FastAPI):
         logging.getLogger(__name__).warning("Startup: marked %d orphaned runs as failed", cleaned)
     sched.start()
     yield
-    sched.shutdown()
+    # Graceful shutdown: let in-flight jobs finish (bounded by APScheduler's own
+    # job timeouts). wait=False previously killed scrapers mid-write.
+    sched.shutdown(wait=True)
 
 
 app = FastAPI(title="Forkeur Backend", lifespan=lifespan, docs_url=None, redoc_url=None)
 
+_cors_origins_env = os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://localhost:8000")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:8000"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=[o.strip() for o in _cors_origins_env.split(",") if o.strip()],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 app.add_middleware(AuthMiddleware)
 

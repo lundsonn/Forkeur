@@ -1,14 +1,15 @@
 from __future__ import annotations
 import asyncio
+import logging
 import math
 import os
 import random
 import re as _re
 from contextlib import asynccontextmanager
-from urllib.parse import urlparse
 from playwright.async_api import async_playwright, Browser, Page
 from playwright_stealth import Stealth as _Stealth
 
+_log = logging.getLogger("forkeur.scraper")
 _stealth = _Stealth()
 
 # Kept alive for the process lifetime when headed mode starts Xvfb automatically.
@@ -19,25 +20,7 @@ class CloudflareBlockedError(Exception):
     pass
 
 
-_SSRF_BLOCKLIST = _re.compile(
-    r'localhost|127\.|0\.0\.0\.0|169\.254\.|10\.\d+\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.'
-    r'|\.internal$|\.local$|oast\.|interactsh\.|burpcollaborator\.|canarytokens\.',
-    _re.IGNORECASE,
-)
-
-
-def is_safe_url(url: str) -> bool:
-    """Return True only if the URL is http/https and does not point at internal infrastructure."""
-    try:
-        p = urlparse(url)
-    except Exception:
-        return False
-    if p.scheme not in ("http", "https"):
-        return False
-    host = p.netloc.lower().split(":")[0]
-    if not host or "." not in host:
-        return False
-    return not bool(_SSRF_BLOCKLIST.search(host))
+from ssrf_guard import is_safe_url  # noqa: F401  (re-export for callers)
 
 
 _USER_AGENTS = [
@@ -210,8 +193,10 @@ async def wait_for_cf_clear(page: Page, timeout_s: int = 90) -> bool:
                 await page.evaluate(f"window.scrollBy(0, {scroll})")
                 await asyncio.sleep(random.uniform(0.1, 0.3))
                 await page.evaluate(f"window.scrollBy(0, -{scroll})")
-        except Exception:
-            pass
+        except Exception as exc:
+            # Expected when CF reloads mid-poll ("Execution context was destroyed").
+            # Demote to debug so real errors (memory, network) still surface.
+            _log.debug("wait_for_cf_clear tick error: %s", exc)
 
         await asyncio.sleep(random.uniform(0.4, 0.6))
 
@@ -263,9 +248,9 @@ async def browser_session(lang: str = "fr-BE", headed: bool = False):
             yield browser
         finally:
             try:
-                await browser.close()
-            except Exception:
-                pass
+                await asyncio.wait_for(browser.close(), timeout=15)
+            except Exception as exc:
+                _log.warning("headed browser close failed: %s", exc)
         return
 
     lock = _get_lock()
@@ -282,9 +267,9 @@ async def browser_session(lang: str = "fr-BE", headed: bool = False):
             _browser_refcount -= 1
             if _browser_refcount <= 0 and _shared_browser is not None:
                 try:
-                    await _shared_browser.close()
-                except Exception:
-                    pass
+                    await asyncio.wait_for(_shared_browser.close(), timeout=15)
+                except Exception as exc:
+                    _log.warning("shared browser close failed: %s", exc)
                 _shared_browser = None
                 _browser_refcount = 0
 

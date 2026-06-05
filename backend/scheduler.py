@@ -1,11 +1,13 @@
 from __future__ import annotations
 import asyncio
+import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from models import ScraperConfig, ScheduleConfigIn, ScheduleConfigOut
 from scrapers.base import CloudflareBlockedError
 import db
 
+_log = logging.getLogger("forkeur.scheduler")
 _scheduler = AsyncIOScheduler()
 _schedules: dict[str, ScheduleConfigIn] = {}
 
@@ -20,7 +22,9 @@ _BATCH_CRON = "0 5,11 * * *"  # 05:00 + 11:00 UTC (off-peak + lunch prep)
 
 
 def _noop(line: str) -> None:
-    pass
+    # Forwards scraper log-fn output into the scheduler logger so cron-driven
+    # runs are visible in journald instead of silently disappearing.
+    _log.info("%s", line)
 
 
 async def _run_scraper(platform: str) -> None:

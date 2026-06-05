@@ -74,7 +74,6 @@ function DishModal({
               alt={item.name}
               fill
               className="object-cover"
-              unoptimized
             />
             <button
               onClick={onClose}
@@ -488,7 +487,6 @@ export default function BasketSimulator({ menuItems, listings, phone, matchRate 
                                 width={36}
                                 height={36}
                                 className="rounded-lg shrink-0 object-cover"
-                                unoptimized
                               />
                             )}
                             <div className="min-w-0">

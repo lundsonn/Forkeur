@@ -44,6 +44,15 @@ SCRAPERS = {
 # Track currently running platforms (also read by scheduler to skip duplicates).
 _running: set[str] = set()
 _tasks: dict[str, asyncio.Task] = {}
+# Tasks not pinned to a platform (e.g. the batch job). Held strictly so the
+# event loop does not garbage-collect them mid-run.
+_bg_tasks: set[asyncio.Task] = set()
+_state_lock = asyncio.Lock()
+
+
+def _track_bg(task: asyncio.Task) -> None:
+    _bg_tasks.add(task)
+    task.add_done_callback(_bg_tasks.discard)
 # No semaphore needed — all Playwright scrapers share one browser instance
 # via base.browser_session(). Their asyncio sleeps/waits interleave naturally.
 
@@ -62,7 +71,7 @@ def _is_transient_error(e: Exception) -> bool:
 async def trigger_batch():
     """Trigger all scrapers concurrently (same as the scheduled batch job)."""
     import scheduler as _sched
-    asyncio.create_task(_sched._run_batch_all())
+    _track_bg(asyncio.create_task(_sched._run_batch_all()))
     return {"status": "started"}
 
 
@@ -70,13 +79,19 @@ async def trigger_batch():
 async def trigger_run(platform: str, body: RunTriggerIn | None = None):
     if platform not in SCRAPERS:
         raise HTTPException(404, f"Unknown platform: {platform}")
-    if platform in _running:
-        raise HTTPException(409, f"{platform} scraper already running")
+    async with _state_lock:
+        if platform in _running:
+            raise HTTPException(409, f"{platform} scraper already running")
+        _running.add(platform)
+    try:
+        run_id = db.create_run(platform)
+    except Exception:
+        async with _state_lock:
+            _running.discard(platform)
+        raise
 
     if body is None:
         body = RunTriggerIn()
-
-    run_id = db.create_run(platform)
     _ws_log = ws_mod.make_log_fn(run_id)
     _log_path = f"/tmp/fk_{platform}_{run_id[:8]}.log"
     def log_fn(msg: str) -> None:
@@ -90,7 +105,6 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
     timeout = _TIMEOUTS.get(platform, 60 * 60)
 
     async def _run():
-        _running.add(platform)
         try:
             config = ScraperConfig(
                 scrape_menus=body.scrape_menus,

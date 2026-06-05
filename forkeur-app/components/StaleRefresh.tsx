@@ -16,11 +16,11 @@ export default function StaleRefresh({ lastScrapedAt }: { lastScrapedAt: string 
     if (Date.now() - lastRefresh < COOLDOWN_MS) return
 
     localStorage.setItem(LS_KEY, String(Date.now()))
-    const secret = process.env.NEXT_PUBLIC_REFRESH_SECRET ?? ''
-    fetch('/api/refresh', {
-      method: 'POST',
-      headers: secret ? { 'x-refresh-secret': secret } : {},
-    }).catch(() => {})
+    fetch('/api/refresh', { method: 'POST' }).catch((err) => {
+      // Telemetry-only: don't surface to the user, but don't pretend it didn't
+      // happen either. Server-side same-origin + cooldown enforce the gate now.
+      console.warn('[StaleRefresh] trigger failed:', err)
+    })
   }, [lastScrapedAt])
 
   return null

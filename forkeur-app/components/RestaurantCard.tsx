@@ -34,7 +34,6 @@ export default function RestaurantCard({ restaurant, isLast, directBadge, maxFee
             width={48}
             height={48}
             className="rounded-lg object-cover shrink-0 bg-stone-100"
-            unoptimized
           />
         )}
         <div className="min-w-0 flex-1">

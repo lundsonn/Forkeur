@@ -1,5 +1,11 @@
 from unittest.mock import MagicMock, patch
 
+# Fixed valid UUIDs used by tests below — db.enqueue_decision /
+# db.merge_restaurants now reject non-UUID input as a defence against
+# PostgREST filter-injection.
+_S = "11111111-1111-1111-1111-111111111111"
+_L = "22222222-2222-2222-2222-222222222222"
+
 
 def test_load_restaurants_for_match_selects_fields():
     rows = [{"id": "1", "name": "Foo", "website": None, "phone": None,
@@ -24,7 +30,7 @@ def test_enqueue_decision_inserts_row():
         mock_get.return_value = client
         import db
         out = db.enqueue_decision(
-            survivor_id="a", loser_id="b", score=0.95,
+            survivor_id=_S, loser_id=_L, score=0.95,
             features={"name_sim": 0.95}, status="queued",
         )
     assert out == "d1"
@@ -38,59 +44,29 @@ def test_enqueue_decision_updates_existing_pair():
         mock_get.return_value = client
         import db
         out = db.enqueue_decision(
-            survivor_id="a", loser_id="b", score=0.99,
+            survivor_id=_S, loser_id=_L, score=0.99,
             features={"name_sim": 0.99}, status="queued",
         )
     assert out == "existing1"
     client.table.return_value.insert.assert_not_called()
 
 
-def test_merge_restaurants_moves_listings_and_deletes_loser():
+def test_merge_restaurants_calls_atomic_rpc():
+    """merge_restaurants delegates to the merge_restaurants_atomic Postgres RPC.
+
+    The previous Python-side multi-step implementation has been replaced with a
+    single transactional SQL function (migration 017). The test now verifies
+    that the helper hands off correctly with validated UUID arguments rather
+    than re-exercising the now-server-side merge logic.
+    """
     import db
-    calls = {"updated_listings": [], "deleted_restaurant": []}
-
-    survivor = {"id": "S", "phone": None, "website": "https://s.be",
-                "lat": None, "lng": None, "geo_source": None,
-                "cuisine": None, "image_url": None}
-    loser = {"id": "L", "phone": "021234567", "website": "https://l.be",
-             "lat": 50.8, "lng": 4.3, "geo_source": "uber_eats",
-             "cuisine": "Pizza", "image_url": "http://img"}
-
     client = MagicMock()
-
-    def table(name):
-        t = MagicMock()
-        if name == "restaurants":
-            def select(*a, **k):
-                sel = MagicMock()
-                def eq(col, val):
-                    e = MagicMock()
-                    e.limit.return_value.execute.return_value.data = (
-                        [survivor] if val == "S" else [loser]
-                    )
-                    e.execute.return_value.data = [survivor] if val == "S" else [loser]
-                    return e
-                sel.eq.side_effect = eq
-                return sel
-            t.select.side_effect = select
-            t.update.return_value.eq.return_value.execute.return_value.data = []
-            t.delete.return_value.eq.side_effect = lambda c, v: (
-                calls["deleted_restaurant"].append(v) or
-                MagicMock(execute=lambda: MagicMock(data=[]))
-            )
-        elif name == "platform_listings":
-            sel = t.select.return_value
-            sel.eq.return_value.execute.return_value.data = [
-                {"id": "PL1", "platform": "deliveroo", "last_scraped_at": None}
-            ]
-            t.update.return_value.eq.return_value.execute.return_value.data = []
-        return t
-
-    client.table.side_effect = table
     with patch("db.get_client", return_value=client):
-        db.merge_restaurants("S", "L")
-
-    assert "L" in calls["deleted_restaurant"]
+        db.merge_restaurants(_S, _L)
+    client.rpc.assert_called_once_with(
+        "merge_restaurants_atomic",
+        {"p_survivor": _S, "p_loser": _L},
+    )
 
 
 def test_upsert_restaurant_website_domain_lock():

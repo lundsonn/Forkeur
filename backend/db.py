@@ -631,67 +631,22 @@ def enqueue_decision(
     return res.data[0]["id"]
 
 
-def _fetch_restaurant(client, rid: str) -> dict | None:
-    res = client.table("restaurants").select(
-        "id, phone, website, lat, lng, geo_source, cuisine, image_url"
-    ).eq("id", rid).limit(1).execute()
-    return res.data[0] if res.data else None
-
-
 def merge_restaurants(survivor_id: str, loser_id: str) -> None:
-    """Merge loser into survivor: move listings, fill nulls, delete loser.
+    """Merge loser into survivor atomically via the merge_restaurants_atomic RPC.
 
-    Idempotent: if loser is already gone, this is a no-op. Same-platform
-    listing conflicts keep the row with the newer last_scraped_at.
+    The previous Python-side multi-step implementation could leave the DB in an
+    inconsistent state if any single .execute() failed mid-merge; the SQL
+    function wraps the entire sequence in one transaction with row locks.
     """
     if survivor_id == loser_id:
         return
+    s = _validate_uuid(survivor_id)
+    l = _validate_uuid(loser_id)
     client = get_client()
-    survivor = _fetch_restaurant(client, survivor_id)
-    loser = _fetch_restaurant(client, loser_id)
-    if survivor is None or loser is None:
-        return  # already merged / missing
-
-    # 1. Listings: detect same-platform conflicts.
-    surv_listings = client.table("platform_listings").select(
-        "id, platform, last_scraped_at"
-    ).eq("restaurant_id", survivor_id).execute().data
-    lose_listings = client.table("platform_listings").select(
-        "id, platform, last_scraped_at"
-    ).eq("restaurant_id", loser_id).execute().data
-
-    from postgrest.exceptions import APIError
-    surv_by_platform = {l["platform"]: l for l in surv_listings}
-    for ll in lose_listings:
-        clash = surv_by_platform.get(ll["platform"])
-        if clash is not None:
-            # Keep the row with the newer scrape; drop the other.
-            keep_loser = (ll.get("last_scraped_at") or "") > (clash.get("last_scraped_at") or "")
-            if not keep_loser:
-                client.table("platform_listings").delete().eq("id", ll["id"]).execute()
-                continue
-            client.table("platform_listings").delete().eq("id", clash["id"]).execute()
-        # Move the loser's listing to the survivor. Guard against any residual
-        # (restaurant_id, platform) collision the pre-scan didn't catch — on a
-        # unique-violation just drop the duplicate loser listing instead of
-        # aborting the whole merge.
-        try:
-            client.table("platform_listings").update(
-                {"restaurant_id": survivor_id}
-            ).eq("id", ll["id"]).execute()
-        except APIError:
-            client.table("platform_listings").delete().eq("id", ll["id"]).execute()
-
-    # 2. Fill survivor null fields from loser.
-    fill = {}
-    for k in ("phone", "website", "lat", "lng", "geo_source", "cuisine", "image_url"):
-        if not survivor.get(k) and loser.get(k):
-            fill[k] = loser[k]
-    if fill:
-        client.table("restaurants").update(fill).eq("id", survivor_id).execute()
-
-    # 3. Delete loser.
-    client.table("restaurants").delete().eq("id", loser_id).execute()
+    client.rpc(
+        "merge_restaurants_atomic",
+        {"p_survivor": s, "p_loser": l},
+    ).execute()
 
 
 def get_queued_decisions() -> list[dict]:
