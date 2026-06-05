@@ -16,8 +16,9 @@ _CRON_RE = re.compile(rf'^{_CRON_FIELD}\s+{_CRON_FIELD}\s+{_CRON_FIELD}\s+{_CRON
 def _validate_schedule(body: ScheduleConfigIn) -> None:
     if body.platform not in SCRAPERS:
         raise HTTPException(400, f"Unknown platform: {body.platform!r}")
-    if not _CRON_RE.match(body.cron.strip()):
-        raise HTTPException(400, f"Invalid cron expression: {body.cron!r}")
+    for part in body.cron.split("|"):
+        if not _CRON_RE.match(part.strip()):
+            raise HTTPException(400, f"Invalid cron expression: {body.cron!r}")
 
 
 @router.get("", response_model=list[ScheduleConfigOut])
