@@ -18,7 +18,8 @@ _ORDERING_HOSTS = re.compile(
     r'|app\.orda\.io'
     r'|orderingstack\.'
     r'|yummyfood\.be'
-    r'|order\.me/',
+    r'|order\.me/'
+    r'|app\.fritzy\.be',
     re.IGNORECASE,
 )
 
@@ -35,7 +36,9 @@ _JUNK_RE = re.compile(
     r'|bookings?\.'
     r'|\.pdf$'
     r'|linktr\.ee'
-    r'|digilink\.io',
+    r'|digilink\.io'
+    r'|bit\.ly/'
+    r'|sprd\.li/',
     re.IGNORECASE,
 )
 

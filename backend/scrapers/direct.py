@@ -227,9 +227,10 @@ async def _enrich_existing(browser, log: Callable) -> int:
             # If no ordering/delivery signals, treat as plain website link
             if not (analysis['has_delivery'] or analysis['order_url']):
                 url_type = 'website'
-            # Chain restaurants have corporate/global websites — never claim they allow
-            # direct ordering or show a local menu. Keep the link but degrade to 'website'.
-            if r.get('is_chain'):
+            # Chain restaurants with corporate/global websites should not claim ordering.
+            # Exception: genuine ordering platform URLs (Odoo, sq-menu with code, etc.)
+            # are already classified as 'ordering' and must not be downgraded.
+            if r.get('is_chain') and url_type != 'ordering':
                 url_type = 'website'
 
             row = {
