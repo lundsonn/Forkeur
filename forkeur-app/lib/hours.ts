@@ -40,6 +40,15 @@ export function getOpenStatus(hours: OpeningHours | null, now = new Date()): Ope
     }
   }
 
+  // Today's slot exists but hasn't started yet → opens later today
+  if (slot) {
+    const [open, close] = slot.map(toMinutes)
+    const crossesMidnight = close < open
+    if ((!crossesMidnight && currentMin < open) || (crossesMidnight && currentMin >= close && currentMin < open)) {
+      return { status: 'closed', opensAt: slot[0] }
+    }
+  }
+
   // Closed today — find next opening
   for (let i = 1; i <= 7; i++) {
     const nextKey = DAYS[(now.getDay() + i) % 7]
