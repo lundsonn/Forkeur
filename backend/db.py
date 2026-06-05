@@ -385,6 +385,8 @@ def get_last_successful_run(platform: str) -> dict | None:
 
 def get_last_successful_run_batch(platforms: list[str]) -> dict[str, dict]:
     """Single query for last successful run across multiple platforms."""
+    if not platforms:
+        return {}
     rows = (
         get_client()
         .table("scraper_runs")
@@ -769,7 +771,7 @@ def load_menu_items_for_match() -> dict[str, set[str]]:
     client = get_client()
     res = (
         client.table("menu_items")
-        .select("name, platform_listings(restaurant_id)")
+        .select("title, platform_listings(restaurant_id)")
         .execute()
     )
     result: dict[str, set[str]] = {}
@@ -778,7 +780,7 @@ def load_menu_items_for_match() -> dict[str, set[str]]:
         rid = str(rid_obj.get("restaurant_id", "")) if isinstance(rid_obj, dict) else ""
         if not rid or rid == "None":
             continue
-        raw = row.get("name") or ""
+        raw = row.get("title") or ""
         # normalize: strip accents, lowercase, keep [a-z0-9]
         nfkd = _ud.normalize("NFD", raw)
         no_acc = "".join(ch for ch in nfkd if _ud.category(ch) != "Mn")
@@ -789,17 +791,31 @@ def load_menu_items_for_match() -> dict[str, set[str]]:
 
 
 def load_slugs_for_match() -> dict[str, list[str]]:
-    """Return {restaurant_id: [slug, ...]} from platform_listings."""
+    """Return {restaurant_id: [url_path_segment, ...]} from platform_listings.url.
+
+    Extracts the last meaningful path segment from each listing URL so the
+    location-token detector can read e.g. 'sushi-palace-ixelles' from a
+    Deliveroo/UberEats URL. No 'slug' column exists on platform_listings.
+    """
+    from urllib.parse import urlparse
     client = get_client()
     res = (
         client.table("platform_listings")
-        .select("restaurant_id, slug")
-        .not_.is_("slug", "null")
+        .select("restaurant_id, url")
+        .not_.is_("url", "null")
         .execute()
     )
     result: dict[str, list[str]] = {}
     for row in (res.data or []):
-        rid = str(row["restaurant_id"])
-        if row["slug"]:
-            result.setdefault(rid, []).append(row["slug"])
+        rid = str(row.get("restaurant_id") or "")
+        url = row.get("url") or ""
+        if not rid or rid == "None" or not url:
+            continue
+        try:
+            path = urlparse(url).path.rstrip("/")
+            segment = path.split("/")[-1] if path else ""
+            if segment and len(segment) >= 3:
+                result.setdefault(rid, []).append(segment)
+        except Exception:
+            continue
     return result
