@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { checkSameOrigin } from '@/lib/same-origin'
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8000'
 const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET_KEY ?? ''
+// Google's own guidance: 0.5 is "may be a bot"; legitimate humans score ≥0.7.
+const RECAPTCHA_MIN_SCORE = Number(process.env.RECAPTCHA_MIN_SCORE ?? '0.7')
 
 async function verifyRecaptcha(token: string): Promise<boolean> {
   if (!RECAPTCHA_SECRET) return true
@@ -11,14 +14,25 @@ async function verifyRecaptcha(token: string): Promise<boolean> {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: `secret=${RECAPTCHA_SECRET}&response=${token}`,
     })
-    const data = await res.json() as { success: boolean; score?: number }
-    return data.success && (data.score ?? 1) >= 0.5
+    const data = (await res.json()) as { success: boolean; score?: number }
+    return data.success && (data.score ?? 1) >= RECAPTCHA_MIN_SCORE
   } catch {
     return false
   }
 }
 
 export async function POST(req: NextRequest) {
+  // Same-origin gate first: this is a state-changing endpoint and the only
+  // legitimate caller is OwnerContactForm on the public site.
+  const reason = checkSameOrigin(req)
+  if (reason) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+
+  // Fail-closed on reCAPTCHA in production — a missing secret previously
+  // disabled bot protection silently.
+  if (!RECAPTCHA_SECRET && process.env.NODE_ENV !== 'development') {
+    return NextResponse.json({ error: 'captcha not configured' }, { status: 503 })
+  }
+
   try {
     const raw = await req.json()
 

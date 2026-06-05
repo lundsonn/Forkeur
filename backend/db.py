@@ -36,6 +36,11 @@ def get_client() -> Client:
 def _is_junk(name: str) -> bool:
     """Return True if the name looks like a scraped UI element, not a real restaurant."""
     s = name.strip().lower()
+    # Cap input length before running the alternation regex — the `[\s-]?\d`
+    # branches can backtrack quadratically on adversarial input. Real
+    # restaurant names never exceed a few hundred characters.
+    if len(s) > 300:
+        return False
     return bool(re.match(
         r'^(around\s+\d|pre[\s-]?order\s+\d|pré[\s-]?commande\s+\d'
         r'|article\s+offert|\d+e?\s*à\s*moiti|\d+\s*%\s+off|-\s*\d+\s*%'
@@ -649,14 +654,15 @@ def merge_restaurants(survivor_id: str, loser_id: str) -> None:
     ).execute()
 
 
-def get_queued_decisions() -> list[dict]:
-    """Pending review-queue rows, newest first."""
+def get_queued_decisions(limit: int = 100, offset: int = 0) -> list[dict]:
+    """Pending review-queue rows, newest first. Bounded to prevent OOM."""
     client = get_client()
     res = (
         client.table("restaurant_match_decisions")
         .select("*")
         .eq("status", "queued")
         .order("created_at", desc=True)
+        .range(offset, offset + limit - 1)
         .execute()
     )
     return res.data

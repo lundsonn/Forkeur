@@ -1,6 +1,6 @@
 import asyncio
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from models import RestaurantOut, MenuItemOut
 import db
@@ -10,7 +10,11 @@ router = APIRouter(prefix="/data", tags=["data"], dependencies=[Depends(require_
 
 
 @router.get("/restaurants", response_model=list[RestaurantOut])
-async def list_restaurants(limit: int = 100, offset: int = 0, search: str | None = None):
+async def list_restaurants(
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    search: str | None = Query(None, max_length=100),
+):
     return await asyncio.to_thread(
         db.get_restaurants, limit=limit, offset=offset, search=search
     )
@@ -27,8 +31,11 @@ class ResolveIn(BaseModel):
 
 
 @router.get("/match-queue")
-async def match_queue():
-    return await asyncio.to_thread(db.get_queued_decisions)
+async def match_queue(
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+):
+    return await asyncio.to_thread(db.get_queued_decisions, limit=limit, offset=offset)
 
 
 @router.post("/match-queue/{decision_id}/resolve")

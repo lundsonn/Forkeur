@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import html
+import ipaddress
 import os
 import time
 from collections import deque
@@ -13,6 +15,43 @@ from pydantic import BaseModel, EmailStr, HttpUrl, model_validator
 
 import db
 from routers.auth_router import require_auth
+
+
+def _parse_trusted_proxies() -> list:
+    """TRUSTED_PROXIES is a comma-separated list of CIDRs whose X-Forwarded-For
+    header is honoured. Anything else: we use the socket peer IP directly so
+    spoofed XFF cannot defeat the per-IP rate limit."""
+    raw = os.environ.get("TRUSTED_PROXIES", "")
+    nets = []
+    for item in raw.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        try:
+            nets.append(ipaddress.ip_network(item, strict=False))
+        except ValueError:
+            continue
+    return nets
+
+
+_TRUSTED_PROXIES = _parse_trusted_proxies()
+
+
+def _client_ip(request: Request) -> str:
+    peer = (request.client.host if request.client else "?") or "?"
+    if not _TRUSTED_PROXIES:
+        return peer
+    try:
+        peer_addr = ipaddress.ip_address(peer)
+    except ValueError:
+        return peer
+    if not any(peer_addr in net for net in _TRUSTED_PROXIES):
+        return peer
+    fwd = request.headers.get("x-forwarded-for", "")
+    if not fwd:
+        return peer
+    first = fwd.split(",")[0].strip()
+    return first or peer
 
 router = APIRouter(prefix="/claims", tags=["claims"])
 
@@ -56,20 +95,27 @@ def _notify_new_claim(body: ClaimIn, claim_id: str) -> None:
     admin_base = os.getenv("ADMIN_DASHBOARD_URL", "").rstrip("/")
     type_labels = {"add_url": "Add URL", "new_listing": "New listing", "remove": "Remove"}
     restaurant = body.restaurant_name_free or str(body.restaurant_id or "unknown")
-    subject = f"[Forkeur] New owner inquiry — {type_labels.get(body.inquiry_type, body.inquiry_type)}: {restaurant}"
-    review_link = f"<p><a href='{admin_base}/claims'>Review in admin →</a></p>" if admin_base else ""
-    html = (
-        f"<p><strong>Type:</strong> {body.inquiry_type}</p>"
-        f"<p><strong>Restaurant:</strong> {restaurant}</p>"
-        f"<p><strong>Email:</strong> {body.owner_email}</p>"
-        + (f"<p><strong>URL:</strong> {body.direct_order_url}</p>" if body.direct_order_url else "")
+    # Escape every interpolated value — user input ends up inside an HTML email
+    # template, so an injected </td><script>… would be rendered by most clients.
+    e_type = html.escape(type_labels.get(body.inquiry_type, body.inquiry_type))
+    e_restaurant = html.escape(restaurant)
+    e_email = html.escape(body.owner_email)
+    e_url = html.escape(str(body.direct_order_url)) if body.direct_order_url else ""
+    e_admin_base = html.escape(admin_base, quote=True)
+    subject = f"[Forkeur] New owner inquiry — {e_type}: {e_restaurant}"
+    review_link = f'<p><a href="{e_admin_base}/claims">Review in admin →</a></p>' if admin_base else ""
+    body_html = (
+        f"<p><strong>Type:</strong> {e_type}</p>"
+        f"<p><strong>Restaurant:</strong> {e_restaurant}</p>"
+        f"<p><strong>Email:</strong> {e_email}</p>"
+        + (f"<p><strong>URL:</strong> {e_url}</p>" if e_url else "")
         + review_link
     )
     try:
         httpx.post(
             "https://api.resend.com/emails",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={"from": "Forkeur <noreply@forkeur.be>", "to": [notify_to], "subject": subject, "html": html},
+            json={"from": "Forkeur <noreply@forkeur.be>", "to": [notify_to], "subject": subject, "html": body_html},
             timeout=5,
         )
     except Exception:
@@ -94,13 +140,7 @@ def _rate_check(ip: str) -> None:
 
 @router.post("", status_code=201)
 async def submit_claim(body: ClaimIn, request: Request):
-    ip = (request.client.host if request.client else "?") or "?"
-    # X-Forwarded-For from a trusted proxy takes precedence — first hop is the
-    # original client.
-    fwd = request.headers.get("x-forwarded-for", "")
-    if fwd:
-        ip = fwd.split(",")[0].strip() or ip
-    _rate_check(ip)
+    _rate_check(_client_ip(request))
 
     # Vet the URL before persisting — previously only checked at approval time,
     # so the DB could accumulate malicious or internal URLs.

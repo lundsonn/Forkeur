@@ -17,14 +17,15 @@ import httpx
 logger = logging.getLogger(__name__)
 
 _RESEND_URL = "https://api.resend.com/emails"
-_DEFAULT_TO = "geraud.marion@gmail.com"
 _DEFAULT_FROM = "Forkeur Alerts <onboarding@resend.dev>"
 
 
 def _cfg() -> tuple[str, str, str]:
     api_key = os.getenv("RESEND_API_KEY", "")
     from_addr = os.getenv("ALERT_FROM", _DEFAULT_FROM)
-    to_addr = os.getenv("ALERT_TO", _DEFAULT_TO)
+    # No fallback recipient: a hardcoded personal email here would silently
+    # route production alerts to one person if ALERT_TO is unset.
+    to_addr = os.getenv("ALERT_TO", "")
     return api_key, from_addr, to_addr
 
 
@@ -32,6 +33,9 @@ def _send(subject: str, html: str) -> None:
     api_key, from_addr, to_addr = _cfg()
     if not api_key:
         logger.warning("alerting: RESEND_API_KEY not set, skipping email")
+        return
+    if not to_addr:
+        logger.warning("alerting: ALERT_TO not set, skipping email")
         return
     try:
         resp = httpx.post(

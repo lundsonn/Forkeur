@@ -99,7 +99,10 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
         try:
             with open(_log_path, "a") as _f:
                 import time as _t
-                _f.write(f"{_t.strftime('%H:%M:%S')} {msg}\n")
+                # Collapse newlines so a scraper exception cannot inject fake
+                # log lines into the audit file via embedded "\n".
+                safe = msg.replace("\r", " ").replace("\n", " | ")
+                _f.write(f"{_t.strftime('%H:%M:%S')} {safe}\n")
         except Exception:
             pass
     timeout = _TIMEOUTS.get(platform, 60 * 60)
