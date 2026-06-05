@@ -53,10 +53,26 @@ def _canonical(name: str) -> str:
     name = name.strip()
     name = re.sub(r"[^ -ɏḀ-ỿ\s\d'\"\-&\(\)\.!,]", "", name).strip()
     name = _SUFFIX_RE.sub("", name).strip()
-    # Strip trailing city noise — "brussels", "bruxelles", "bxl" at end are
-    # not differentiators within Brussels and inflate name distance.
+    # Strip trailing city noise — not a differentiator within Brussels.
     name = re.sub(r"\s+(?:brussels|bruxelles|bxl|bsl)\s*$", "", name, flags=re.IGNORECASE).strip()
+    # Strip trailing property labels — same restaurant markets as "Halal/Bio/Vegan"
+    # on one platform but not another; these are not branch identifiers.
+    name = re.sub(r"\s+(?:halal|bio|vegan|végétalien|casher|kosher)\s*$", "", name, flags=re.IGNORECASE).strip()
     return name
+
+
+def _normalize_slug(slug: str) -> str:
+    """Normalize a URL slug for cross-platform comparison.
+
+    Strips hyphens/underscores, accents, city noise, then keeps [a-z0-9].
+    'barbq-brasserie' → 'barbqbrasserie'; 'wok-up-bruxelles' → 'wokup'.
+    Returns '' for slugs that collapse to nothing meaningful (< 4 chars).
+    """
+    s = _strip_accents(slug.lower())
+    # Strip city noise embedded in slugs
+    s = re.sub(r"[\-_]?(?:brussels|bruxelles|bxl|bsl)[\-_]?", "", s)
+    s = re.sub(r"[^a-z0-9]", "", s)
+    return s if len(s) >= 4 else ""
 
 
 @lru_cache(maxsize=None)
@@ -174,6 +190,7 @@ class MatchFeatures:
     menu_overlap: float | None      # Jaccard overlap; None if either side < 3 items
     soft_geo_dist: float | None     # metres; one venue-grade + one has any coords
     is_chain_name: bool             # normalized name appears 3+ times in corpus
+    slug_match: bool                # normalized URL slug shared across platforms
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -241,6 +258,21 @@ def score_pair(
         or significant_first_token(b["name"]) in (chain_names or set())
     )
 
+    # URL slug match — shared normalized slug across different platforms means
+    # the same restaurant slug was registered on both (e.g. "barbq-brasserie"
+    # on Deliveroo and Takeaway, or "wokup" on UberEats and Deliveroo).
+    a_slug_keys: set[str] = set()
+    b_slug_keys: set[str] = set()
+    for raw_slug in (slugs.get(str(a["id"]), []) if slugs else []):
+        key = _normalize_slug(raw_slug)
+        if key:
+            a_slug_keys.add(key)
+    for raw_slug in (slugs.get(str(b["id"]), []) if slugs else []):
+        key = _normalize_slug(raw_slug)
+        if key:
+            b_slug_keys.add(key)
+    slug_match = bool(a_slug_keys and b_slug_keys and a_slug_keys & b_slug_keys)
+
     return MatchFeatures(
         name_sim=name_sim,
         website_match=website_match,
@@ -252,6 +284,7 @@ def score_pair(
         menu_overlap=menu_overlap,
         soft_geo_dist=soft_geo_dist,
         is_chain_name=is_chain_name,
+        slug_match=slug_match,
     )
 
 
@@ -306,6 +339,7 @@ def decide(f: MatchFeatures) -> Decision:
         or (f.geo_dist is not None and f.geo_dist <= GEO_CONFIRM_M)
         or (f.website_match and f.name_sim >= NAME_SIM_WEBSITE_AUTO)
         or (f.menu_overlap is not None and f.menu_overlap >= MENU_OVERLAP_CONFIRM)
+        or f.slug_match  # same URL slug on different platforms = same venue
     )
 
     # Chain guard: don't auto-merge or queue chain branches without evidence

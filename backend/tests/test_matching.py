@@ -447,6 +447,7 @@ def _f(**kw) -> matching.MatchFeatures:
         menu_overlap=None,
         soft_geo_dist=None,
         is_chain_name=False,
+        slug_match=False,
     )
     defaults.update(kw)
     return matching.MatchFeatures(**defaults)
@@ -816,9 +817,49 @@ def test_match_features_to_dict_has_all_fields():
     expected = {
         "name_sim", "website_match", "phone_match", "geo_dist",
         "cuisine_match", "cuisine_conflict", "location_conflict",
-        "menu_overlap", "soft_geo_dist", "is_chain_name",
+        "menu_overlap", "soft_geo_dist", "is_chain_name", "slug_match",
     }
     assert expected.issubset(d.keys())
+
+
+# ---------------------------------------------------------------------------
+# Slug match signal
+# ---------------------------------------------------------------------------
+
+def test_slug_match_fires_on_shared_normalized_slug():
+    a = _r("Bar BQ Brasserie", id="a1")
+    b = _r("Barbq Brasserie", id="b1")
+    slugs = {"a1": ["barbq-brasserie"], "b1": ["barbq-brasserie"]}
+    f = matching.score_pair(a, b, slugs=slugs)
+    assert f.slug_match is True
+
+
+def test_slug_match_strips_brussels_suffix():
+    a = _r("Wok Up", id="a1")
+    b = _r("WokUp", id="b1")
+    slugs = {"a1": ["wok-up-bruxelles"], "b1": ["wokup"]}
+    f = matching.score_pair(a, b, slugs=slugs)
+    assert f.slug_match is True
+
+
+def test_slug_match_false_for_different_slugs():
+    a = _r("Pizza Roma", id="a1")
+    b = _r("Pizza Napoli", id="b1")
+    slugs = {"a1": ["pizza-roma"], "b1": ["pizza-napoli"]}
+    f = matching.score_pair(a, b, slugs=slugs)
+    assert f.slug_match is False
+
+
+def test_slug_match_auto_merges_via_strong_confirm():
+    # slug_match = True should push past chain guard into AUTO_MERGE
+    f = _f(name_sim=0.96, slug_match=True, is_chain_name=False)
+    assert matching.decide(f) == matching.Decision.AUTO_MERGE
+
+
+def test_halal_suffix_stripped_from_canonical():
+    # "Express Pizza Halal" → "Express Pizza" after canonical
+    import matching as m
+    assert m.normalize_name("Express Pizza Halal") == m.normalize_name("Express Pizza")
 
 
 def test_block_candidates_groups_by_first_token_and_domain():
