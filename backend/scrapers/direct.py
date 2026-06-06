@@ -17,7 +17,7 @@ from scrapers.direct_classify import classify_url, is_junk_url
 import db
 
 # Re-check existing direct listings older than this many days
-_RESCRAPE_DAYS = 30
+_RESCRAPE_DAYS = 10
 
 # ── Belgian phone regex (mobile + landline) ───────────────────────────────────
 _PHONE_RE = re.compile(
