@@ -16,9 +16,9 @@ Context: batch wall = slowest scraper. A (parallelize ube/del menu loop) = big w
 
 ### Matcher improvements (2026-06-05 analysis)
 
-- [ ] **[deliveroo.py] Fix Deliveroo geo** — scraper stores zone centroid, not venue coords → `geo_source='deliveroo'` excluded from geo scoring → ~40% of listings can't confirm/veto via distance. Investigate if Deliveroo API response contains venue lat/lng; store it + set `geo_source='deliveroo_venue'`. Biggest single matcher improvement.
-- [ ] **[matching.py] Add cuisine veto** — cuisine stored in features JSONB but never used in `decide()`. "Sushi Palace" (sushi) vs "Sushi Palace" (pizza) → false merge. Add: if both have cuisine and cuisines don't overlap → SEPARATE.
-- [ ] **[matching.py] Add postal code / neighborhood blocking** — common names like "Le Grill" can appear across Brussels. Block or veto by arrondissement/postal code to cut false positives.
+- [x] **[deliveroo.py] Fix Deliveroo geo** — DONE. `deliveroo_venue` geo source implemented; venue coords extracted via JSON-LD/__NEXT_DATA__ from menu pages.
+- [x] **[matching.py] Add cuisine veto** — DONE. `_cuisine_conflict()` + `cuisine_conflict` in `decide()`.
+- [x] **[matching.py] Add postal code / neighborhood blocking** — DONE. `_location_tokens()` + `location_conflict` in `decide()`.
 - [ ] **[matching.py] Improve phone coverage** — phone sparsely populated; phone match rarely fires. Investigate enriching `restaurants.phone` from scraper data (UberEats/Deliveroo API responses often include contact info).
 
 ---
@@ -27,22 +27,22 @@ Context: batch wall = slowest scraper. A (parallelize ube/del menu loop) = big w
 
 ### 🔴 HIGH — Convergent (2+ agents)
 
-- [ ] **[db.py:85-195] upsert_restaurant full-table-scan** — Step 2b fetches all non-null-website restaurants, Python domain-compares. 500 restaurants × 7 round-trips = 3500/run. Fix: Postgres generated domain column + unique index; batch-load into in-memory dict once per run. [Agents C+D]
-- [ ] **[ubereats/deliveroo/direct_menu/db.py] N+1 DB writes** — serial upsert per restaurant (600+ trips/200 rest); `prune_stale_menu_items` N+1 delete loop blocks event loop (201 trips); `merge_restaurants` one UPDATE per listing. Fix: bulk `.upsert(list)` / single `.in_()` delete; wrap sync DB in `asyncio.to_thread`. [Agents A,B,D]
-- [ ] **[matching.py:129] score_pair re-normalizes names every pair** — 50 pairs = 50× wasted normalization. Fix: precompute `_norm_name`/`domain_of`/`phone_digits` in `block_candidates`. [Agent C]
+- [x] **[db.py:85-195] upsert_restaurant full-table-scan** — DONE. `_domain_cache` module-level dict, loaded once per run, invalidated on website patch.
+- [ ] **[ubereats/deliveroo/direct_menu/db.py] N+1 DB writes** — `prune_stale_menu_items` N+1 delete loop still pending. `upsert_listing` fixed (atomic upsert). `merge_restaurants` RPC. Still: bulk prune + wrap sync DB in `asyncio.to_thread`.
+- [x] **[matching.py:129] score_pair re-normalizes names every pair** — DONE. `@lru_cache(maxsize=None)` on `normalize_name`, `normalize_match_key`, `domain_of`, `phone_digits`; cache warmed in `run_sync`.
 
 ### 🔴 HIGH — Single-agent
 
-- [ ] **[routers/scrapers.py:44-137] TOCTOU race on `_running`** — 409 guard checks `_running` but `.add` happens inside task body across `await` → double-launch possible. Fix: `_running.add` synchronously in handler before `create_task`.
-- [ ] **[scheduler.py:31-74] Scheduled runs invisible to stop endpoint** — `_run_scraper` never calls `_running.add/discard` → status shows "idle". Fix: add/discard in try/finally; store task in `_tasks`.
-- [ ] **[db.py:305-320] get_last_run_per_platform 8 sequential round-trips** — 160-400ms per `/status` poll. Fix: single `GROUP BY MAX` or `.in_()` + reduce.
+- [x] **[routers/scrapers.py:44-137] TOCTOU race on `_running`** — DONE. `_state_lock` + synchronous `_running.add` before `create_task`.
+- [x] **[scheduler.py:31-74] Scheduled runs invisible to stop endpoint** — DONE. `_running.add/discard` + `_tasks[platform] = asyncio.current_task()` in try/finally.
+- [x] **[db.py:305-320] get_last_run_per_platform 8 sequential round-trips** — DONE. Single `.in_()` + `.limit(140)` query.
 - [ ] **[odoo_pos.py:67-84] on_response race** — fires per sub-resource; `done.is_set()` race before json decode. Fix: re-check before decode.
 - [ ] **[db.py:107-129] _found re-SELECTs already-fetched row** — up to 6 extra trips. Fix: reuse fetched row.
 
 ### 🟡 MED — UberEats
 
 - [ ] **[ubereats.py:300-311] 3 separate writes/restaurant** — no cross-worker batch. Fix: composite batched helper.
-- [ ] **[ubereats.py:692-721] `import re` inside parse fns** — per-call `sys.modules` lookup. Fix: move to module top.
+- [x] **[ubereats.py:692-721] `import re` inside parse fns** — DONE. Moved to module top.
 - [ ] **[ubereats.py:211-246] scroll loop 18s/restaurant** — card already in DOM from prior worker. Fix: full scroll once on worker open/recycle.
 
 ### 🟡 MED — Deliveroo
@@ -58,35 +58,35 @@ Context: batch wall = slowest scraper. A (parallelize ube/del menu loop) = big w
 
 ### 🟡 MED — dom_menu / direct_menu
 
-- [ ] **[generic.py:195] Unconditional `sleep(2)` per site** — 894s across 447 sites. Fix: `wait_for_load_state("networkidle", 5000)`.
-- [ ] **[generic.py:191] `block_media=False`** — loads unused images. Fix: flip True.
-- [ ] **[direct_menu.py:438-474] Entire `run()` synchronous serial httpx** — Odoo 35s timeout blocks thread. Fix: async + AsyncClient + Semaphore(10).
+- [x] **[generic.py:195] Unconditional `sleep(2)` per site** — DONE. `wait_for_load_state("networkidle", timeout=5000)` + 0.3s fallback.
+- [ ] **[generic.py:191] `block_media=False`** — loads unused images. Fix: flip True. (Kept due to layout comment — verify safe.)
+- [x] **[direct_menu.py:438-474] Entire `run()` synchronous serial httpx** — DONE. Async + `Semaphore(10)` + `asyncio.to_thread` per listing.
 - [ ] **[odoo_pos.py:86-91] 12s unconditional wait on dead SPA** — remove/replace with networkidle.
 
 ### 🟡 MED — matching / db (matcher path)
 
-- [ ] **[matching.py:196-216] Repeated `_canonical`/`_strip_accents` + per-pair tuple alloc** — precompute.
-- [ ] **[db.py:198-213] upsert_listing SELECT-then-UPDATE/INSERT** — Fix: `.upsert(on_conflict=...)`.
+- [x] **[matching.py:196-216] Repeated `_canonical`/`_strip_accents` + per-pair tuple alloc** — DONE. lru_cache on normalize_name covers this.
+- [x] **[db.py:198-213] upsert_listing SELECT-then-UPDATE/INSERT** — DONE. Atomic `.upsert(on_conflict="restaurant_id,platform")`.
 - [ ] **[db.py:580-605] enqueue_decision read-modify-write per pair** — Fix: batch.
 - [ ] **[match.py:61-75] Auto-merge 200×(5-9) = 1000-1800 round-trips** — Fix: bulk operation.
 
 ### 🟡 MED — routers / scheduler / main
 
-- [ ] **[routers/scrapers.py:125-133] open+write+close per log line** — 500 lines = 1500 syscalls; /tmp logs accumulate. Fix: open once, close in finally.
-- [ ] **[routers/scrapers.py:149-151] `inspect.signature` per invocation in retry loop** — Fix: precompute.
-- [ ] **[routers/scrapers.py:213-226] /health 3 sequential get_last_successful_run** — Fix: single `.in_()`.
+- [x] **[routers/scrapers.py:125-133] open+write+close per log line** — DONE. `_log_fh` opened once, `flush()` per write, closed in finally.
+- [x] **[routers/scrapers.py:149-151] `inspect.signature` per invocation in retry loop** — DONE. Precomputed before loop.
+- [x] **[routers/scrapers.py:213-226] /health 3 sequential get_last_successful_run** — DONE. `get_last_successful_run_batch()` single query.
 - [ ] **[routers/data.py:24-26] /match-queue unbounded, sync on event loop** — Fix: limit/offset + `to_thread`.
-- [ ] **[scheduler.py:259-260] shutdown(wait=False) orphans Playwright procs** — stuck `status="running"` rows. Fix: `wait=True` or cancel `_tasks` first.
-- [ ] **[db.py:400-420] get_restaurants no order() + get_menu_items no limit** — non-deterministic pagination; 60KB+ payloads.
+- [x] **[scheduler.py:259-260] shutdown(wait=False) orphans Playwright procs** — DONE. `wait=True`.
+- [x] **[db.py:400-420] get_restaurants no order() + get_menu_items no limit** — DONE. `order("id")` + `.limit(2000)`.
 - [ ] **[db.py:9-18] Supabase singleton httpx pool never closed, not thread-safe init** — Fix: `db.close()` in lifespan.
 - [ ] **[main.py:24-41] AuthMiddleware sync `verify_token` per request** — Fix: confirm CPU-only or move to `to_thread`.
 
 ### 🟢 LOW — Quick wins / cleanup
 
-- [ ] **[ubereats.py:727-809] `_parse_ue_menu` dead code** — ~80 lines; live path is `_parse_menu_items`. Delete.
-- [ ] **[ubereats.py:94-107] feed_pages accumulates 4-10MB raw JSON** — Fix: parse in `on_response`, discard.
-- [ ] **[base.py:148-158] `_move_mouse_human` up to 1575 CDP round-trips** — Fix: built-in `page.mouse.move(x,y,steps=N)`.
-- [ ] **[base.py:215-266] `_browser_lock` lazy-init race** — Fix: init `asyncio.Lock()` at import.
+- [x] **[ubereats.py:727-809] `_parse_ue_menu` dead code** — DONE. Deleted.
+- [x] **[ubereats.py:94-107] feed_pages accumulates 4-10MB raw JSON** — DONE. Extracts only feedItems in `on_response`.
+- [x] **[base.py:148-158] `_move_mouse_human` up to 1575 CDP round-trips** — DONE. Uses `page.mouse.move(x,y,steps=N)`.
+- [x] **[base.py:215-266] `_browser_lock` lazy-init race** — DONE. `asyncio.Lock()` at module level.
 - [ ] **[db.py vs matching.py] `_canonical` duplicated with divergence** — db normalizes apostrophes, matching doesn't → correctness risk. Fix: shared module.
 - [ ] **[ubereats:66-68,284,451] Polling `asyncio.sleep(0.5)` + deprecated `get_event_loop().time()`** — Fix: `asyncio.Event` + `wait_for`.
 - [ ] **Dead piki host 15s timeout** — replace with fast-fail.

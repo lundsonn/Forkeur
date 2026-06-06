@@ -93,14 +93,14 @@ def _normalize_slug(slug: str) -> str:
     return s if len(s) >= 4 else ""
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=2048)
 def normalize_match_key(name: str) -> str:
     """Aggressive key: canonical -> lower -> strip accents -> keep [a-z0-9] only."""
     c = _strip_accents(_canonical(name)).lower()
     return re.sub(r"[^a-z0-9]", "", c)
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=2048)
 def normalize_name(name: str) -> str:
     """Looser normalize for fuzzy ratio: canonical, lower, accent-free, single spaces."""
     c = _strip_accents(_canonical(name)).lower()
@@ -134,7 +134,7 @@ def _distinctive_remainder(name: str) -> tuple[str, bool]:
     return " ".join(toks[i:]), had_generic
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=2048)
 def domain_of(url: str | None) -> str | None:
     """Registrable-ish domain: strip scheme + leading www. None if not a URL."""
     if not url or "." not in url:
@@ -152,7 +152,7 @@ def domain_of(url: str | None) -> str | None:
     return ".".join(parts[-2:]) if len(parts) >= 2 else None
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=2048)
 def phone_digits(phone: str | None) -> str | None:
     """Reduce to comparable digits: drop +32 / leading 0 country noise."""
     if not phone:

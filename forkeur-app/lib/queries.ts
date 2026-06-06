@@ -7,6 +7,7 @@ import { normalizeTitle } from '@/lib/normalize-title'
 export { normalizeTitle }
 
 const STALE_THRESHOLD_MS = 72 * 60 * 60 * 1000
+const EMOJI_RE = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu
 
 export type RestaurantSummary = {
   id: string
@@ -82,7 +83,6 @@ type RawListingShort = {
   platform: string
   delivery_fee: number | null
   eta_min: number | null
-  rating: number | null
   url_type: string | null
   is_available: boolean | null
   opening_hours: OpeningHours | null
@@ -186,7 +186,7 @@ export async function getRestaurants(): Promise<{
     .from('restaurants')
     .select(`
       id, name, cuisine, neighborhood, lat, lng, order_url, image_url, is_chain,
-      platform_listings ( platform, delivery_fee, eta_min, rating, url_type, is_available, opening_hours, last_scraped_at )
+      platform_listings ( platform, delivery_fee, eta_min, url_type, is_available, opening_hours, last_scraped_at )
     `)
 
   if (error) throw new Error(`getRestaurants: ${error.message}`)
@@ -212,12 +212,6 @@ export async function getRestaurants(): Promise<{
       const directListing = rawListings.find((l) => l.platform === 'direct') ?? null
       const direct_url_type: string | null = directListing?.url_type ?? null
 
-      const bestRating = rawListings.reduce<number | null>((best, l) => {
-        if (l.rating == null) return best
-        const v = Number(l.rating)
-        return best == null || v > best ? v : best
-      }, null)
-
       const available = listings.filter((l) => l.delivery_fee_cents !== null)
 
       const lat = r.lat != null ? Number(r.lat) : null
@@ -236,7 +230,7 @@ export async function getRestaurants(): Promise<{
           lng,
           order_url,
           image_url,
-          rating: bestRating,
+          rating: null,
           direct_url_type,
           is_chain: r.is_chain ?? false,
           listings,
@@ -259,7 +253,7 @@ export async function getRestaurants(): Promise<{
         lng,
         order_url,
         image_url,
-        rating: bestRating,
+        rating: null,
         direct_url_type,
         is_chain: r.is_chain ?? false,
         listings,
@@ -308,7 +302,6 @@ export async function getDeals(): Promise<DealItem[]> {
     `)
     .neq('promo_type', 'other')
     .neq('promo_type', 'spend_save')
-    .in('platform_listings.platform', ['uber_eats', 'deliveroo', 'takeaway'])
 
   if (error) throw new Error(`getDeals: ${error.message}`)
 
@@ -316,6 +309,7 @@ export async function getDeals(): Promise<DealItem[]> {
     const listing = p.platform_listings
     const restaurant = listing?.restaurants
     if (!listing || !restaurant) return []
+    if (!['uber_eats', 'deliveroo', 'takeaway'].includes(listing.platform)) return []
     return [{
       id: p.id,
       restaurant_id: restaurant.id,
@@ -394,9 +388,9 @@ export const getRestaurantWithListings = cache(async (
       const key = normalizeTitle(item.title)
       if (!itemMap.has(key)) {
         itemMap.set(key, {
-          name: item.title.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim(),
+          name: item.title.replace(EMOJI_RE, '').trim(),
           description: item.description ?? null,
-          category: item.catalog_name?.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim() ?? null,
+          category: item.catalog_name?.replace(EMOJI_RE, '').trim() ?? null,
           image_url: item.image_url ?? null,
           prices: { uber_eats: null, deliveroo: null, takeaway: null, direct: null },
           platformTitles: { uber_eats: null, deliveroo: null, takeaway: null, direct: null },
@@ -405,9 +399,7 @@ export const getRestaurantWithListings = cache(async (
       const entry = itemMap.get(key)!
       entry.prices[platform] = feeCents(item.price)
       if (entry.platformTitles) {
-        entry.platformTitles[platform] = item.title
-          .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '')
-          .trim()
+        entry.platformTitles[platform] = item.title.replace(EMOJI_RE, '').trim()
       }
     }
   }

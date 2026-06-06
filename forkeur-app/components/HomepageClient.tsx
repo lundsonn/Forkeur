@@ -79,14 +79,11 @@ export default function HomepageClient({
       return matchSearch && matchNeighborhood
     })
 
+    if (sortBy === 'best') return base
+
     return [...base].sort((a, b) => {
       const ma = metrics.get(a.id)!
       const mb = metrics.get(b.id)!
-      if (sortBy === 'best') {
-        if (mb.platformCount !== ma.platformCount) return mb.platformCount - ma.platformCount
-        if (a.is_chain !== b.is_chain) return a.is_chain ? 1 : -1
-        return mb.savings - ma.savings
-      }
       if (sortBy === 'cheapest') {
         if (ma.minFee === null && mb.minFee === null) return 0
         if (ma.minFee === null) return 1
@@ -117,7 +114,7 @@ export default function HomepageClient({
           <LangToggle />
           <Link
             href="/owners"
-            className="px-2.5 py-1 rounded-lg text-xs font-medium text-stone-400 hover:text-stone-600 transition-colors"
+            className="hidden min-[450px]:inline-flex px-2.5 py-1 rounded-lg text-xs font-medium text-stone-400 hover:text-stone-600 transition-colors"
           >
             {tOwners('nav_link')}
           </Link>
@@ -180,7 +177,7 @@ export default function HomepageClient({
       </div>
 
       {/* How it works */}
-      <div className="flex items-start gap-0 mb-6">
+      <div className="overflow-hidden flex items-start gap-0 mb-6">
         {([
           { num: 1, title: tHowItWorks('step1_title'), body: tHowItWorks('step1_body') },
           { num: 2, title: tHowItWorks('step2_title'), body: tHowItWorks('step2_body') },
@@ -272,6 +269,7 @@ export default function HomepageClient({
                   href={`/restaurant/${r.id}`}
                   isLast={i === Math.min(visibleCount, filtered.length) - 1}
                   maxFee={m?.maxFee}
+                  priority={i < 3}
                   directBadge={
                     r.direct_url_type === 'ordering'
                       ? tCard('direct_cta_ordering')

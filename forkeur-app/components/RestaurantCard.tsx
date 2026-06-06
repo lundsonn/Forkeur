@@ -2,7 +2,6 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import { ChevronUp, ChevronDown } from 'lucide-react'
-import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import type { RestaurantSummary } from '@/lib/queries'
 import { centsToEuro, PLATFORM_LABELS, type Platform } from '@/lib/basket'
@@ -16,12 +15,12 @@ type Props = {
   isLast?: boolean
   directBadge: string
   maxFee?: number | null
+  priority?: boolean
 }
 
-export default function RestaurantCard({ restaurant, href, isLast, directBadge }: Props) {
+export default function RestaurantCard({ restaurant, href, isLast, directBadge, priority }: Props) {
   const { name, cuisine, listings, cheapest, order_url, direct_url_type, image_url } = restaurant
   const tCard = useTranslations('card')
-  const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
 
   const bestListing = listings.find((l) => l.opening_hours != null) ?? listings[0] ?? null
@@ -41,14 +40,10 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge }
 
   const cheapestFeeCents = cheapest?.delivery_fee_cents ?? null
 
-  function handleCardClick() {
-    router.push(href)
-  }
-
   return (
-    <div
-      className={`py-4 cursor-pointer select-none ${!isLast ? 'border-b border-stone-100' : ''} ${isClosed ? 'opacity-60' : ''}`}
-      onClick={handleCardClick}
+    <a
+      href={href}
+      className={`block py-4 cursor-pointer select-none ${!isLast ? 'border-b border-stone-100' : ''} ${isClosed ? 'opacity-60' : ''}`}
     >
       {/* Header */}
       <div className="flex items-start gap-3 mb-3">
@@ -59,6 +54,7 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge }
             width={44}
             height={44}
             className="rounded-xl object-cover shrink-0 bg-stone-100"
+            priority={priority}
           />
         )}
         <div className="flex-1 min-w-0">
@@ -138,6 +134,6 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge }
           {tCard('compare_all', { count: sortedTiles.length })} ›
         </p>
       )}
-    </div>
+    </a>
   )
 }
