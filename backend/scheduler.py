@@ -22,8 +22,6 @@ _DIGEST_JOB_ID = "daily_digest"
 _DIGEST_CRON = "0 19 * * *"   # 19:00 UTC = 21:00 Brussels (CEST)
 
 _BATCH_JOB_ID = "batch_all"
-_BATCH_CRON = "0 5,11 * * *"  # 05:00 + 11:00 UTC (off-peak + lunch prep)
-
 
 def _noop(line: str) -> None:
     # Forwards scraper log-fn output into the scheduler logger so cron-driven
@@ -213,12 +211,6 @@ async def _run_daily_digest() -> None:
 
 
 def start() -> None:
-    _scheduler.add_job(
-        _run_batch_all,
-        CronTrigger.from_crontab(_BATCH_CRON),
-        id=_BATCH_JOB_ID,
-        replace_existing=True,
-    )
     _scheduler.add_job(
         _run_daily_cleanup,
         CronTrigger.from_crontab(_CLEANUP_CRON),
