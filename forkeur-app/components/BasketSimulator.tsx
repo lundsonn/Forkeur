@@ -505,7 +505,7 @@ export default function BasketSimulator({ menuItems, listings, phone, matchRate 
               <button
                 data-testid="basket-bar"
                 onClick={() => setSheetOpen(true)}
-                className="w-full flex items-center justify-between gap-3 text-left"
+                className="w-full flex items-center justify-between gap-3 text-left min-h-[44px]"
               >
                 <div className="min-w-0">
                   <p className="text-[11px] text-green-700">

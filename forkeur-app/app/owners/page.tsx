@@ -14,10 +14,10 @@ export default async function OwnersPage() {
   const tNav = await getTranslations('nav')
 
   return (
-    <div className="max-w-md mx-auto px-5 pb-16">
+    <div className="w-full max-w-md mx-auto px-5 pb-16">
       {/* Nav */}
       <div className="flex items-center pt-5 pb-4">
-        <Link href="/" className="text-stone-500 hover:text-stone-800 text-lg mr-auto">‹</Link>
+        <Link href="/" className="text-stone-500 hover:text-stone-800 text-lg mr-auto min-w-[44px] min-h-[44px] flex items-center">‹</Link>
         <Link href="/" className="font-bold text-sm tracking-tight absolute left-1/2 -translate-x-1/2">
           fork<span className="text-orange-500">eur</span>
         </Link>

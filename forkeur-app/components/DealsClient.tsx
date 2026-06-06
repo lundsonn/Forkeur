@@ -72,7 +72,7 @@ export default function DealsClient({ deals }: { deals: DealItem[] }) {
   }
 
   return (
-    <div className="max-w-md mx-auto px-5">
+    <div className="w-full max-w-md mx-auto px-5">
       {/* Nav */}
       <div className="flex items-center justify-between pt-5 pb-4">
         <Link href="/" className="flex items-center gap-1.5">
@@ -83,7 +83,7 @@ export default function DealsClient({ deals }: { deals: DealItem[] }) {
         </Link>
         <div className="flex items-center gap-1">
           <LangToggle />
-          <Link href="/" className="text-xs text-stone-400 hover:text-stone-600">
+          <Link href="/" className="text-xs text-stone-400 hover:text-stone-600 min-h-[44px] inline-flex items-center px-1">
             {tNav('back_restaurants')}
           </Link>
         </div>
@@ -121,7 +121,7 @@ export default function DealsClient({ deals }: { deals: DealItem[] }) {
             <button
               key={key}
               onClick={() => toggle(key)}
-              className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+              className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 min-h-[44px] rounded-full text-xs font-medium border transition-colors ${
                 isActive
                   ? 'text-white border-transparent'
                   : 'bg-white text-stone-600 border-stone-200 hover:border-stone-300'

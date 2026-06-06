@@ -26,7 +26,7 @@ export default function LangToggle() {
         <button
           key={code}
           onClick={() => switchLocale(code)}
-          className={`text-[10px] font-medium transition-colors px-1 ${
+          className={`text-[10px] font-medium transition-colors px-2 min-h-[44px] inline-flex items-center ${
             locale === code
               ? 'text-stone-900'
               : 'text-stone-400 hover:text-stone-600'

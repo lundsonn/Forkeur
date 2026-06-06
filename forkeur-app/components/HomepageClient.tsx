@@ -101,7 +101,7 @@ export default function HomepageClient({
   const hasFilter = !!(search || selectedNeighborhood)
 
   return (
-    <div className="max-w-md mx-auto px-5">
+    <div className="w-full max-w-md mx-auto px-5">
       {/* Nav */}
       <div className="flex items-center justify-between pt-5 pb-4">
         <Link href="/" className="flex items-center gap-1.5">
@@ -114,20 +114,20 @@ export default function HomepageClient({
           <LangToggle />
           <Link
             href="/owners"
-            className="hidden min-[450px]:inline-flex px-2.5 py-1 rounded-lg text-xs font-medium text-stone-400 hover:text-stone-600 transition-colors"
+            className="hidden min-[450px]:inline-flex items-center px-2.5 min-h-[44px] rounded-lg text-xs font-medium text-stone-400 hover:text-stone-600 transition-colors"
           >
             {tOwners('nav_link')}
           </Link>
           <Link
             href="/deals"
-            className="px-2.5 py-1 rounded-lg text-xs font-medium text-orange-500 hover:text-orange-600 transition-colors"
+            className="px-2.5 min-h-[44px] inline-flex items-center rounded-lg text-xs font-medium text-orange-500 hover:text-orange-600 transition-colors"
           >
             {tNav('deals')}
           </Link>
           <button
             type="button"
             onClick={() => setView('list')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+            className={`px-2.5 min-h-[44px] inline-flex items-center rounded-lg text-xs font-medium transition-colors ${
               view === 'list'
                 ? 'bg-stone-900 text-white'
                 : 'text-stone-500 hover:text-stone-700'
@@ -138,7 +138,7 @@ export default function HomepageClient({
           <button
             type="button"
             onClick={() => setView('map')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+            className={`px-2.5 min-h-[44px] inline-flex items-center rounded-lg text-xs font-medium transition-colors ${
               view === 'map'
                 ? 'bg-stone-900 text-white'
                 : 'text-stone-500 hover:text-stone-700'
@@ -204,14 +204,14 @@ export default function HomepageClient({
               <button
                 type="button"
                 onClick={() => setNeighborhoodSheetOpen(true)}
-                className="flex items-center rounded-l-full border border-r-0 border-[#1A1A1A] bg-white px-3 py-1 text-xs font-medium text-[#1A1A1A]"
+                className="flex items-center rounded-l-full border border-r-0 border-[#1A1A1A] bg-white px-3 min-h-[44px] text-xs font-medium text-[#1A1A1A]"
               >
                 {selectedNeighborhood}
               </button>
               <button
                 type="button"
                 onClick={() => setSelectedNeighborhood(null)}
-                className="flex items-center rounded-r-full border border-[#1A1A1A] bg-white px-2 py-1 text-xs text-[#888780]"
+                className="flex items-center rounded-r-full border border-[#1A1A1A] bg-white px-2 min-h-[44px] text-xs text-[#888780]"
               >
                 ✕
               </button>
@@ -220,7 +220,7 @@ export default function HomepageClient({
             <button
               type="button"
               onClick={() => setNeighborhoodSheetOpen(true)}
-              className="flex items-center gap-1 rounded-full bg-[#EDEDEA] px-3 py-1 text-xs font-medium text-[#888780]"
+              className="flex items-center gap-1 rounded-full bg-[#EDEDEA] px-3 min-h-[44px] text-xs font-medium text-[#888780]"
             >
               {tSort('all_areas')}
             </button>
@@ -234,7 +234,7 @@ export default function HomepageClient({
               type="button"
               key={s}
               onClick={() => resetAndSet(setSortBy)(s)}
-              className={`min-[360px]:text-sm text-xs pb-1 transition-colors ${
+              className={`min-[360px]:text-sm text-xs min-h-[44px] inline-flex items-end pb-1 transition-colors ${
                 sortBy === s
                   ? 'font-medium text-[#1A1A1A] border-b-2 border-[#1A1A1A]'
                   : 'text-[#888780]'

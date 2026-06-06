@@ -73,7 +73,7 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge, 
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); setCollapsed((v) => !v) }}
-            className="text-stone-300 hover:text-stone-500 p-0.5 transition-colors"
+            className="text-stone-300 hover:text-stone-500 min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors"
             aria-label={collapsed ? 'Expand' : 'Collapse'}
           >
             {collapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
