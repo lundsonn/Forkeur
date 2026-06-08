@@ -261,13 +261,13 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                 clicked = False
                 for _attempt in range(5):
                     clicked = await wpage.evaluate(
-                        """(storePath, slugOnly) => {
+                        """([storePath, slugOnly]) => {
                             let a = document.querySelector('a[href*="/store/"+storePath]');
                             if (!a) a = document.querySelector('a[href*="/store/"+slugOnly]');
                             if (a) { a.click(); return true; }
                             return false;
                         }""",
-                        store_path, slug_only,
+                        [store_path, slug_only],
                     )
                     if clicked:
                         break
@@ -470,13 +470,13 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                     log_fn(f"Retry: {name}")
                     slug_only = store_path.split("/")[0] if "/" in store_path else store_path
                     clicked = await page.evaluate(
-                        """(storePath, slugOnly) => {
+                        """([storePath, slugOnly]) => {
                             let a = document.querySelector('a[href*="/store/"+storePath]');
                             if (!a) a = document.querySelector('a[href*="/store/"+slugOnly]');
                             if (a) { a.click(); return true; }
                             return false;
                         }""",
-                        store_path, slug_only,
+                        [store_path, slug_only],
                     )
                     if not clicked:
                         log_fn(f"Retry: {name} — not in DOM, skipping")
