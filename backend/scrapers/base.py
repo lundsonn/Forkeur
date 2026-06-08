@@ -18,7 +18,8 @@ _virtual_display = None
 # Compiled regex to match image/media URLs by extension (case-insensitive).
 # Used by page route handlers to avoid invoking Python for every network request.
 _MEDIA_URL_RE = _re.compile(
-    r"(?i)\.(png|jpe?g|gif|webp|svg|ico|bmp|avif|mp4|webm|ogg|avi|mov|wmv)(\?[^/]*)?$"
+    r"\.(png|jpe?g|gif|webp|svg|ico|bmp|avif|mp4|webm|ogg|avi|mov|wmv)(\?[^/]*)?$",
+    _re.IGNORECASE,
 )
 
 
