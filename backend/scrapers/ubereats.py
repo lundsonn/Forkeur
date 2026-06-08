@@ -16,6 +16,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
     async with browser_session(lang="fr-BE") as browser:
         page = await new_page(browser, lang="fr-BE")
 
+        feed_event = asyncio.Event()
         feed_pages: list[dict] = []
 
         async def on_response(response):
@@ -69,7 +70,6 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
         await asyncio.sleep(2)
 
         log_fn("Waiting for first feed API response...")
-        feed_event = asyncio.Event()
         try:
             async with asyncio.timeout(15):
                 await feed_event.wait()
