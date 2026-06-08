@@ -357,10 +357,21 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                             enriched["cuisine"] = rinfo["cuisine"]
                         if rinfo.get("phone"):
                             enriched["phone"] = rinfo["phone"]
+                        # Address goes to platform_listings, not restaurants
+                        addr_patch: dict = {}
+                        if rinfo.get("street_address"):
+                            addr_patch["street_address"] = rinfo["street_address"]
+                        if rinfo.get("postal_code"):
+                            addr_patch["postal_code"] = rinfo["postal_code"]
                         try:
                             db.upsert_restaurant(enriched)
                         except ValueError:
                             pass
+                        if addr_patch:
+                            try:
+                                db.patch_listing(lid, addr_patch)
+                            except Exception:
+                                pass
                         log_fn(f"  geo: {rinfo.get('lat')},{rinfo.get('lng')}")
                     if items:
                         count = db.insert_menu_items(lid, items)

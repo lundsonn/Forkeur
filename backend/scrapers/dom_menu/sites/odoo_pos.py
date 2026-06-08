@@ -74,6 +74,8 @@ async def scrape(url: str, browser, log: Callable) -> list[dict]:
         if "/pos-self/data/" in response.url and response.status == 200:
             try:
                 body = await response.json()
+                if done.is_set():
+                    return
                 result = body.get("result") or {}
                 if result.get("product.template"):
                     captured.append(result)
@@ -84,9 +86,26 @@ async def scrape(url: str, browser, log: Callable) -> list[dict]:
     page.on("response", on_response)
     try:
         await page.goto(url, wait_until="domcontentloaded", timeout=25000)
+        networkidle_task = asyncio.create_task(
+            page.wait_for_load_state("networkidle", timeout=8000)
+        )
+        done_task = asyncio.create_task(done.wait())
         try:
-            await asyncio.wait_for(done.wait(), timeout=12)
-        except asyncio.TimeoutError:
+            finished, _ = await asyncio.wait(
+                [networkidle_task, done_task],
+                timeout=12,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+        finally:
+            networkidle_task.cancel()
+            done_task.cancel()
+            # suppress cancellation errors
+            for t in (networkidle_task, done_task):
+                try:
+                    await t
+                except (asyncio.CancelledError, Exception):
+                    pass
+        if not done.is_set():
             log(f"    odoo_pos: no /pos-self/data/ response from {url[:60]}")
             return []
         items = _parse_items(captured[0])

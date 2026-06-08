@@ -40,6 +40,12 @@ def run_sync(*, dry_run: bool, log_fn) -> dict:
     # Load supplementary data for enhanced scoring
     menus_raw = db.load_menu_items_for_match()
     slugs = db.load_slugs_for_match()
+    listing_addresses = db.load_listing_addresses_for_match()
+    for r in rows:
+        addr = listing_addresses.get(str(r["id"]))
+        if addr:
+            r["street_address"] = addr.get("street_address")
+            r["postal_code"] = addr.get("postal_code")
     # Build chain_names: significant first tokens appearing 3+ times.
     # Uses significant_first_token (not full normalize_match_key) so
     # "McDonald's Bascule" and "McDonald's Bourse" both count as "mcdonalds".

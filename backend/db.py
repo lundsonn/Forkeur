@@ -1,5 +1,6 @@
 import os
 import re
+import threading
 import unicodedata
 from uuid import UUID
 from supabase import create_client, Client
@@ -20,7 +21,10 @@ def _validate_uuid(value: str) -> str:
 
 _MENU_INSERT_CHUNK = 500
 
+_SUFFIX_RE = re.compile(r"\s+-\s+\S.*$")
+
 _client: Client | None = None
+_client_lock = threading.Lock()
 _domain_cache: dict[str, str] | None = None  # domain → restaurant_id
 
 
@@ -32,11 +36,24 @@ def invalidate_domain_cache() -> None:
 def get_client() -> Client:
     global _client
     if _client is None:
-        url = os.environ["SUPABASE_URL"]
-        # Use the service_role key so writes bypass RLS (anon key is public).
-        key = os.environ["SUPABASE_SERVICE_KEY"]
-        _client = create_client(url, key)
+        with _client_lock:
+            if _client is None:
+                url = os.environ["SUPABASE_URL"]
+                # Use the service_role key so writes bypass RLS (anon key is public).
+                key = os.environ["SUPABASE_SERVICE_KEY"]
+                _client = create_client(url, key)
     return _client
+
+
+def close_client() -> None:
+    global _client
+    with _client_lock:
+        if _client is not None:
+            try:
+                _client.postgrest.session.close()
+            except Exception:
+                pass
+            _client = None
 
 
 def _is_junk(name: str) -> bool:
@@ -59,13 +76,13 @@ def _canonical(name: str) -> str:
     """Strip platform-specific location suffixes and noise for cross-platform matching.
     'Burger King - Ixelles' → 'Burger King'
     '🩷 Crousty Factory 🧡 - Bruxelles' → 'Crousty Factory'
+    'Barakah Halal' → 'Barakah'
     """
-    # Strip leading/trailing whitespace
     name = name.strip()
-    # Remove emoji and symbols outside Basic Latin + Latin Extended blocks
     name = re.sub(r'[^ -ɏḀ-ỿ\s\d\'\"\-&\(\)\.!,]', '', name).strip()
-    # Strip location suffix after " - " (regular hyphen only — em-dash separates distinct branches)
-    name = re.sub(r'\s+-\s+\S.*$', '', name).strip()
+    name = _SUFFIX_RE.sub("", name).strip()
+    name = re.sub(r"\s+(?:brussels|bruxelles|bxl|bsl)\s*$", "", name, flags=re.IGNORECASE).strip()
+    name = re.sub(r"\s+(?:halal|bio|vegan|végétalien|casher|kosher)\s*$", "", name, flags=re.IGNORECASE).strip()
     return name
 
 
@@ -901,4 +918,26 @@ def load_slugs_for_match() -> dict[str, list[str]]:
         if len(batch) < page:
             break
         offset += page
+    return result
+
+
+def load_listing_addresses_for_match() -> dict[str, dict]:
+    """Return {restaurant_id: {"street_address": ..., "postal_code": ...}} from platform_listings."""
+    client = get_client()
+    res = (
+        client.table("platform_listings")
+        .select("restaurant_id, street_address, postal_code")
+        .not_.is_("street_address", "null")
+        .execute()
+    )
+    result: dict[str, dict] = {}
+    for row in res.data or []:
+        rid = str(row.get("restaurant_id") or "")
+        if not rid or rid == "None":
+            continue
+        if rid not in result or (not result[rid].get("postal_code") and row.get("postal_code")):
+            result[rid] = {
+                "street_address": row.get("street_address"),
+                "postal_code": row.get("postal_code"),
+            }
     return result

@@ -73,6 +73,7 @@ async def lifespan(app: FastAPI):
     # Graceful shutdown: let in-flight jobs finish (bounded by APScheduler's own
     # job timeouts). wait=False previously killed scrapers mid-write.
     sched.shutdown(wait=True)
+    db.close_client()
 
 
 app = FastAPI(title="Forkeur Backend", lifespan=lifespan, docs_url=None, redoc_url=None)

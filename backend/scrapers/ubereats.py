@@ -197,6 +197,26 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
         _fail_lock = asyncio.Lock()
         from scrapers.base import new_sibling_page
 
+        async def _scroll_listing(wp) -> None:
+            """Scroll the listing page to bottom until height stabilises, loading all cards."""
+            prev_h = 0
+            for _ in range(15):
+                try:
+                    h = await asyncio.wait_for(
+                        wp.evaluate("(function(){var h=document.body.scrollHeight;window.scrollTo(0,h);return h;})()"),
+                        timeout=5,
+                    )
+                except asyncio.TimeoutError:
+                    break
+                await asyncio.sleep(0.8)
+                if h == prev_h:
+                    break
+                prev_h = h
+            try:
+                await asyncio.wait_for(wp.evaluate("window.scrollTo(0, 0)"), timeout=5)
+            except asyncio.TimeoutError:
+                pass
+
         async def _scrape_one(wpage, r, lid) -> None:
             """Scrape one restaurant's menu on `wpage` (already on the listing).
 
@@ -234,26 +254,6 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                     except (asyncio.TimeoutError, Exception):
                         await wpage.goto(listing_url, wait_until="domcontentloaded", timeout=20000)
                     await asyncio.sleep(2)
-
-                # Scroll until page height stabilises so the target card is in the DOM.
-                prev_h = 0
-                for _ in range(15):
-                    try:
-                        h = await asyncio.wait_for(
-                            wpage.evaluate("(function(){var h=document.body.scrollHeight;window.scrollTo(0,h);return h;})()"),
-                            timeout=5,
-                        )
-                    except asyncio.TimeoutError:
-                        break
-                    await asyncio.sleep(1.2)
-                    if h == prev_h:
-                        break
-                    prev_h = h
-                try:
-                    await asyncio.wait_for(wpage.evaluate("window.scrollTo(0, 0)"), timeout=5)
-                except asyncio.TimeoutError:
-                    pass
-                await asyncio.sleep(0.5)
 
                 # Click restaurant anchor; scroll-retry if not yet in DOM.
                 slug_only = store_path.split("/")[0] if "/" in store_path else store_path
@@ -309,17 +309,26 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
             try:
                 store_data = json.loads(store_raw[0])
                 items = _parse_menu_items(store_data)
-                count = db.insert_menu_items(lid, items)
-                menu_items_saved += count
-                # getStoreV1 has richer promo/hours detail than the feed — overwrite.
                 store_obj = store_data.get("data") or {}
+                tasks: list = [asyncio.to_thread(db.insert_menu_items, lid, items)]
                 if store_obj:
                     rich_promos = _parse_promotions(store_obj)
                     if rich_promos:
-                        db.upsert_promotions(lid, rich_promos)
+                        tasks.append(asyncio.to_thread(db.upsert_promotions, lid, rich_promos))
                     rich_hours = _parse_section_hours(store_obj) or _parse_regular_hours(store_obj)
+                    addr = _parse_address(store_obj)
+                    patch: dict = {}
                     if rich_hours:
-                        db.patch_listing(lid, {"opening_hours": rich_hours})
+                        patch["opening_hours"] = rich_hours
+                    if addr["street_address"]:
+                        patch["street_address"] = addr["street_address"]
+                    if addr["postal_code"]:
+                        patch["postal_code"] = addr["postal_code"]
+                    if patch:
+                        tasks.append(asyncio.to_thread(db.patch_listing, lid, patch))
+                results = await asyncio.gather(*tasks)
+                count = results[0]
+                menu_items_saved += count
                 log_fn(f"Menu: {name} — {count} items saved")
             except Exception as exc:
                 log_fn(f"Menu: {name} — parse/save error: {exc}")
@@ -331,6 +340,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                 wp = await asyncio.wait_for(new_sibling_page(page), timeout=30)
                 await wp.goto(listing_url, wait_until="domcontentloaded", timeout=20000)
                 await asyncio.sleep(2)
+                await _scroll_listing(wp)
                 return wp
             except Exception:
                 return None
@@ -340,6 +350,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
             try:
                 await wpage.goto(listing_url, wait_until="domcontentloaded", timeout=20000)
                 await asyncio.sleep(2)
+                await _scroll_listing(wpage)
                 for k, (r, lid) in enumerate(slice_items):
                     # Recycle the worker page every 30 restaurants — reusing one page
                     # across a whole slice of heavy menu loads leaks renderer RSS
@@ -489,8 +500,16 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                         if rich_promos:
                             db.upsert_promotions(lid, rich_promos)
                         rich_hours = _parse_section_hours(store_obj) or _parse_regular_hours(store_obj)
+                        addr = _parse_address(store_obj)
+                        patch: dict = {}
                         if rich_hours:
-                            db.patch_listing(lid, {"opening_hours": rich_hours})
+                            patch["opening_hours"] = rich_hours
+                        if addr["street_address"]:
+                            patch["street_address"] = addr["street_address"]
+                        if addr["postal_code"]:
+                            patch["postal_code"] = addr["postal_code"]
+                        if patch:
+                            db.patch_listing(lid, patch)
                     log_fn(f"Retry: {name} — {count} items saved")
                 except Exception as exc:
                     log_fn(f"Retry: {name} — parse/save error: {exc}")
@@ -600,6 +619,38 @@ def _parse_regular_hours(store: dict) -> dict | None:
             continue
         result[day] = [str(start)[:5], str(end)[:5]]
     return result or None
+
+
+def _parse_address(store: dict) -> dict:
+    """Extract street address + postal code from a UberEats getStoreV1 store object.
+
+    The address lives under store["location"], whose shape has varied. Handles
+    both a flat `{"streetAddress": ..., "postalCode": ...}` and a nested
+    `{"address": {...}}` form, trying the most common key aliases. Returns
+    {"street_address": str|None, "postal_code": str|None}; never raises.
+    """
+    loc = store.get("location")
+    if not isinstance(loc, dict):
+        return {"street_address": None, "postal_code": None}
+
+    # Some shapes nest the real fields one level down under "address".
+    nested = loc.get("address")
+    src = nested if isinstance(nested, dict) else loc
+
+    def _first_str(d: dict, keys: tuple[str, ...]) -> str | None:
+        for k in keys:
+            v = d.get(k)
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+        return None
+
+    street = _first_str(src, ("streetAddress", "address", "address1", "street"))
+    # Postal code may sit alongside the street or back up on the flat location obj.
+    postal = (
+        _first_str(src, ("postalCode", "postal_code", "zipCode", "zip"))
+        or _first_str(loc, ("postalCode", "postal_code", "zipCode", "zip"))
+    )
+    return {"street_address": street, "postal_code": postal}
 
 
 def _extract_store_image(store: dict) -> str | None:

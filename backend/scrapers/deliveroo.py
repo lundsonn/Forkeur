@@ -63,11 +63,17 @@ def _coords_from_url(url: str) -> tuple[float, float] | None:
         return None
 
 
-async def _venue_coords_from_page(page) -> tuple[float, float] | None:
-    """Extract actual venue coords from a Deliveroo restaurant menu page.
+async def _venue_coords_from_page(page) -> dict | None:
+    """Extract actual venue coords + address from a Deliveroo restaurant menu page.
 
     Tries JSON-LD Restaurant schema first (most stable), then __NEXT_DATA__.
-    Returns None if not found or coords are outside Brussels area.
+    Returns a dict ``{"lat", "lng", "street_address", "postal_code"}`` (the
+    address keys may be None) or None if no valid Brussels-area coords are found.
+
+    The JSON-LD Restaurant block carries an ``address`` PostalAddress alongside
+    ``geo``; when present we also capture ``streetAddress`` + ``postalCode``.
+    The __NEXT_DATA__ fallback yields coords only (no address), so address keys
+    are None there.
     """
     try:
         result = await page.evaluate("""() => {
@@ -80,12 +86,17 @@ async def _venue_coords_from_page(page) -> tuple[float, float] | None:
                         if (item['@type'] === 'Restaurant' && item.geo) {
                             const lat = parseFloat(item.geo.latitude);
                             const lng = parseFloat(item.geo.longitude);
-                            if (!isNaN(lat) && !isNaN(lng)) return [lat, lng];
+                            if (!isNaN(lat) && !isNaN(lng)) {
+                                const addr = item.address || {};
+                                const street = (addr.streetAddress || '').trim() || null;
+                                const postal = (addr.postalCode || '').toString().trim() || null;
+                                return { lat, lng, street_address: street, postal_code: postal };
+                            }
                         }
                     }
                 } catch {}
             }
-            // Strategy 2: __NEXT_DATA__ — scan props for lat/lng keys
+            // Strategy 2: __NEXT_DATA__ — scan props for lat/lng keys (coords only)
             try {
                 const nd = window.__NEXT_DATA__;
                 if (nd) {
@@ -94,12 +105,12 @@ async def _venue_coords_from_page(page) -> tuple[float, float] | None:
                         if ('latitude' in obj && 'longitude' in obj) {
                             const lat = parseFloat(obj.latitude);
                             const lng = parseFloat(obj.longitude);
-                            if (!isNaN(lat) && !isNaN(lng)) return [lat, lng];
+                            if (!isNaN(lat) && !isNaN(lng)) return { lat, lng, street_address: null, postal_code: null };
                         }
                         if ('lat' in obj && ('lng' in obj || 'lon' in obj)) {
                             const lat = parseFloat(obj.lat);
                             const lng = parseFloat(obj.lng ?? obj.lon);
-                            if (!isNaN(lat) && !isNaN(lng)) return [lat, lng];
+                            if (!isNaN(lat) && !isNaN(lng)) return { lat, lng, street_address: null, postal_code: null };
                         }
                         for (const v of Object.values(obj)) {
                             const r = findCoords(v, depth + 1);
@@ -113,10 +124,15 @@ async def _venue_coords_from_page(page) -> tuple[float, float] | None:
             } catch {}
             return null;
         }""")
-        if result and len(result) == 2:
-            lat, lng = float(result[0]), float(result[1])
+        if result and result.get("lat") is not None and result.get("lng") is not None:
+            lat, lng = float(result["lat"]), float(result["lng"])
             if 50.4 < lat < 51.1 and 3.9 < lng < 4.8:  # Brussels + surrounding area
-                return (lat, lng)
+                return {
+                    "lat": lat,
+                    "lng": lng,
+                    "street_address": result.get("street_address"),
+                    "postal_code": result.get("postal_code"),
+                }
     except Exception:
         pass
     return None
@@ -433,67 +449,52 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                     await page.goto(menu_url, wait_until="domcontentloaded", timeout=60000)
                 except Exception:
                     pass  # timeout is fine — content loads progressively
-                # Handle redirect /menu/ → /fr/menu/
+                check_cloudflare(await page.title())  # fail fast before waiting for content
+
+                # Try to extract actual venue coords + address (JSON-LD / __NEXT_DATA__)
+                venue = await _venue_coords_from_page(page)
+                if venue:
+                    db.patch_restaurant_geo(rid, venue["lat"], venue["lng"], "deliveroo_venue")
+                    log_fn(f"  Venue coords: {venue['lat']:.5f}, {venue['lng']:.5f}")
+                    # Persist street_address + postal_code onto the platform_listing
+                    # (DB columns live on platform_listings). Null/absent → skipped.
+                    addr_patch = {
+                        "street_address": venue.get("street_address"),
+                        "postal_code": venue.get("postal_code"),
+                    }
+                    if any(addr_patch.values()):
+                        db.patch_listing(lid, addr_patch)
+                        log_fn(f"  Venue address: {addr_patch}")
+
+                # Single wait: covers redirect + load + settle in one step.
+                # div.notranslate appears once any items render; fallbacks cover layout changes.
                 try:
-                    await page.wait_for_url("**/menu/**", timeout=10000)
+                    await page.wait_for_selector(
+                        'div.notranslate, [class*="MenuItemCardV2"], [class*="MenuItemCard"], [data-testid="menu-item-image"]',
+                        timeout=25000,
+                    )
                 except Exception:
                     pass
-                try:
-                    await page.wait_for_load_state("networkidle", timeout=20000)
-                except Exception:
-                    pass
-                # Extra settle — Deliveroo defers off-screen section rendering
-                await asyncio.sleep(2)
-                check_cloudflare(await page.title())
 
-                # Try to extract actual venue coords (JSON-LD / __NEXT_DATA__)
-                venue_coords = await _venue_coords_from_page(page)
-                if venue_coords:
-                    db.patch_restaurant_geo(rid, venue_coords[0], venue_coords[1], "deliveroo_venue")
-                    log_fn(f"  Venue coords: {venue_coords[0]:.5f}, {venue_coords[1]:.5f}")
-
-                # Wait for price-bearing element. notranslate is more stable than
-                # CSS-module hashed MenuItemCard class (changes every Deliveroo deploy).
-                for _sel in ('div.notranslate', '[class*="MenuItemCardV2"]', '[class*="MenuItemCard"]', '[data-testid="menu-item-image"]'):
-                    try:
-                        await page.wait_for_selector(_sel, timeout=8000)
-                        break
-                    except Exception:
-                        pass
-
-                # notranslate count is the reliable item proxy — class hashes change each deploy.
-                _card_js = "document.querySelectorAll('div.notranslate').length"
-                before_scroll = await page.evaluate(_card_js)
-                log_fn(f"  Before scroll: {before_scroll} notranslate divs, url={page.url[:80]}")
-
-                # Scroll to trigger lazy-loaded sections — height-stable then item-count-stable.
-                prev_h = 0
-                for _ in range(30):
-                    h = await page.evaluate("document.body.scrollHeight")
+                # Unified scroll: stable when BOTH height AND item count unchanged for 2 consecutive ticks.
+                prev_h, prev_count, stale = 0, 0, 0
+                for _ in range(40):
+                    result = await page.evaluate(
+                        "()=>({h:document.body.scrollHeight,"
+                        "c:document.querySelectorAll('div.notranslate').length})"
+                    )
+                    h, count = result["h"], result["c"]
                     await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                     await page.wait_for_timeout(800)
-                    if h == prev_h:
-                        # Extra wait: next batch sometimes loads 500ms after height settles
-                        await page.wait_for_timeout(600)
-                        h2 = await page.evaluate("document.body.scrollHeight")
-                        if h2 == h:
+                    if h == prev_h and count == prev_count:
+                        stale += 1
+                        if stale >= 3:
                             break
-                    prev_h = h
-
-                after_scroll = await page.evaluate(_card_js)
-                log_fn(f"  After scroll: {after_scroll} notranslate divs")
-
-                # Item-count loop: keeps scrolling while new items appear.
-                prev_count = after_scroll
-                for _ in range(20):
-                    await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                    await page.wait_for_timeout(900)
-                    cur = await page.evaluate(_card_js)
-                    if cur == prev_count:
-                        break
-                    prev_count = cur
+                    else:
+                        stale = 0
+                    prev_h, prev_count = h, count
                 await page.evaluate("window.scrollTo(0, 0)")
-                await asyncio.sleep(0.5)
+                log_fn(f"  Scroll done: {prev_count} notranslate divs, url={page.url[:80]}")
 
                 # Multi-strategy extraction — ordered by selector stability.
                 items: list[dict] = await page.evaluate("""() => {

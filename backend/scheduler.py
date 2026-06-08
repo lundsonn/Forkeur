@@ -201,7 +201,7 @@ async def _run_match() -> None:
 
 
 async def _run_daily_cleanup() -> None:
-    pruned = db.prune_stale_menu_items(days=30)
+    pruned = await asyncio.to_thread(db.prune_stale_menu_items, days=30)
     if pruned:
         _noop(f"Daily cleanup: pruned {pruned} stale menu items")
 

@@ -17,7 +17,7 @@ from typing import Callable
 from urllib.parse import urlparse
 
 from models import ScraperConfig, ScraperResult
-from scrapers.base import browser_session, noop_log
+from scrapers.base import browser_session, new_context, noop_log
 from scrapers.dom_menu import generic
 from scrapers.dom_menu.sites import get_adapter
 import db
@@ -47,31 +47,34 @@ async def run(config: ScraperConfig | None = None, log: Callable = noop_log) -> 
     # only slows ~3.5→5.5min (it's never the batch long pole). ~5× vs sequential.
     sem = asyncio.Semaphore(5)
 
-    async def _scrape_one(listing: dict) -> int:
-        async with sem:
-            url = listing["url"]
-            host = urlparse(url).netloc.lower()
-            log(f"  → {url[:70]}")
-            adapter = get_adapter(host)
-            try:
-                if adapter:
-                    log(f"    [site-specific]")
-                    items = await adapter(url, browser, log)
-                else:
-                    items = await generic.scrape_url(url, browser, log)
-            except Exception as e:
-                log(f"     error: {e}")
-                return 0
-            if not items:
-                return 0
-            saved = db.insert_menu_items(listing["id"], items)
-            log(f"     {saved} items saved")
-            return saved
-
-    total_saved = 0
     async with browser_session(headed=False) as browser:
-        results = await asyncio.gather(*[_scrape_one(l) for l in listings], return_exceptions=True)
-        total_saved = sum(r for r in results if isinstance(r, int))
+        ctx = await new_context(browser)
+        try:
+            async def _scrape_one(listing: dict) -> int:
+                async with sem:
+                    url = listing["url"]
+                    host = urlparse(url).netloc.lower()
+                    log(f"  → {url[:70]}")
+                    adapter = get_adapter(host)
+                    try:
+                        if adapter:
+                            log(f"    [site-specific]")
+                            items = await adapter(url, ctx, log)
+                        else:
+                            items = await generic.scrape_url(url, ctx, log)
+                    except Exception as e:
+                        log(f"     error: {e}")
+                        return 0
+                    if not items:
+                        return 0
+                    saved = db.insert_menu_items(listing["id"], items)
+                    log(f"     {saved} items saved")
+                    return saved
+
+            results = await asyncio.gather(*[_scrape_one(l) for l in listings], return_exceptions=True)
+            total_saved = sum(r for r in results if isinstance(r, int))
+        finally:
+            await ctx.close()
 
     log(f"\ndone — {total_saved} total items")
     return ScraperResult(records_saved=total_saved)

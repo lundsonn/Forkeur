@@ -48,6 +48,11 @@ _GENERIC_TOKENS = {
 }
 
 _SUFFIX_RE = re.compile(r"\s+-\s+\S.*$")  # " - Ixelles"
+_STREET_PREFIX_RE = re.compile(
+    r"^(?:rue|avenue|av|boulevard|bvd|bd|chaussee|ch[eé]e|dr[eè]ve|place|pl|square|sq|"
+    r"clos|impasse|all[eé]e|quai|passage|sentier|chemin|ch|dreve|ruelle|voie|cit[eé])\s+",
+    re.IGNORECASE,
+)
 
 _BRUSSELS_LOCATIONS = {
     # 19 communes
@@ -195,6 +200,34 @@ def _location_tokens(raw_name: str, slugs: list[str] | None = None) -> set[str]:
     return tokens
 
 
+def _normalize_address(addr: str | None) -> str:
+    """Lowercase, strip accents, strip common street prefixes, keep [a-z0-9] only."""
+    if not addr:
+        return ""
+    s = _strip_accents(addr.strip().lower())
+    s = _STREET_PREFIX_RE.sub("", s)
+    return re.sub(r"[^a-z0-9]", "", s)
+
+
+def _match_address(a: dict, b: dict) -> bool | None:
+    """Compare address signals. True=confirmed same, False=conflict, None=insufficient data."""
+    pca = (a.get("postal_code") or "").strip()
+    pcb = (b.get("postal_code") or "").strip()
+    if not pca or not pcb:
+        return None
+    if pca != pcb:
+        return False
+    sa = _normalize_address(a.get("street_address"))
+    sb = _normalize_address(b.get("street_address"))
+    if not sa or not sb:
+        return None  # postal codes match but no streets to confirm or deny
+    if sa == sb:
+        return True
+    if len(sa) >= 4 and len(sb) >= 4:
+        return False
+    return None
+
+
 def _cuisine_conflict(ca: str | None, cb: str | None) -> bool:
     """True if both cuisines are set AND they do not match (case-insensitive, accent-stripped).
 
@@ -227,6 +260,7 @@ class MatchFeatures:
     is_chain_name: bool             # normalized name appears 3+ times in corpus
     slug_match: bool                # normalized URL slug shared across platforms
     distinctive_conflict: bool      # shared generic prefix but distinct remainder
+    address_match: bool | None      # postal+street match; None if data missing
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -325,6 +359,8 @@ def score_pair(
         and JaroWinkler.similarity(a_rem, b_rem) < DISTINCTIVE_REMAINDER_MIN
     )
 
+    address_match = _match_address(a, b)
+
     return MatchFeatures(
         name_sim=name_sim,
         website_match=website_match,
@@ -338,6 +374,7 @@ def score_pair(
         is_chain_name=is_chain_name,
         slug_match=slug_match,
         distinctive_conflict=distinctive_conflict,
+        address_match=address_match,
     )
 
 
@@ -375,6 +412,10 @@ def decide(f: MatchFeatures) -> Decision:
     if f.name_sim < HIGH_NAME_SIM:
         return Decision.SEPARATE
 
+    # Address veto: same postal code but different streets → different venues
+    if f.address_match is False:
+        return Decision.SEPARATE
+
     # Menu veto (after name threshold so low-sim pairs don't reach here)
     if f.menu_overlap is not None and f.menu_overlap < MENU_OVERLAP_VETO:
         return Decision.SEPARATE
@@ -398,6 +439,7 @@ def decide(f: MatchFeatures) -> Decision:
         or (f.website_match and f.name_sim >= NAME_SIM_WEBSITE_AUTO)
         or (f.menu_overlap is not None and f.menu_overlap >= MENU_OVERLAP_CONFIRM)
         or (f.slug_match and not f.is_chain_name)  # slug only confirms non-chains
+        or f.address_match is True
     )
 
     # Chain guard: don't auto-merge or queue chain branches without evidence

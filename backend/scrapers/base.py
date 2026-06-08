@@ -6,7 +6,7 @@ import os
 import random
 import re as _re
 from contextlib import asynccontextmanager
-from playwright.async_api import async_playwright, Browser, Page
+from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 from playwright_stealth import Stealth as _Stealth
 
 _log = logging.getLogger("forkeur.scraper")
@@ -14,6 +14,12 @@ _stealth = _Stealth()
 
 # Kept alive for the process lifetime when headed mode starts Xvfb automatically.
 _virtual_display = None
+
+# Compiled regex to match image/media URLs by extension (case-insensitive).
+# Used by page route handlers to avoid invoking Python for every network request.
+_MEDIA_URL_RE = _re.compile(
+    r"(?i)\.(png|jpe?g|gif|webp|svg|ico|bmp|avif|mp4|webm|ogg|avi|mov|wmv)(\?[^/]*)?$"
+)
 
 
 class CloudflareBlockedError(Exception):
@@ -103,28 +109,36 @@ async def new_browser(lang: str = "fr-BE", headed: bool = False) -> Browser:
     return browser
 
 
-async def new_page(browser: Browser, lang: str = "fr-BE", block_media: bool = True) -> Page:
+async def new_context(browser: Browser, lang: str = "fr-BE") -> BrowserContext:
+    """Create and configure a stealth browser context. Caller must close it."""
     context = await browser.new_context(
         user_agent=_next_ua(),
         locale=lang,
-        timezone_id="Europe/Brussels",  # matches Belgian exit IP; mismatch = CF flag
+        timezone_id="Europe/Brussels",
         viewport={"width": 1280, "height": 800},
         extra_http_headers={"Accept-Language": f"{lang},{lang[:2]};q=0.9,en;q=0.8"},
         java_script_enabled=True,
         bypass_csp=True,
     )
     await context.add_init_script(_STEALTH_SCRIPT)
+    return context
+
+
+async def new_page(
+    browser_or_context: Browser | BrowserContext,
+    lang: str = "fr-BE",
+    block_media: bool = True,
+) -> Page:
+    if isinstance(browser_or_context, BrowserContext):
+        context = browser_or_context
+    else:
+        context = await new_context(browser_or_context, lang=lang)
     page = await context.new_page()
     await _stealth.apply_stealth_async(page)
     if block_media:
         # Images and media are not needed for data scraping and are the biggest
         # contributors to renderer RSS and the network-service process cache.
-        await page.route(
-            "**/*",
-            lambda route: route.abort()
-            if route.request.resource_type in {"image", "media"}
-            else route.continue_(),
-        )
+        await page.route(_MEDIA_URL_RE, lambda route: route.abort())
     return page
 
 
@@ -139,12 +153,7 @@ async def new_sibling_page(page: Page, block_media: bool = True) -> Page:
     sib = await page.context.new_page()
     await _stealth.apply_stealth_async(sib)
     if block_media:
-        await sib.route(
-            "**/*",
-            lambda route: route.abort()
-            if route.request.resource_type in {"image", "media"}
-            else route.continue_(),
-        )
+        await sib.route(_MEDIA_URL_RE, lambda route: route.abort())
     return sib
 
 
