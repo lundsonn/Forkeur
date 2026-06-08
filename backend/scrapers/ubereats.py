@@ -189,15 +189,6 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
         # We fan out across N sibling pages (same context = same delivery-address
         # session + cookies) so the menu loop runs ~N× faster. Each worker owns a
         # contiguous slice and click-navs within its own page independently.
-        # Skip listings whose menus were scraped within the last 12 hours.
-        stale_ids = await asyncio.to_thread(
-            db.get_stale_listing_ids, [lid for _, lid, _ in saved_listings]
-        )
-        fresh_count = len(saved_listings) - len(stale_ids)
-        if fresh_count:
-            log_fn(f"Staleness skip: {fresh_count}/{len(saved_listings)} listings fresh (<12h)")
-        saved_listings = [(r, lid, rid) for r, lid, rid in saved_listings if lid in stale_ids]
-
         listing_url = page.url
         menu_items_saved = 0
         n = len(saved_listings)

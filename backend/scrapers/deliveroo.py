@@ -133,6 +133,7 @@ async def _venue_coords_from_page(page) -> dict | None:
                     "lng": lng,
                     "street_address": result.get("street_address"),
                     "postal_code": result.get("postal_code"),
+                    "telephone": result.get("telephone"),
                 }
     except Exception:
         pass
@@ -429,15 +430,6 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
 
         if config.listing_only:
             return ScraperResult(records_saved=records_saved)
-
-        # Skip listings whose menus were scraped within the last 12 hours.
-        stale_ids = await asyncio.to_thread(
-            db.get_stale_listing_ids, [lid for _, _, lid in saved]
-        )
-        fresh_count = len(saved) - len(stale_ids)
-        if fresh_count:
-            log_fn(f"Staleness skip: {fresh_count}/{len(saved)} listings fresh (<12h)")
-        saved = [(r, rid, lid) for r, rid, lid in saved if lid in stale_ids]
 
         # --- Phase 2: goto per restaurant menu page ---
         # SPA click only renders a partial React tree → ~6 items.
