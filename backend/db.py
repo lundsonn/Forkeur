@@ -311,25 +311,6 @@ def insert_menu_items(listing_id: str, items: list[dict]) -> int:
     return total
 
 
-def get_stale_listing_ids(listing_ids: list[str], max_age_hours: int = 12) -> set[str]:
-    """Return subset of listing_ids that lack a recent menu scrape.
-
-    A listing is stale if last_scraped_at IS NULL or older than max_age_hours.
-    Used to skip Phase 2 menu scraping for recently-scraped restaurants.
-    """
-    if not listing_ids:
-        return set()
-    from datetime import datetime, timezone, timedelta
-    threshold = (datetime.now(timezone.utc) - timedelta(hours=max_age_hours)).isoformat()
-    res = (
-        get_client()
-        .table("platform_listings")
-        .select("id")
-        .in_("id", listing_ids)
-        .or_(f"last_scraped_at.is.null,last_scraped_at.lt.{threshold}")
-        .execute()
-    )
-    return {r["id"] for r in res.data}
 
 
 def run_exists(run_id: str) -> bool:
