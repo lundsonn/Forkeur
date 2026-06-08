@@ -321,6 +321,9 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                 store_obj = store_data.get("data") or {}
                 tasks: list = [asyncio.to_thread(db.insert_menu_items, lid, items)]
                 if store_obj:
+                    log_fn(f"[addr-debug] {name} store_obj keys: {list(store_obj.keys())[:10]}")
+                    loc_raw = store_obj.get("location")
+                    log_fn(f"[addr-debug] {name} location: {str(loc_raw)[:200]}")
                     rich_promos = _parse_promotions(store_obj)
                     if rich_promos:
                         tasks.append(asyncio.to_thread(db.upsert_promotions, lid, rich_promos))
