@@ -5,9 +5,9 @@
 <!-- Add tasks here. Format: `- [ ] Task description` -->
 
 ### Scraper run optimization — option B (cheap wins, after A done)
-- [ ] **Staleness skip** — skip restaurants whose menus updated <12-24h ago (cuts 2nd daily batch to near-zero re-scrape)
+- [x] **Staleness skip** — DONE. `db.get_stale_listing_ids()` batch-queries `last_scraped_at`; ube/del filter `saved_listings`/`saved` before Phase 2 via `asyncio.to_thread`.
 - [x] **Lower dom_menu sem 8→5** — DONE. Was the batch RAM driver (8 pages overlapping ube/del menu workers → peak 6.7GB/1.1GB free). Now sem=5 frees ~1.5GB at overlap.
-- [ ] **Tighten scroll waits** — ube/del menu scroll sleep 1.2s→0.6s, fewer iterations (~15-20% per restaurant; watch missed lazy cards)
+- [x] **Tighten scroll waits** — DONE. UberEats 1.2s→0.6s (lines 274, 432); Deliveroo 0.8s→0.6s (line 488).
 
 Context: batch wall = slowest scraper. A (parallelize ube/del menu loop) = big win (33min→~8min). B = polish on top.
 
@@ -49,7 +49,7 @@ Context: batch wall = slowest scraper. A (parallelize ube/del menu loop) = big w
 ### 🟡 MED — dom_menu / direct_menu
 
 - [x] **[generic.py:195] Unconditional `sleep(2)` per site** — DONE. `wait_for_load_state("networkidle", timeout=5000)` + 0.3s fallback.
-- [ ] **[generic.py:191] `block_media=False`** — loads unused images. Fix: flip True. (Kept due to layout comment — verify safe.)
+- [x] **[generic.py:191] `block_media=False`** — DONE. Flipped to True. Heuristic is text-based DOM traversal (no bounding-box calls); comment was misleading.
 - [x] **[direct_menu.py:438-474] Entire `run()` synchronous serial httpx** — DONE. Async + `Semaphore(10)` + `asyncio.to_thread` per listing.
 
 ### 🟡 MED — matching / db (matcher path)
@@ -75,9 +75,9 @@ Context: batch wall = slowest scraper. A (parallelize ube/del menu loop) = big w
 - [x] **[ubereats.py:94-107] feed_pages accumulates 4-10MB raw JSON** — DONE. Extracts only feedItems in `on_response`.
 - [x] **[base.py:148-158] `_move_mouse_human` up to 1575 CDP round-trips** — DONE. Uses `page.mouse.move(x,y,steps=N)`.
 - [x] **[base.py:215-266] `_browser_lock` lazy-init race** — DONE. `asyncio.Lock()` at module level.
-- [ ] **[db.py vs matching.py] `_canonical` duplicated with divergence** — db normalizes apostrophes, matching doesn't → correctness risk. Fix: shared module.
-- [ ] **[ubereats.py:58,90,256] Polling `asyncio.sleep(0.5)`** — sleep-poll loops remain; no deprecated `get_event_loop()` found. Fix: `asyncio.Event` + `wait_for`.
-- [ ] **Dead piki host 15s timeout** — replace with fast-fail.
-- [ ] **Unused Odoo `image_128` base64 payload** — drop from parse.
-- [ ] **Hardcoded Brussels constant [scheduler:77-84]** — extract to config.
+- [x] **[db.py vs matching.py] `_canonical` duplicated with divergence** — DONE. db.py `_canonical` now matches matching.py: strips city noise + halal/bio/vegan labels; uses compiled `_SUFFIX_RE`.
+- [x] **[ubereats.py] Polling `asyncio.sleep(0.1)`** — DONE. All 3 sleep-poll loops (`feed_pages`, `store_raw`, `retry_buf`) replaced with `asyncio.Event` + `await event.wait()`.
+- [x] **Dead piki host 15s timeout** — DONE. `httpx.Timeout(connect=3.0, read=8.0)` fast-fails on dead DNS.
+- [x] **Unused Odoo `image_128` base64 payload** — DONE. Removed from `_ODOO_PRODUCT_PAYLOAD` fields list.
+- [x] **Hardcoded Brussels constant** — Already extracted: `DEFAULT_ADDRESS` in `constants.py`; `ScraperConfig` defaults to it.
 

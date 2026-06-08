@@ -188,7 +188,7 @@ async def scrape_url(url: str, browser, log: Callable) -> list[dict]:
     if urlparse(url).scheme not in ("http", "https"):
         return []
 
-    page = await new_page(browser, block_media=False)  # layout heuristic needs images for correct bounding boxes
+    page = await new_page(browser, block_media=True)
     try:
         try:
             await page.goto(url, timeout=20_000, wait_until="domcontentloaded")

@@ -429,6 +429,15 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
         if config.listing_only:
             return ScraperResult(records_saved=records_saved)
 
+        # Skip listings whose menus were scraped within the last 12 hours.
+        stale_ids = await asyncio.to_thread(
+            db.get_stale_listing_ids, [lid for _, _, lid in saved]
+        )
+        fresh_count = len(saved) - len(stale_ids)
+        if fresh_count:
+            log_fn(f"Staleness skip: {fresh_count}/{len(saved)} listings fresh (<12h)")
+        saved = [(r, rid, lid) for r, rid, lid in saved if lid in stale_ids]
+
         # --- Phase 2: goto per restaurant menu page ---
         # SPA click only renders a partial React tree → ~6 items.
         # Full goto gives 100+ items because the full SSR + hydration runs.
@@ -485,7 +494,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                     )
                     h, count = result["h"], result["c"]
                     await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                    await page.wait_for_timeout(800)
+                    await page.wait_for_timeout(600)
                     if h == prev_h and count == prev_count:
                         stale += 1
                         if stale >= 3:

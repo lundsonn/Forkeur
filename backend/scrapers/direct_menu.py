@@ -172,7 +172,6 @@ _ODOO_PRODUCT_PAYLOAD: dict[str, Any] = {
                 "list_price",
                 "categ_id",
                 "description_sale",
-                "image_128",
             ],
             "limit": 200,
         },
@@ -368,7 +367,7 @@ def fetch_piki_app(url: str, client: httpx.Client) -> list[dict[str, Any]]:
         try:
             resp = client.get(
                 api_url,
-                timeout=15,
+                timeout=httpx.Timeout(connect=3.0, read=8.0, write=5.0, pool=5.0),
                 headers={"Accept": "application/json"},
             )
             if resp.status_code == 200:

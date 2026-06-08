@@ -27,6 +27,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                     feed_data = parsed.get("data", {}).get("feedItems", [])
                     if feed_data:
                         feed_pages.append(feed_data)
+                        feed_event.set()
                 except Exception:
                     pass
 
@@ -71,9 +72,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
         feed_event = asyncio.Event()
         try:
             async with asyncio.timeout(15):
-                # Wait for first feed response or timeout
-                while not feed_pages:
-                    await asyncio.sleep(0.1)
+                await feed_event.wait()
         except asyncio.TimeoutError:
             pass
 
@@ -190,6 +189,15 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
         # We fan out across N sibling pages (same context = same delivery-address
         # session + cookies) so the menu loop runs ~N× faster. Each worker owns a
         # contiguous slice and click-navs within its own page independently.
+        # Skip listings whose menus were scraped within the last 12 hours.
+        stale_ids = await asyncio.to_thread(
+            db.get_stale_listing_ids, [lid for _, lid in saved_listings]
+        )
+        fresh_count = len(saved_listings) - len(stale_ids)
+        if fresh_count:
+            log_fn(f"Staleness skip: {fresh_count}/{len(saved_listings)} listings fresh (<12h)")
+        saved_listings = [(r, lid) for r, lid in saved_listings if lid in stale_ids]
+
         listing_url = page.url
         menu_items_saved = 0
         n = len(saved_listings)
@@ -234,11 +242,13 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                 return
 
             store_raw: list[str] = []
+            store_event = asyncio.Event()
 
-            async def on_store_response(response, _buf=store_raw):
+            async def on_store_response(response, _buf=store_raw, _evt=store_event):
                 if "getStoreV1" in response.url and not _buf:
                     try:
                         _buf.append(await response.text())
+                        _evt.set()
                     except Exception:
                         pass
 
@@ -271,7 +281,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                     if clicked:
                         break
                     await wpage.evaluate("window.scrollBy(0, 4000)")
-                    await asyncio.sleep(1.2)
+                    await asyncio.sleep(0.6)
 
                 if not clicked:
                     # Fallback: navigate directly if click failed (go_back depleted cards)
@@ -291,8 +301,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
 
             try:
                 async with asyncio.timeout(12):
-                    while not store_raw:
-                        await asyncio.sleep(0.1)
+                    await store_event.wait()
             except asyncio.TimeoutError:
                 pass
 
@@ -429,7 +438,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                         await asyncio.wait_for(page.evaluate("window.scrollTo(0, document.body.scrollHeight)"), timeout=5)
                     except asyncio.TimeoutError:
                         break
-                    await asyncio.sleep(1.2)
+                    await asyncio.sleep(0.6)
                     if h == prev_h:
                         break
                     prev_h = h
@@ -445,11 +454,13 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                 if not store_path:
                     continue
                 retry_buf: list[str] = []
-                async def on_retry_response(response, _buf=retry_buf):
+                retry_event = asyncio.Event()
+                async def on_retry_response(response, _buf=retry_buf, _evt=retry_event):
                     if "getStoreV1" in response.url and not _buf:
                         try:
                             text = await response.text()
                             _buf.append(text)
+                            _evt.set()
                         except Exception:
                             pass
                 page.on("response", on_retry_response)
@@ -472,8 +483,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                     await page.wait_for_load_state("domcontentloaded", timeout=15000)
                     try:
                         async with asyncio.timeout(15):
-                            while not retry_buf:
-                                await asyncio.sleep(0.1)
+                            await retry_event.wait()
                     except asyncio.TimeoutError:
                         pass
                 except Exception as exc:
