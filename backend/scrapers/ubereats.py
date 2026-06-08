@@ -320,10 +320,13 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                 items = _parse_menu_items(store_data)
                 store_obj = store_data.get("data") or {}
                 tasks: list = [asyncio.to_thread(db.insert_menu_items, lid, items)]
+                # ONE-TIME: dump first store response for address key inspection
+                import pathlib as _pl
+                _dbg = _pl.Path("/tmp/ue_store_debug.json")
+                if not _dbg.exists():
+                    import json as _json2
+                    _dbg.write_text(_json2.dumps(store_obj, indent=2, default=str)[:50000])
                 if store_obj:
-                    log_fn(f"[addr-debug] {name} store_obj keys: {list(store_obj.keys())[:10]}")
-                    loc_raw = store_obj.get("location")
-                    log_fn(f"[addr-debug] {name} location: {str(loc_raw)[:200]}")
                     rich_promos = _parse_promotions(store_obj)
                     if rich_promos:
                         tasks.append(asyncio.to_thread(db.upsert_promotions, lid, rich_promos))
@@ -632,6 +635,20 @@ def _parse_regular_hours(store: dict) -> dict | None:
             continue
         result[day] = [str(start)[:5], str(end)[:5]]
     return result or None
+
+
+def _parse_phone(store: dict) -> str | None:
+    """Extract phone number from a UberEats getStoreV1 store object."""
+    raw = (
+        store.get("phoneNumber")
+        or store.get("phone")
+        or (store.get("contactInfo") or {}).get("phoneNumber")
+        or (store.get("contactInfo") or {}).get("phone")
+        or (store.get("location") or {}).get("phoneNumber")
+    )
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    return None
 
 
 def _parse_address(store: dict) -> dict:
