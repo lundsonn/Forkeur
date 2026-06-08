@@ -144,7 +144,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
             restaurants = [r for r in restaurants if config.target.lower() in r["name"].lower()]
 
         log_fn(f"Saving {len(restaurants)} restaurants...")
-        saved_listings: list[tuple[dict, str]] = []  # (restaurant_dict, listing_id)
+        saved_listings: list[tuple[dict, str, str]] = []  # (restaurant_dict, listing_id, restaurant_id)
         promo_total = 0
         for r in (restaurants[:config.max_items] if config.max_items else restaurants):
             try:
@@ -173,7 +173,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
             })
             promos = _parse_promotions(r.get("_store") or {})
             promo_total += db.upsert_promotions(lid, promos)
-            saved_listings.append((r, lid))
+            saved_listings.append((r, lid, rid))
             records_saved += 1
 
         log_fn(f"Phase 1 done — {records_saved} listings, {promo_total} promotions saved")
@@ -191,17 +191,17 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
         # contiguous slice and click-navs within its own page independently.
         # Skip listings whose menus were scraped within the last 12 hours.
         stale_ids = await asyncio.to_thread(
-            db.get_stale_listing_ids, [lid for _, lid in saved_listings]
+            db.get_stale_listing_ids, [lid for _, lid, _ in saved_listings]
         )
         fresh_count = len(saved_listings) - len(stale_ids)
         if fresh_count:
             log_fn(f"Staleness skip: {fresh_count}/{len(saved_listings)} listings fresh (<12h)")
-        saved_listings = [(r, lid) for r, lid in saved_listings if lid in stale_ids]
+        saved_listings = [(r, lid, rid) for r, lid, rid in saved_listings if lid in stale_ids]
 
         listing_url = page.url
         menu_items_saved = 0
         n = len(saved_listings)
-        failed_listings: list[tuple[dict, str]] = []
+        failed_listings: list[tuple[dict, str, str]] = []
         _fail_lock = asyncio.Lock()
         from scrapers.base import new_sibling_page
 
@@ -225,11 +225,11 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
             except asyncio.TimeoutError:
                 pass
 
-        async def _scrape_one(wpage, r, lid) -> None:
+        async def _scrape_one(wpage, r, lid, rid) -> None:
             """Scrape one restaurant's menu on `wpage` (already on the listing).
 
             Click-navs to the store, captures getStoreV1, parses + saves.
-            On capture/click failure, queues (r, lid) for the retry pass.
+            On capture/click failure, queues (r, lid, rid) for the retry pass.
             Re-raises only on a page crash so the worker can recreate its page.
             """
             nonlocal menu_items_saved
@@ -294,7 +294,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                 except Exception:
                     pass
                 async with _fail_lock:
-                    failed_listings.append((r, lid))
+                    failed_listings.append((r, lid, rid))
                 if "crashed" in str(exc).lower():
                     raise  # bubble up so the worker recreates its page
                 return
@@ -312,7 +312,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
 
             if not store_raw:
                 async with _fail_lock:
-                    failed_listings.append((r, lid))
+                    failed_listings.append((r, lid, rid))
                 return
 
             try:
@@ -320,18 +320,13 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                 items = _parse_menu_items(store_data)
                 store_obj = store_data.get("data") or {}
                 tasks: list = [asyncio.to_thread(db.insert_menu_items, lid, items)]
-                # ONE-TIME: dump first store response for address key inspection
-                import pathlib as _pl
-                _dbg = _pl.Path("/tmp/ue_store_debug.json")
-                if not _dbg.exists():
-                    import json as _json2
-                    _dbg.write_text(_json2.dumps(store_obj, indent=2, default=str)[:50000])
                 if store_obj:
                     rich_promos = _parse_promotions(store_obj)
                     if rich_promos:
                         tasks.append(asyncio.to_thread(db.upsert_promotions, lid, rich_promos))
                     rich_hours = _parse_section_hours(store_obj) or _parse_regular_hours(store_obj)
                     addr = _parse_address(store_obj)
+                    phone = _parse_phone(store_obj)
                     patch: dict = {}
                     if rich_hours:
                         patch["opening_hours"] = rich_hours
@@ -341,6 +336,8 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                         patch["postal_code"] = addr["postal_code"]
                     if patch:
                         tasks.append(asyncio.to_thread(db.patch_listing, lid, patch))
+                    if phone:
+                        tasks.append(asyncio.to_thread(db.patch_restaurant_phone, rid, phone))
                 results = await asyncio.gather(*tasks)
                 count = results[0]
                 menu_items_saved += count
@@ -366,7 +363,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                 await wpage.goto(listing_url, wait_until="domcontentloaded", timeout=20000)
                 await asyncio.sleep(2)
                 await _scroll_listing(wpage)
-                for k, (r, lid) in enumerate(slice_items):
+                for k, (r, lid, rid) in enumerate(slice_items):
                     # Recycle the worker page every 30 restaurants — reusing one page
                     # across a whole slice of heavy menu loads leaks renderer RSS
                     # (full-batch creep drove free RAM to ~300MB). Close+reopen caps it.
@@ -386,11 +383,11 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                     try:
                         # Hard per-restaurant wall cap — a page crash can poison the
                         # shared context and wedge Playwright past its own timeouts.
-                        await asyncio.wait_for(_scrape_one(wpage, r, lid), timeout=45)
+                        await asyncio.wait_for(_scrape_one(wpage, r, lid, rid), timeout=45)
                     except asyncio.TimeoutError:
                         log_fn(f"Menu worker {wid}: {r.get('name','?')} timed out, requeuing")
                         async with _fail_lock:
-                            failed_listings.append((r, lid))
+                            failed_listings.append((r, lid, rid))
                         needs_recover = True  # page likely wedged
                     except Exception:
                         # Crash bubbled from _scrape_one (already queued the item).
@@ -451,7 +448,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
             except Exception as _e:
                 log_fn(f"Retry pass: failed to load listing: {_e}")
 
-            for r, lid in failed_listings:
+            for r, lid, rid in failed_listings:
                 url = r.get("url")
                 name = r.get("name", "?")
                 if not url:
@@ -517,6 +514,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                             db.upsert_promotions(lid, rich_promos)
                         rich_hours = _parse_section_hours(store_obj) or _parse_regular_hours(store_obj)
                         addr = _parse_address(store_obj)
+                        phone = _parse_phone(store_obj)
                         patch: dict = {}
                         if rich_hours:
                             patch["opening_hours"] = rich_hours
@@ -526,6 +524,8 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                             patch["postal_code"] = addr["postal_code"]
                         if patch:
                             db.patch_listing(lid, patch)
+                        if phone:
+                            db.patch_restaurant_phone(rid, phone)
                     log_fn(f"Retry: {name} — {count} items saved")
                 except Exception as exc:
                     log_fn(f"Retry: {name} — parse/save error: {exc}")

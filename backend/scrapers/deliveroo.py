@@ -90,7 +90,8 @@ async def _venue_coords_from_page(page) -> dict | None:
                                 const addr = item.address || {};
                                 const street = (addr.streetAddress || '').trim() || null;
                                 const postal = (addr.postalCode || '').toString().trim() || null;
-                                return { lat, lng, street_address: street, postal_code: postal };
+                                const tel = (item.telephone || '').trim() || null;
+                                return { lat, lng, street_address: street, postal_code: postal, telephone: tel };
                             }
                         }
                     }
@@ -474,6 +475,10 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                     if any(addr_patch.values()):
                         db.patch_listing(lid, addr_patch)
                         log_fn(f"  Venue address: {addr_patch}")
+                    tel = venue.get("telephone")
+                    if tel:
+                        db.patch_restaurant_phone(rid, tel)
+                        log_fn(f"  Venue phone: {tel}")
 
                 # Single wait: covers redirect + load + settle in one step.
                 # div.notranslate appears once any items render; fallbacks cover layout changes.

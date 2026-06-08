@@ -593,6 +593,13 @@ def patch_restaurant_website(restaurant_id: str, website: str | None, order_url:
     invalidate_domain_cache()
 
 
+def patch_restaurant_phone(restaurant_id: str, phone: str) -> None:
+    """Write phone to restaurants row only if currently empty."""
+    existing = get_client().table("restaurants").select("phone").eq("id", restaurant_id).limit(1).execute()
+    if existing.data and not existing.data[0].get("phone"):
+        get_client().table("restaurants").update({"phone": phone}).eq("id", restaurant_id).execute()
+
+
 def mark_restaurant_searched(restaurant_id: str) -> None:
     from datetime import datetime, timezone
     get_client().table("restaurants").update({
