@@ -312,8 +312,8 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                 store_data = json.loads(store_raw[0])
                 items = _parse_menu_items(store_data)
                 store_obj = store_data.get("data") or {}
-                # addr-debug: log structure on first worker call to diagnose 0-address issue
-                if k == 0:
+                # addr-debug: log structure to diagnose 0-address issue
+                if True:  # noqa: SIM210
                     top_keys = list(store_data.keys())
                     data_keys = list(store_obj.keys()) if store_obj else []
                     loc_direct = store_obj.get("location")
