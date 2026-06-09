@@ -295,129 +295,107 @@ def upsert_restaurant(data: dict) -> str:
 
 
 def upsert_listing(data: dict) -> str:
-    """Upsert platform_listing by restaurant_id + platform. Returns id."""
-    res = (
-        get_client()
-        .table("platform_listings")
-        .upsert(data, on_conflict="restaurant_id,platform")
-        .execute()
+    sql, params = _build_insert(
+        "platform_listings", data, on_conflict="restaurant_id,platform"
     )
-    return res.data[0]["id"]
+    row = pgpool.fetchone(sql, params)
+    return str(row["id"])
 
 
 def patch_listing(listing_id: str, data: dict) -> None:
-    """Patch specific fields on a platform_listing row by id."""
-    get_client().table("platform_listings").update(data).eq("id", listing_id).execute()
+    sql, params = _build_update("platform_listings", data, "id", listing_id)
+    pgpool.execute(sql, params)
 
 
 def upsert_promotions(listing_id: str, promotions: list[dict]) -> int:
-    """Replace all promotions for a listing. Returns count saved."""
-    client = get_client()
-    client.table("promotions").delete().eq("listing_id", listing_id).execute()
+    pgpool.execute("DELETE FROM promotions WHERE listing_id = %s", [listing_id])
     if not promotions:
         return 0
-    rows = [{"listing_id": listing_id, **p} for p in promotions]
-    res = client.table("promotions").insert(rows).execute()
-    return len(res.data)
+    saved = 0
+    for p in promotions:
+        sql, params = _build_insert("promotions", {"listing_id": listing_id, **p})
+        pgpool.fetchone(sql, params)
+        saved += 1
+    return saved
 
 
 def delete_menu_items(listing_id: str) -> None:
-    """Delete all menu items for a listing."""
-    get_client().table("menu_items").delete().eq("listing_id", listing_id).execute()
+    pgpool.execute("DELETE FROM menu_items WHERE listing_id = %s", [listing_id])
 
 
 def insert_menu_items(listing_id: str, items: list[dict]) -> int:
-    """Delete existing items for listing, insert new ones. Returns count.
-
-    Also bumps last_scraped_at on the listing so the frontend can show staleness.
-    """
-    from datetime import datetime, timezone
-    client = get_client()
-    client.table("menu_items").delete().eq("listing_id", listing_id).execute()
-    now = datetime.now(timezone.utc).isoformat()
-    client.table("platform_listings").update({"last_scraped_at": now}).eq("id", listing_id).execute()
+    pgpool.execute("DELETE FROM menu_items WHERE listing_id = %s", [listing_id])
+    pgpool.execute(
+        "UPDATE platform_listings SET last_scraped_at = now() WHERE id = %s",
+        [listing_id],
+    )
     if not items:
         return 0
-    rows = [{**item, "listing_id": listing_id} for item in items]
     total = 0
-    for i in range(0, len(rows), _MENU_INSERT_CHUNK):
-        res = client.table("menu_items").insert(rows[i : i + _MENU_INSERT_CHUNK]).execute()
-        total += len(res.data)
+    with pgpool.get_pool().connection() as conn, conn.cursor() as cur:
+        for i in range(0, len(items), _MENU_INSERT_CHUNK):
+            chunk = items[i : i + _MENU_INSERT_CHUNK]
+            for item in chunk:
+                row = {**item, "listing_id": listing_id}
+                cols = ", ".join(row.keys())
+                ph = ", ".join(["%s"] * len(row))
+                cur.execute(
+                    f"INSERT INTO menu_items ({cols}) VALUES ({ph})",
+                    [_coerce(v) for v in row.values()],
+                )
+                total += 1
     return total
 
 
 
 
 def run_exists(run_id: str) -> bool:
-    """Return True if a scraper_run with this id exists."""
-    client = get_client()
-    res = client.table("scraper_runs").select("id").eq("id", run_id).limit(1).execute()
-    return bool(res.data)
+    row = pgpool.fetchone("SELECT id FROM scraper_runs WHERE id = %s LIMIT 1", [run_id])
+    return row is not None
 
 
 def create_run(platform: str) -> str:
-    """Insert a scraper_run row with status=running. Returns run id."""
-    client = get_client()
-    res = (
-        client.table("scraper_runs")
-        .insert({"platform": platform, "status": "running"})
-        .execute()
+    row = pgpool.fetchone(
+        "INSERT INTO scraper_runs (platform, status) VALUES (%s, 'running') RETURNING id",
+        [platform],
     )
-    return res.data[0]["id"]
+    return str(row["id"])
 
 
 def update_run_progress(run_id: str, records_saved: int) -> None:
-    get_client().table("scraper_runs").update({
-        "records_saved": records_saved,
-    }).eq("id", run_id).execute()
+    pgpool.execute(
+        "UPDATE scraper_runs SET records_saved = %s WHERE id = %s",
+        [records_saved, run_id],
+    )
 
 
-def finish_run(
-    run_id: str,
-    status: str,
-    records_saved: int = 0,
-    error_msg: str | None = None,
-) -> None:
-    client = get_client()
-    from datetime import datetime, timezone
-    client.table("scraper_runs").update({
-        "status": status,
-        "records_saved": records_saved,
-        "finished_at": datetime.now(timezone.utc).isoformat(),
-        "error_msg": error_msg,
-    }).eq("id", run_id).execute()
+def finish_run(run_id: str, status: str, records_saved: int = 0,
+               error_msg: str | None = None) -> None:
+    pgpool.execute(
+        "UPDATE scraper_runs SET status = %s, records_saved = %s, "
+        "finished_at = now(), error_msg = %s WHERE id = %s",
+        [status, records_saved, error_msg, run_id],
+    )
 
 
 def get_runs(limit: int = 50, offset: int = 0) -> list[dict]:
-    client = get_client()
-    res = (
-        client.table("scraper_runs")
-        .select("*")
-        .order("started_at", desc=True)
-        .range(offset, offset + limit - 1)
-        .execute()
+    return pgpool.fetchall(
+        "SELECT * FROM scraper_runs ORDER BY started_at DESC LIMIT %s OFFSET %s",
+        [limit, offset],
     )
-    return res.data
 
 
 def get_run(run_id: str) -> dict | None:
-    client = get_client()
-    res = client.table("scraper_runs").select("*").eq("id", run_id).execute()
-    return res.data[0] if res.data else None
+    return pgpool.fetchone("SELECT * FROM scraper_runs WHERE id = %s", [run_id])
 
 
 def get_last_run_per_platform() -> dict[str, dict]:
-    """Returns {platform: run_row} for the most recent run of each platform."""
     platforms = ("ubereats", "deliveroo", "takeaway", "direct", "direct_menu", "dom_menu", "match")
-    rows = (
-        get_client()
-        .table("scraper_runs")
-        .select("*")
-        .in_("platform", list(platforms))
-        .order("started_at", desc=True)
-        .limit(140)
-        .execute()
-    ).data or []
+    rows = pgpool.fetchall(
+        "SELECT * FROM scraper_runs WHERE platform = ANY(%s) "
+        "ORDER BY started_at DESC LIMIT 140",
+        [list(platforms)],
+    )
     seen: dict[str, dict] = {}
     for row in rows:
         p = row["platform"]
@@ -427,34 +405,21 @@ def get_last_run_per_platform() -> dict[str, dict]:
 
 
 def get_last_successful_run(platform: str) -> dict | None:
-    """Return the most recent successful run for a platform, or None."""
-    res = (
-        get_client()
-        .table("scraper_runs")
-        .select("*")
-        .eq("platform", platform)
-        .eq("status", "success")
-        .order("started_at", desc=True)
-        .limit(1)
-        .execute()
+    return pgpool.fetchone(
+        "SELECT * FROM scraper_runs WHERE platform = %s AND status = 'success' "
+        "ORDER BY started_at DESC LIMIT 1",
+        [platform],
     )
-    return res.data[0] if res.data else None
 
 
 def get_last_successful_run_batch(platforms: list[str]) -> dict[str, dict]:
-    """Single query for last successful run across multiple platforms."""
     if not platforms:
         return {}
-    rows = (
-        get_client()
-        .table("scraper_runs")
-        .select("platform,status,started_at,finished_at,records_saved")
-        .eq("status", "success")
-        .in_("platform", platforms)
-        .order("finished_at", desc=True)
-        .limit(len(platforms) * 5)
-        .execute()
-        .data
+    rows = pgpool.fetchall(
+        "SELECT platform, status, started_at, finished_at, records_saved "
+        "FROM scraper_runs WHERE status = 'success' AND platform = ANY(%s) "
+        "ORDER BY finished_at DESC LIMIT %s",
+        [platforms, len(platforms) * 5],
     )
     result: dict[str, dict] = {}
     for row in rows:
@@ -512,27 +477,12 @@ def prune_stale_menu_items(days: int = 30) -> int:
 
 
 def orphan_stale_runs(max_age_hours: int = 2) -> int:
-    """Mark any 'running' rows older than max_age_hours as failed/orphaned.
-
-    Called on backend startup to clean up runs that were interrupted by a
-    previous restart and will never finish.
-    """
-    from datetime import datetime, timezone, timedelta
-    now = datetime.now(timezone.utc)
-    cutoff = (now - timedelta(hours=max_age_hours)).isoformat()
-    res = (
-        get_client()
-        .table("scraper_runs")
-        .update({
-            "status": "failed",
-            "finished_at": now.isoformat(),
-            "error_msg": "orphaned — backend restarted",
-        })
-        .eq("status", "running")
-        .lt("started_at", cutoff)
-        .execute()
+    return pgpool.execute(
+        "UPDATE scraper_runs SET status = 'failed', finished_at = now(), "
+        "error_msg = 'orphaned — backend restarted' "
+        "WHERE status = 'running' AND started_at < now() - make_interval(hours => %s)",
+        [max_age_hours],
     )
-    return len(res.data)
 
 
 def get_restaurants(
