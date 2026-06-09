@@ -72,135 +72,118 @@ def test_merge_restaurants_calls_atomic_rpc():
 def test_upsert_restaurant_website_domain_lock():
     """A new name with a known website domain attaches to the existing row."""
     import db
-    existing = [{"id": "R1", "website": "https://foo.be"}]
-    client = MagicMock()
+    # pgpool call sequence for "Totally Different" with website="http://www.foo.be/x":
+    # fetchone(exact name)  → None
+    # fetchone(ilike name)  → None
+    # fetchall(website rows) → [{"id": "R1", "website": "https://foo.be"}]
+    # _found: fetchone(existing row by id) → {"cuisine": None, "image_url": None, ...}
+    # no updates → execute not called
+    fetchone_results = iter([None, None, {"cuisine": None, "image_url": None,
+                                          "lat": None, "lng": None, "geo_source": None,
+                                          "phone": None, "neighborhood": None}])
+    fetchall_results = iter([[{"id": "R1", "website": "https://foo.be"}]])
 
-    def table(name):
-        t = MagicMock()
-        if name == "restaurants":
-            # Step 1 — exact name eq: no match
-            t.select.return_value.eq.return_value.limit.return_value.execute.return_value.data = []
-            # Step 2 — ilike name: no match
-            t.select.return_value.ilike.return_value.limit.return_value.execute.return_value.data = []
-            # Step 2b — domain lock: .select(...).not_.is_(...).execute()
-            # .not_ is an attribute (not a call) in supabase-py
-            t.select.return_value.not_.is_.return_value.execute.return_value.data = existing
-            # _found: .select(...).eq(...).limit(1).execute()
-            t.select.return_value.eq.return_value.execute.return_value.data = [{"cuisine": None, "image_url": None}]
-            t.update.return_value.eq.return_value.execute.return_value.data = []
-        return t
-
-    client.table.side_effect = table
-    with patch("db.get_client", return_value=client):
+    with patch("pgpool.fetchone", side_effect=fetchone_results), \
+         patch("pgpool.fetchall", side_effect=fetchall_results), \
+         patch("pgpool.execute") as mock_exec:
         rid = db.upsert_restaurant({"name": "Totally Different", "website": "http://www.foo.be/x"})
     assert rid == "R1"
+    mock_exec.assert_not_called()
 
 
 def test_upsert_restaurant_stamps_geo_source():
     """geo_source is persisted when provided on insert."""
     import db
-    captured = {}
-    client = MagicMock()
+    captured_sql = {}
 
-    def table(name):
-        t = MagicMock()
-        if name == "restaurants":
-            # All name-matching steps return no match
-            t.select.return_value.eq.return_value.limit.return_value.execute.return_value.data = []
-            t.select.return_value.ilike.return_value.limit.return_value.execute.return_value.data = []
-            # Domain lock: no existing rows with websites
-            t.select.return_value.not_.is_.return_value.execute.return_value.data = []
-            # Step 5 prefix scan: no candidates
-            t.select.return_value.ilike.return_value.execute.return_value.data = []
-            # Step 6 token scan: no candidates (ilike with limit)
-            t.select.return_value.ilike.return_value.limit.return_value.execute.return_value.data = []
+    # pgpool call sequence for "Brand New" (no match anywhere → insert):
+    # fetchone(exact name)   → None
+    # fetchone(ilike name)   → None
+    # fetchall(website rows) → []  (no websites in db)
+    # fetchone(canonical ilike) → None  (canonical != name only if suffix stripped)
+    # fetchone(suffix variant)  → None
+    # fetchall(prefix scan)     → []
+    # fetchone(INSERT … RETURNING id) → {"id": "NEW"}
+    # "Brand New" → canonical = "Brand New", so step 3 is skipped (canonical == name)
+    fetchone_results = iter([None, None, None, {"id": "NEW"}])
+    fetchall_results = iter([[], []])  # website rows, prefix scan
 
-            def upsert(data, **k):
-                captured.update(data)
-                m = MagicMock()
-                m.execute.return_value.data = [{"id": "NEW"}]
-                return m
-            t.upsert.side_effect = upsert
-        return t
+    def fake_fetchone(sql, params=None):
+        result = next(fetchone_results)
+        if result and result.get("id") == "NEW":
+            captured_sql["insert_params"] = params
+        return result
 
-    client.table.side_effect = table
-    with patch("db.get_client", return_value=client):
+    with patch("pgpool.fetchone", side_effect=fake_fetchone), \
+         patch("pgpool.fetchall", side_effect=fetchall_results), \
+         patch("pgpool.execute"):
         rid = db.upsert_restaurant({"name": "Brand New", "slug": "brand-new",
                                     "lat": 50.8, "lng": 4.3, "geo_source": "uber_eats"})
     assert rid == "NEW"
-    assert captured.get("geo_source") == "uber_eats"
+    # geo_source was in the inserted data (passed as params to INSERT)
+    params = captured_sql.get("insert_params", [])
+    assert "uber_eats" in params
 
 
 def test_upsert_found_deliveroo_does_not_clobber_venue_geo():
     """A deliveroo re-scrape must not overwrite venue-grade coords/source."""
     import db
     existing_row = {"id": "R1", "cuisine": "Pizza", "image_url": "x",
-                    "lat": 50.1, "lng": 4.1, "geo_source": "uber_eats"}
-    captured = {}
-    client = MagicMock()
+                    "lat": 50.1, "lng": 4.1, "geo_source": "uber_eats",
+                    "phone": None, "neighborhood": None}
 
-    def table(name):
-        t = MagicMock()
-        if name == "restaurants":
-            def select(cols):
-                s = MagicMock()
-                if "geo_source" in cols:  # _found's existing-row fetch
-                    s.eq.return_value.limit.return_value.execute.return_value.data = [existing_row]
-                else:                      # step 1 select("id") exact-name match
-                    s.eq.return_value.limit.return_value.execute.return_value.data = [{"id": "R1"}]
-                s.ilike.return_value.limit.return_value.execute.return_value.data = []
-                return s
-            t.select.side_effect = select
-            def update(u):
-                captured.update(u)
-                m = MagicMock()
-                m.eq.return_value.execute.return_value.data = []
-                return m
-            t.update.side_effect = update
-        return t
+    # Step 1 exact-name match hits → _found called with row from step 1.
+    # Step 1 row lacks phone/neighborhood so _found does a fetchone for full row.
+    # Actually step 1 returns _MATCH_COLS = "id, cuisine, image_url, lat, lng, geo_source"
+    # which IS passed as row to _found — no extra fetchone needed.
+    step1_row = {"id": "R1", "cuisine": "Pizza", "image_url": "x",
+                 "lat": 50.1, "lng": 4.1, "geo_source": "uber_eats"}
 
-    client.table.side_effect = table
-    with patch("db.get_client", return_value=client):
+    fetchone_results = iter([step1_row])
+    captured_updates = {}
+
+    def fake_execute(sql, params=None):
+        # Capture UPDATE calls
+        if sql.strip().upper().startswith("UPDATE"):
+            captured_updates["sql"] = sql
+            captured_updates["params"] = params
+        return 1
+
+    with patch("pgpool.fetchone", side_effect=fetchone_results), \
+         patch("pgpool.fetchall") as mock_fetchall, \
+         patch("pgpool.execute", side_effect=fake_execute):
         db.upsert_restaurant({"name": "Pizza Roma", "lat": 50.9, "lng": 4.9,
                               "geo_source": "deliveroo"})
-    assert "lat" not in captured
-    assert "geo_source" not in captured
+
+    # No UPDATE should have included lat/geo_source — deliveroo can't clobber uber_eats
+    params = captured_updates.get("params", [])
+    assert 50.9 not in params
+    assert "deliveroo" not in params
 
 
 def test_upsert_found_venue_grade_upgrades_geo():
     """An uber_eats re-scrape upgrades coords + stamps geo_source."""
     import db
-    existing_row = {"id": "R1", "cuisine": "Pizza", "image_url": "x",
-                    "lat": 50.1, "lng": 4.1, "geo_source": "deliveroo"}
-    captured = {}
-    client = MagicMock()
+    step1_row = {"id": "R1", "cuisine": "Pizza", "image_url": "x",
+                 "lat": 50.1, "lng": 4.1, "geo_source": "deliveroo"}
 
-    def table(name):
-        t = MagicMock()
-        if name == "restaurants":
-            def select(cols):
-                s = MagicMock()
-                if "geo_source" in cols:
-                    s.eq.return_value.limit.return_value.execute.return_value.data = [existing_row]
-                else:
-                    s.eq.return_value.limit.return_value.execute.return_value.data = [{"id": "R1"}]
-                s.ilike.return_value.limit.return_value.execute.return_value.data = []
-                return s
-            t.select.side_effect = select
-            def update(u):
-                captured.update(u)
-                m = MagicMock()
-                m.eq.return_value.execute.return_value.data = []
-                return m
-            t.update.side_effect = update
-        return t
+    fetchone_results = iter([step1_row])
+    captured_updates = {}
 
-    client.table.side_effect = table
-    with patch("db.get_client", return_value=client):
+    def fake_execute(sql, params=None):
+        if sql.strip().upper().startswith("UPDATE"):
+            captured_updates["params"] = params
+        return 1
+
+    with patch("pgpool.fetchone", side_effect=fetchone_results), \
+         patch("pgpool.fetchall") as mock_fetchall, \
+         patch("pgpool.execute", side_effect=fake_execute):
         db.upsert_restaurant({"name": "Pizza Roma", "lat": 50.9, "lng": 4.9,
                               "geo_source": "uber_eats"})
-    assert captured.get("lat") == 50.9
-    assert captured.get("geo_source") == "uber_eats"
+
+    params = captured_updates.get("params", [])
+    assert 50.9 in params
+    assert "uber_eats" in params
 
 
 def test_get_queued_decisions_filters_status():

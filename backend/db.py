@@ -1,6 +1,4 @@
-import os
 import re
-import threading
 import unicodedata
 import json as _json
 from uuid import UUID
@@ -60,8 +58,6 @@ _MENU_INSERT_CHUNK = 500
 
 _SUFFIX_RE = re.compile(r"\s+-\s+\S.*$")
 
-_client = None
-_client_lock = threading.Lock()
 _domain_cache: dict[str, str] | None = None  # domain → restaurant_id
 
 
@@ -70,27 +66,9 @@ def invalidate_domain_cache() -> None:
     _domain_cache = None
 
 
-def get_client():
-    global _client
-    if _client is None:
-        with _client_lock:
-            if _client is None:
-                url = os.environ["SUPABASE_URL"]
-                # Use the service_role key so writes bypass RLS (anon key is public).
-                key = os.environ["SUPABASE_SERVICE_KEY"]
-                _client = create_client(url, key)
-    return _client
-
-
 def close_client() -> None:
-    global _client
-    with _client_lock:
-        if _client is not None:
-            try:
-                _client.postgrest.session.close()
-            except Exception:
-                pass
-            _client = None
+    """Back-compat shim — closes the psycopg pool."""
+    pgpool.close_pool()
 
 
 def _is_junk(name: str) -> bool:
@@ -166,11 +144,9 @@ def infer_cuisine(name: str) -> str | None:
 def upsert_restaurant(data: dict) -> str:
     """Match restaurant by name across platforms, insert if new. Returns id.
 
-    Matching is done in 5 escalating steps to handle cross-platform name
-    variations: exact → case-insensitive → canonical base → suffixed variant
-    → fully-normalized (accents, quotes, emoji).
+    5 escalating steps: exact → case-insensitive → domain lock → canonical base
+    → suffixed variant → fully-normalized.
     """
-    client = get_client()
     name: str = data["name"].strip()
     data = {**data, "name": name}
 
@@ -188,8 +164,10 @@ def upsert_restaurant(data: dict) -> str:
 
     def _found(rid: str, row: dict | None = None) -> str:
         if row is None:
-            existing = client.table("restaurants").select("cuisine, image_url, lat, lng, geo_source, phone, neighborhood").eq("id", rid).limit(1).execute()
-            row = existing.data[0] if existing.data else {}
+            row = pgpool.fetchone(
+                "SELECT cuisine, image_url, lat, lng, geo_source, phone, neighborhood "
+                "FROM restaurants WHERE id = %s LIMIT 1", [rid]
+            ) or {}
         updates: dict = {}
         if data.get("cuisine") and not row.get("cuisine"):
             updates["cuisine"] = data["cuisine"]
@@ -199,9 +177,6 @@ def upsert_restaurant(data: dict) -> str:
             updates["phone"] = data["phone"]
         if data.get("neighborhood") and not row.get("neighborhood"):
             updates["neighborhood"] = data["neighborhood"]
-        # Geo provenance hierarchy: uber_eats/direct/takeaway > deliveroo_venue > deliveroo (zone centroid).
-        # venue-grade always overwrites; deliveroo_venue upgrades over zone centroid only;
-        # plain deliveroo only fills when row has no coords.
         incoming_src = data.get("geo_source")
         _VENUE = {"uber_eats", "direct", "takeaway"}
         if data.get("lat") is not None and data.get("lng") is not None:
@@ -219,32 +194,33 @@ def upsert_restaurant(data: dict) -> str:
                 if incoming_src:
                     updates["geo_source"] = incoming_src
         if updates:
-            client.table("restaurants").update(updates).eq("id", rid).execute()
-        return rid
+            sql, params = _build_update("restaurants", updates, "id", rid)
+            pgpool.execute(sql, params)
+        return str(rid)
 
-    # 1. Exact name match (same scraper re-running)
-    res = client.table("restaurants").select(_MATCH_COLS).eq("name", name).limit(1).execute()
-    if res.data:
-        return _found(res.data[0]["id"], res.data[0])
+    # 1. Exact name match
+    row = pgpool.fetchone(
+        f"SELECT {_MATCH_COLS} FROM restaurants WHERE name = %s LIMIT 1", [name]
+    )
+    if row:
+        return _found(row["id"], row)
 
-    # 2. Case-insensitive exact match ("GOMU" ↔ "Gomu", "Bombay Inn" ↔ "bombay inn")
-    res = client.table("restaurants").select(_MATCH_COLS).ilike("name", name).limit(1).execute()
-    if res.data:
-        return _found(res.data[0]["id"], res.data[0])
+    # 2. Case-insensitive exact match
+    row = pgpool.fetchone(
+        f"SELECT {_MATCH_COLS} FROM restaurants WHERE name ILIKE %s LIMIT 1", [name]
+    )
+    if row:
+        return _found(row["id"], row)
 
-    # 2b. Website-domain lock — strongest deterministic signal. A new listing
-    #     whose website resolves to a domain we already store is the same venue.
+    # 2b. Website-domain lock
     import matching as _m
     incoming_domain = _m.domain_of(data.get("website"))
     if incoming_domain:
         global _domain_cache
         if _domain_cache is None:
-            cands = (
-                client.table("restaurants")
-                .select("id, website")
-                .not_.is_("website", "null")
-                .execute()
-            ).data or []
+            cands = pgpool.fetchall(
+                "SELECT id, website FROM restaurants WHERE website IS NOT NULL"
+            )
             _domain_cache = {}
             for c in cands:
                 d = _m.domain_of(c.get("website"))
@@ -253,45 +229,43 @@ def upsert_restaurant(data: dict) -> str:
         if incoming_domain in _domain_cache:
             return _found(_domain_cache[incoming_domain])
 
-    # 3. Canonical base match ("Burger King - Ixelles" → find "Burger King")
+    # 3. Canonical base match
     if canonical != name:
-        res = client.table("restaurants").select(_MATCH_COLS).ilike("name", canonical).limit(1).execute()
-        if res.data:
-            return _found(res.data[0]["id"], res.data[0])
+        row = pgpool.fetchone(
+            f"SELECT {_MATCH_COLS} FROM restaurants WHERE name ILIKE %s LIMIT 1",
+            [canonical],
+        )
+        if row:
+            return _found(row["id"], row)
 
-    # 4. Suffixed variant match ("Burger King" → find "Burger King - Ixelles")
-    res = (
-        client.table("restaurants")
-        .select(_MATCH_COLS)
-        .ilike("name", f"{canonical} -%")
-        .limit(1)
-        .execute()
+    # 4. Suffixed variant match ("Burger King" → "Burger King - Ixelles")
+    row = pgpool.fetchone(
+        f"SELECT {_MATCH_COLS} FROM restaurants WHERE name ILIKE %s LIMIT 1",
+        [f"{canonical} -%"],
     )
-    if res.data:
-        return _found(res.data[0]["id"], res.data[0])
+    if row:
+        return _found(row["id"], row)
 
-    # 5. Fully-normalized match: handles accents, smart quotes, emoji, trailing
-    #    spaces. Fetch candidates by the first non-article word of canonical.
+    # 5. Fully-normalized match by significant-word prefix
     _ARTICLES = {"le", "la", "les", "l'", "au", "aux", "un", "une", "de", "du", "the", "a"}
     words = canonical.split()
     sig_words = [w for w in words if w.lower().rstrip("'") not in _ARTICLES]
     prefix = sig_words[0] if sig_words else (words[0] if words else canonical[:5])
     if len(prefix) >= 3:
-        candidates = (
-            client.table("restaurants")
-            .select(f"name, {_MATCH_COLS}")
-            .ilike("name", f"{prefix}%")
-            .execute()
+        candidates = pgpool.fetchall(
+            f"SELECT name, {_MATCH_COLS} FROM restaurants WHERE name ILIKE %s",
+            [f"{prefix}%"],
         )
-        for cand in candidates.data:
+        for cand in candidates:
             cand_norm = _normalize_for_match(cand["name"])
             cand_norm_can = _normalize_for_match(_canonical(cand["name"]))
             if cand_norm in (norm, norm_canonical) or cand_norm_can in (norm, norm_canonical):
                 return _found(cand["id"], cand)
 
-    # Not found — insert new row
-    res = client.table("restaurants").upsert(data, on_conflict="slug").execute()
-    rid = res.data[0]["id"]
+    # Not found — insert
+    sql, params = _build_insert("restaurants", data, on_conflict="slug")
+    row = pgpool.fetchone(sql, params)
+    rid = str(row["id"])
     invalidate_domain_cache()
     return rid
 
