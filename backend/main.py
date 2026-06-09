@@ -72,7 +72,7 @@ async def lifespan(app: FastAPI):
     yield
     # Graceful shutdown: let in-flight jobs finish (bounded by APScheduler's own
     # job timeouts). wait=False previously killed scrapers mid-write.
-    sched.shutdown(wait=True)
+    sched.shutdown()
     db.close_client()
 
 
