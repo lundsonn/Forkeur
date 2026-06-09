@@ -262,8 +262,10 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                 for _attempt in range(5):
                     clicked = await wpage.evaluate(
                         """([storePath, slugOnly]) => {
-                            let a = document.querySelector('a[href*="/store/"+storePath]');
-                            if (!a) a = document.querySelector('a[href*="/store/"+slugOnly]');
+                            const needle1 = '/store/' + storePath;
+                            const needle2 = '/store/' + slugOnly;
+                            const links = Array.from(document.querySelectorAll('a[href]'));
+                            const a = links.find(l => l.href.includes(needle1) || l.href.includes(needle2));
                             if (a) { a.click(); return true; }
                             return false;
                         }""",
@@ -471,8 +473,10 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                     slug_only = store_path.split("/")[0] if "/" in store_path else store_path
                     clicked = await page.evaluate(
                         """([storePath, slugOnly]) => {
-                            let a = document.querySelector('a[href*="/store/"+storePath]');
-                            if (!a) a = document.querySelector('a[href*="/store/"+slugOnly]');
+                            const needle1 = '/store/' + storePath;
+                            const needle2 = '/store/' + slugOnly;
+                            const links = Array.from(document.querySelectorAll('a[href]'));
+                            const a = links.find(l => l.href.includes(needle1) || l.href.includes(needle2));
                             if (a) { a.click(); return true; }
                             return false;
                         }""",
