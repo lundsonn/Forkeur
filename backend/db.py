@@ -2,11 +2,46 @@ import os
 import re
 import threading
 import unicodedata
+import json as _json
 from uuid import UUID
-from supabase import create_client, Client
+
+import pgpool
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def _build_insert(table: str, data: dict, on_conflict: str | None = None,
+                  returning: str = "id") -> tuple[str, list]:
+    cols = list(data.keys())
+    placeholders = ", ".join(["%s"] * len(cols))
+    col_list = ", ".join(cols)
+    sql = f"INSERT INTO {table} ({col_list}) VALUES ({placeholders})"
+    if on_conflict:
+        # mirror Supabase upsert: on conflict, overwrite every non-conflict column
+        updates = ", ".join(
+            f"{c} = EXCLUDED.{c}" for c in cols if c != on_conflict
+        )
+        sql += f" ON CONFLICT ({on_conflict}) DO UPDATE SET {updates}" if updates \
+            else f" ON CONFLICT ({on_conflict}) DO NOTHING"
+    if returning:
+        sql += f" RETURNING {returning}"
+    return sql, [_coerce(v) for v in data.values()]
+
+
+def _build_update(table: str, data: dict, where_col: str, where_val) -> tuple[str, list]:
+    sets = ", ".join(f"{c} = %s" for c in data.keys())
+    sql = f"UPDATE {table} SET {sets} WHERE {where_col} = %s"
+    return sql, [_coerce(v) for v in data.values()] + [where_val]
+
+
+def _coerce(v):
+    """psycopg adapts dict/list to jsonb only with an explicit Jsonb wrapper;
+    Supabase accepted raw dicts. Wrap dict/list as JSON strings for jsonb cols
+    (features, opening_hours)."""
+    if isinstance(v, (dict, list)):
+        return _json.dumps(v)
+    return v
 
 
 def _validate_uuid(value: str) -> str:
@@ -23,7 +58,7 @@ _MENU_INSERT_CHUNK = 500
 
 _SUFFIX_RE = re.compile(r"\s+-\s+\S.*$")
 
-_client: Client | None = None
+_client = None
 _client_lock = threading.Lock()
 _domain_cache: dict[str, str] | None = None  # domain → restaurant_id
 
@@ -33,7 +68,7 @@ def invalidate_domain_cache() -> None:
     _domain_cache = None
 
 
-def get_client() -> Client:
+def get_client():
     global _client
     if _client is None:
         with _client_lock:
