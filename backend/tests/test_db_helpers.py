@@ -19,3 +19,14 @@ def test_build_update():
     sql, params = db._build_update("restaurants", {"cuisine": "Pizza"}, "id", "abc")
     assert sql == 'UPDATE restaurants SET cuisine = %s WHERE id = %s'
     assert params == ["Pizza", "abc"]
+
+
+def test_build_insert_composite_conflict_excludes_both():
+    sql, params = db._build_insert(
+        "platform_listings",
+        {"restaurant_id": "r", "platform": "uber_eats", "url": "u"},
+        on_conflict="restaurant_id,platform",
+    )
+    assert "ON CONFLICT (restaurant_id,platform) DO UPDATE SET url = EXCLUDED.url" in sql
+    assert "restaurant_id = EXCLUDED" not in sql
+    assert "platform = EXCLUDED" not in sql

@@ -18,9 +18,11 @@ def _build_insert(table: str, data: dict, on_conflict: str | None = None,
     col_list = ", ".join(cols)
     sql = f"INSERT INTO {table} ({col_list}) VALUES ({placeholders})"
     if on_conflict:
-        # mirror Supabase upsert: on conflict, overwrite every non-conflict column
+        # mirror Supabase upsert: on conflict, overwrite every non-conflict column.
+        # on_conflict may be composite ("a,b") — exclude each conflict column.
+        conflict_cols = {c.strip() for c in on_conflict.split(",")}
         updates = ", ".join(
-            f"{c} = EXCLUDED.{c}" for c in cols if c != on_conflict
+            f"{c} = EXCLUDED.{c}" for c in cols if c not in conflict_cols
         )
         sql += f" ON CONFLICT ({on_conflict}) DO UPDATE SET {updates}" if updates \
             else f" ON CONFLICT ({on_conflict}) DO NOTHING"
@@ -324,27 +326,27 @@ def delete_menu_items(listing_id: str) -> None:
 
 
 def insert_menu_items(listing_id: str, items: list[dict]) -> int:
-    pgpool.execute("DELETE FROM menu_items WHERE listing_id = %s", [listing_id])
-    pgpool.execute(
-        "UPDATE platform_listings SET last_scraped_at = now() WHERE id = %s",
-        [listing_id],
-    )
-    if not items:
-        return 0
-    total = 0
     with pgpool.get_pool().connection() as conn, conn.cursor() as cur:
-        for i in range(0, len(items), _MENU_INSERT_CHUNK):
-            chunk = items[i : i + _MENU_INSERT_CHUNK]
-            for item in chunk:
-                row = {**item, "listing_id": listing_id}
-                cols = ", ".join(row.keys())
-                ph = ", ".join(["%s"] * len(row))
-                cur.execute(
-                    f"INSERT INTO menu_items ({cols}) VALUES ({ph})",
-                    [_coerce(v) for v in row.values()],
-                )
-                total += 1
-    return total
+        cur.execute("DELETE FROM menu_items WHERE listing_id = %s", [listing_id])
+        cur.execute(
+            "UPDATE platform_listings SET last_scraped_at = now() WHERE id = %s",
+            [listing_id],
+        )
+        if not items:
+            return 0
+        total = 0
+        for item in items:
+            row = {**item, "listing_id": listing_id}
+            cols = ", ".join(row.keys())
+            ph = ", ".join(["%s"] * len(row))
+            # NOTE: column names come from scraper-controlled item dicts (hardcoded
+            # field names), never end-user input — safe to interpolate.
+            cur.execute(
+                f"INSERT INTO menu_items ({cols}) VALUES ({ph})",
+                [_coerce(v) for v in row.values()],
+            )
+            total += 1
+        return total
 
 
 
