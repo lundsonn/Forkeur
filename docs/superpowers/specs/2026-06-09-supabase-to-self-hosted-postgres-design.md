@@ -2,7 +2,18 @@
 
 **Date:** 2026-06-09  
 **Approach:** Schema-first, scrapers-repopulate (no data migration)  
-**Status:** Approved
+**Status:** Approved (amended 2026-06-09 during plan writing — see "Plan-time corrections")
+
+---
+
+## Plan-time corrections
+
+Four technical decisions were refined while writing the implementation plan, after reading the full backend call graph and migration set. They override the original prose below where they conflict:
+
+1. **Driver = psycopg3 (sync `ConnectionPool`), not asyncpg.** `backend/db.py` exposes ~40 **synchronous** functions called by 10 async Playwright scrapers — directly (blocking) and via `asyncio.to_thread`. asyncpg would force `async def` on every function and break every call site. psycopg3's sync pool keeps `db.py` synchronous: zero scraper changes, routers keep `asyncio.to_thread(db.fn)`, and it is PgBouncer-transaction-mode safe.
+2. **Extensions = `pg_stat_statements` only.** `gen_random_uuid()` is core in PostgreSQL 13+ (no `uuid-ossp`). `unaccent`/`pg_trgm` are never called at runtime (matching uses Python `rapidfuzz.JaroWinkler`; migration 019 confirms zero trgm indexes) — skip both.
+3. **Schema provisioning = `pg_dump --schema-only` from Supabase, sanitized.** The 20 migrations grant to Supabase-only roles (`anon`, `service_role`) and move extensions into a Supabase-only `extensions` schema, so naive `psql` replay fails on vanilla PG16. Dump the live public schema, strip RLS/policy/grant/owner lines, apply one clean `selfhosted_schema.sql`. The `merge_restaurants_atomic(uuid,uuid)` function must survive the strip (it is the only runtime RPC).
+4. **`BACKEND_URL` must be added to `queries.ts` + `sitemap.ts`.** It is NOT yet referenced there (only in `app/api/refresh/route.ts` and `app/api/claims/route.ts`). A shared `lib/backend.ts` helper centralizes it.
 
 ---
 
