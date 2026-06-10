@@ -1,19 +1,12 @@
 import type { MetadataRoute } from 'next'
-import { createClient } from '@/utils/supabase/server'
-import { cookies } from 'next/headers'
+import { backendFetch } from '@/lib/backend'
 
 const BASE_URL = 'https://forkeur.be'
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const cookieStore = await cookies()
-  const supabase = createClient(cookieStore)
+  const restaurants = await backendFetch<{ id: string }[]>('/api/public/restaurants', { revalidate: 3600 }).catch(() => [] as { id: string }[])
 
-  const { data: restaurants } = await supabase
-    .from('restaurants')
-    .select('id, name')
-    .limit(2000)
-
-  const restaurantUrls: MetadataRoute.Sitemap = (restaurants ?? []).map((r) => ({
+  const restaurantUrls: MetadataRoute.Sitemap = restaurants.map((r) => ({
     url: `${BASE_URL}/restaurant/${r.id}`,
     changeFrequency: 'daily',
     priority: 0.7,

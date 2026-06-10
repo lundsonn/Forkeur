@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 import { checkSameOrigin } from '@/lib/same-origin'
-import { createClient } from '@/utils/supabase/server'
+import { backendFetch } from '@/lib/backend'
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:8000'
 const JWT_SECRET = process.env.BACKEND_ADMIN_TOKEN ?? ''
@@ -28,27 +27,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, throttled: 'local' })
   }
 
-  // DB-backed cooldown — anyone with the supabase URL/anon key can read
-  // scraper_runs (it has a public SELECT policy), so we don't need the
-  // service-role key here.
   try {
-    const supabase = createClient(await cookies())
     const cutoff = new Date(now - COOLDOWN_MS).toISOString()
-    const { data, error } = await supabase
-      .from('scraper_runs')
-      .select('started_at')
-      .eq('platform', 'fees')
-      .gte('started_at', cutoff)
-      .limit(1)
-    if (error) {
-      console.warn('[refresh] cooldown lookup failed:', error.message)
-      // fail-open on infrastructure failure: better to allow a duplicate
-      // run than to permanently block refreshes when supabase is down
-    } else if (data && data.length > 0) {
+    const run = await backendFetch(
+      `/api/public/scraper-runs/latest?platform=fees&since=${encodeURIComponent(cutoff)}`
+    )
+    if (run) {
       return NextResponse.json({ ok: true, throttled: 'cooldown' })
     }
   } catch (err) {
-    console.warn('[refresh] supabase client init failed:', err)
+    console.warn('[refresh] cooldown lookup failed:', err)
+    // fail-open: allow refresh on infrastructure failure
   }
 
   lastLocalFire = now
