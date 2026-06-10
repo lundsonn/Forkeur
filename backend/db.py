@@ -751,3 +751,102 @@ def load_listing_addresses_for_match() -> dict[str, dict]:
                 "postal_code": row.get("postal_code"),
             }
     return result
+
+
+# ---------------------------------------------------------------------------
+# Public reads (frontend) — return PostgREST-shaped nested JSON
+# ---------------------------------------------------------------------------
+
+def get_public_restaurants() -> list[dict]:
+    """Homepage: every non-merged restaurant with its listings (short shape)."""
+    return pgpool.fetchall(
+        """
+        SELECT r.id, r.name, r.cuisine, r.neighborhood, r.lat, r.lng,
+               r.order_url, r.image_url, r.is_chain,
+               COALESCE(
+                 json_agg(
+                   json_build_object(
+                     'platform', pl.platform, 'delivery_fee', pl.delivery_fee,
+                     'eta_min', pl.eta_min, 'url_type', pl.url_type,
+                     'is_available', pl.is_available, 'opening_hours', pl.opening_hours,
+                     'last_scraped_at', pl.last_scraped_at
+                   )
+                 ) FILTER (WHERE pl.id IS NOT NULL), '[]'
+               ) AS platform_listings
+        FROM restaurants r
+        LEFT JOIN platform_listings pl ON pl.restaurant_id = r.id
+        WHERE r.merged_into IS NULL
+        GROUP BY r.id
+        """
+    )
+
+def get_public_restaurant_detail(restaurant_id: str) -> dict | None:
+    """Detail page: one restaurant, listings with nested menu_items + promotions."""
+    _validate_uuid(restaurant_id)
+    return pgpool.fetchone(
+        """
+        SELECT r.id, r.name, r.neighborhood, r.cuisine, r.phone,
+               r.order_url, r.image_url,
+               COALESCE(
+                 json_agg(
+                   json_build_object(
+                     'id', pl.id, 'platform', pl.platform, 'url', pl.url,
+                     'url_type', pl.url_type, 'is_available', pl.is_available,
+                     'opening_hours', pl.opening_hours, 'delivery_fee', pl.delivery_fee,
+                     'min_order', pl.min_order, 'eta_min', pl.eta_min,
+                     'eta_max', pl.eta_max, 'rating', pl.rating,
+                     'last_scraped_at', pl.last_scraped_at,
+                     'menu_items', COALESCE((
+                       SELECT json_agg(json_build_object(
+                         'title', mi.title, 'price', mi.price,
+                         'catalog_name', mi.catalog_name, 'image_url', mi.image_url,
+                         'description', mi.description))
+                       FROM menu_items mi WHERE mi.listing_id = pl.id), '[]'),
+                     'promotions', COALESCE((
+                       SELECT json_agg(json_build_object(
+                         'promo_type', pr.promo_type, 'label', pr.label, 'value', pr.value))
+                       FROM promotions pr WHERE pr.listing_id = pl.id), '[]')
+                   )
+                 ) FILTER (WHERE pl.id IS NOT NULL), '[]'
+               ) AS platform_listings
+        FROM restaurants r
+        LEFT JOIN platform_listings pl ON pl.restaurant_id = r.id
+        WHERE r.id = %s
+        GROUP BY r.id
+        """,
+        [restaurant_id],
+    )
+
+def get_public_deals() -> list[dict]:
+    """Deals page: promotions joined to listing + restaurant (nested shape)."""
+    return pgpool.fetchall(
+        """
+        SELECT p.id, p.promo_type, p.label, p.value, p.min_order,
+               json_build_object(
+                 'platform', pl.platform, 'url', pl.url, 'rating', pl.rating,
+                 'review_count', pl.review_count, 'is_available', pl.is_available,
+                 'opening_hours', pl.opening_hours,
+                 'restaurants', json_build_object(
+                   'id', r.id, 'name', r.name, 'cuisine', r.cuisine,
+                   'neighborhood', r.neighborhood)
+               ) AS platform_listings
+        FROM promotions p
+        JOIN platform_listings pl ON pl.id = p.listing_id
+        JOIN restaurants r ON r.id = pl.restaurant_id
+        WHERE p.promo_type NOT IN ('other', 'spend_save')
+        """
+    )
+
+def get_latest_run(platform: str, since_iso: str | None = None) -> dict | None:
+    """Most recent run for a platform, optionally only if started since a cutoff."""
+    if since_iso:
+        return pgpool.fetchone(
+            "SELECT started_at FROM scraper_runs WHERE platform = %s "
+            "AND started_at >= %s ORDER BY started_at DESC LIMIT 1",
+            [platform, since_iso],
+        )
+    return pgpool.fetchone(
+        "SELECT started_at FROM scraper_runs WHERE platform = %s "
+        "ORDER BY started_at DESC LIMIT 1",
+        [platform],
+    )
