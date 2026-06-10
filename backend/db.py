@@ -1,12 +1,47 @@
-import os
 import re
-import threading
 import unicodedata
+import json as _json
 from uuid import UUID
-from supabase import create_client, Client
+
+import pgpool
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def _build_insert(table: str, data: dict, on_conflict: str | None = None,
+                  returning: str = "id") -> tuple[str, list]:
+    cols = list(data.keys())
+    placeholders = ", ".join(["%s"] * len(cols))
+    col_list = ", ".join(cols)
+    sql = f"INSERT INTO {table} ({col_list}) VALUES ({placeholders})"
+    if on_conflict:
+        # mirror Supabase upsert: on conflict, overwrite every non-conflict column.
+        # on_conflict may be composite ("a,b") — exclude each conflict column.
+        conflict_cols = {c.strip() for c in on_conflict.split(",")}
+        updates = ", ".join(
+            f"{c} = EXCLUDED.{c}" for c in cols if c not in conflict_cols
+        )
+        sql += f" ON CONFLICT ({on_conflict}) DO UPDATE SET {updates}" if updates \
+            else f" ON CONFLICT ({on_conflict}) DO NOTHING"
+    if returning:
+        sql += f" RETURNING {returning}"
+    return sql, [_coerce(v) for v in data.values()]
+
+
+def _build_update(table: str, data: dict, where_col: str, where_val) -> tuple[str, list]:
+    sets = ", ".join(f"{c} = %s" for c in data.keys())
+    sql = f"UPDATE {table} SET {sets} WHERE {where_col} = %s"
+    return sql, [_coerce(v) for v in data.values()] + [where_val]
+
+
+def _coerce(v):
+    """psycopg adapts dict/list to jsonb only with an explicit Jsonb wrapper;
+    Supabase accepted raw dicts. Wrap dict/list as JSON strings for jsonb cols
+    (features, opening_hours)."""
+    if isinstance(v, (dict, list)):
+        return _json.dumps(v)
+    return v
 
 
 def _validate_uuid(value: str) -> str:
@@ -23,8 +58,6 @@ _MENU_INSERT_CHUNK = 500
 
 _SUFFIX_RE = re.compile(r"\s+-\s+\S.*$")
 
-_client: Client | None = None
-_client_lock = threading.Lock()
 _domain_cache: dict[str, str] | None = None  # domain → restaurant_id
 
 
@@ -33,27 +66,9 @@ def invalidate_domain_cache() -> None:
     _domain_cache = None
 
 
-def get_client() -> Client:
-    global _client
-    if _client is None:
-        with _client_lock:
-            if _client is None:
-                url = os.environ["SUPABASE_URL"]
-                # Use the service_role key so writes bypass RLS (anon key is public).
-                key = os.environ["SUPABASE_SERVICE_KEY"]
-                _client = create_client(url, key)
-    return _client
-
-
 def close_client() -> None:
-    global _client
-    with _client_lock:
-        if _client is not None:
-            try:
-                _client.postgrest.session.close()
-            except Exception:
-                pass
-            _client = None
+    """Back-compat shim — closes the psycopg pool."""
+    pgpool.close_pool()
 
 
 def _is_junk(name: str) -> bool:
@@ -129,11 +144,9 @@ def infer_cuisine(name: str) -> str | None:
 def upsert_restaurant(data: dict) -> str:
     """Match restaurant by name across platforms, insert if new. Returns id.
 
-    Matching is done in 5 escalating steps to handle cross-platform name
-    variations: exact → case-insensitive → canonical base → suffixed variant
-    → fully-normalized (accents, quotes, emoji).
+    5 escalating steps: exact → case-insensitive → domain lock → canonical base
+    → suffixed variant → fully-normalized.
     """
-    client = get_client()
     name: str = data["name"].strip()
     data = {**data, "name": name}
 
@@ -151,8 +164,10 @@ def upsert_restaurant(data: dict) -> str:
 
     def _found(rid: str, row: dict | None = None) -> str:
         if row is None:
-            existing = client.table("restaurants").select("cuisine, image_url, lat, lng, geo_source, phone, neighborhood").eq("id", rid).limit(1).execute()
-            row = existing.data[0] if existing.data else {}
+            row = pgpool.fetchone(
+                "SELECT cuisine, image_url, lat, lng, geo_source, phone, neighborhood "
+                "FROM restaurants WHERE id = %s LIMIT 1", [rid]
+            ) or {}
         updates: dict = {}
         if data.get("cuisine") and not row.get("cuisine"):
             updates["cuisine"] = data["cuisine"]
@@ -162,9 +177,6 @@ def upsert_restaurant(data: dict) -> str:
             updates["phone"] = data["phone"]
         if data.get("neighborhood") and not row.get("neighborhood"):
             updates["neighborhood"] = data["neighborhood"]
-        # Geo provenance hierarchy: uber_eats/direct/takeaway > deliveroo_venue > deliveroo (zone centroid).
-        # venue-grade always overwrites; deliveroo_venue upgrades over zone centroid only;
-        # plain deliveroo only fills when row has no coords.
         incoming_src = data.get("geo_source")
         _VENUE = {"uber_eats", "direct", "takeaway"}
         if data.get("lat") is not None and data.get("lng") is not None:
@@ -182,32 +194,33 @@ def upsert_restaurant(data: dict) -> str:
                 if incoming_src:
                     updates["geo_source"] = incoming_src
         if updates:
-            client.table("restaurants").update(updates).eq("id", rid).execute()
-        return rid
+            sql, params = _build_update("restaurants", updates, "id", rid)
+            pgpool.execute(sql, params)
+        return str(rid)
 
-    # 1. Exact name match (same scraper re-running)
-    res = client.table("restaurants").select(_MATCH_COLS).eq("name", name).limit(1).execute()
-    if res.data:
-        return _found(res.data[0]["id"], res.data[0])
+    # 1. Exact name match
+    row = pgpool.fetchone(
+        f"SELECT {_MATCH_COLS} FROM restaurants WHERE name = %s LIMIT 1", [name]
+    )
+    if row:
+        return _found(row["id"], row)
 
-    # 2. Case-insensitive exact match ("GOMU" ↔ "Gomu", "Bombay Inn" ↔ "bombay inn")
-    res = client.table("restaurants").select(_MATCH_COLS).ilike("name", name).limit(1).execute()
-    if res.data:
-        return _found(res.data[0]["id"], res.data[0])
+    # 2. Case-insensitive exact match
+    row = pgpool.fetchone(
+        f"SELECT {_MATCH_COLS} FROM restaurants WHERE name ILIKE %s LIMIT 1", [name]
+    )
+    if row:
+        return _found(row["id"], row)
 
-    # 2b. Website-domain lock — strongest deterministic signal. A new listing
-    #     whose website resolves to a domain we already store is the same venue.
+    # 2b. Website-domain lock
     import matching as _m
     incoming_domain = _m.domain_of(data.get("website"))
     if incoming_domain:
         global _domain_cache
         if _domain_cache is None:
-            cands = (
-                client.table("restaurants")
-                .select("id, website")
-                .not_.is_("website", "null")
-                .execute()
-            ).data or []
+            cands = pgpool.fetchall(
+                "SELECT id, website FROM restaurants WHERE website IS NOT NULL"
+            )
             _domain_cache = {}
             for c in cands:
                 d = _m.domain_of(c.get("website"))
@@ -216,173 +229,149 @@ def upsert_restaurant(data: dict) -> str:
         if incoming_domain in _domain_cache:
             return _found(_domain_cache[incoming_domain])
 
-    # 3. Canonical base match ("Burger King - Ixelles" → find "Burger King")
+    # 3. Canonical base match
     if canonical != name:
-        res = client.table("restaurants").select(_MATCH_COLS).ilike("name", canonical).limit(1).execute()
-        if res.data:
-            return _found(res.data[0]["id"], res.data[0])
+        row = pgpool.fetchone(
+            f"SELECT {_MATCH_COLS} FROM restaurants WHERE name ILIKE %s LIMIT 1",
+            [canonical],
+        )
+        if row:
+            return _found(row["id"], row)
 
-    # 4. Suffixed variant match ("Burger King" → find "Burger King - Ixelles")
-    res = (
-        client.table("restaurants")
-        .select(_MATCH_COLS)
-        .ilike("name", f"{canonical} -%")
-        .limit(1)
-        .execute()
+    # 4. Suffixed variant match ("Burger King" → "Burger King - Ixelles")
+    row = pgpool.fetchone(
+        f"SELECT {_MATCH_COLS} FROM restaurants WHERE name ILIKE %s LIMIT 1",
+        [f"{canonical} -%"],
     )
-    if res.data:
-        return _found(res.data[0]["id"], res.data[0])
+    if row:
+        return _found(row["id"], row)
 
-    # 5. Fully-normalized match: handles accents, smart quotes, emoji, trailing
-    #    spaces. Fetch candidates by the first non-article word of canonical.
+    # 5. Fully-normalized match by significant-word prefix
     _ARTICLES = {"le", "la", "les", "l'", "au", "aux", "un", "une", "de", "du", "the", "a"}
     words = canonical.split()
     sig_words = [w for w in words if w.lower().rstrip("'") not in _ARTICLES]
     prefix = sig_words[0] if sig_words else (words[0] if words else canonical[:5])
     if len(prefix) >= 3:
-        candidates = (
-            client.table("restaurants")
-            .select(f"name, {_MATCH_COLS}")
-            .ilike("name", f"{prefix}%")
-            .execute()
+        candidates = pgpool.fetchall(
+            f"SELECT name, {_MATCH_COLS} FROM restaurants WHERE name ILIKE %s",
+            [f"{prefix}%"],
         )
-        for cand in candidates.data:
+        for cand in candidates:
             cand_norm = _normalize_for_match(cand["name"])
             cand_norm_can = _normalize_for_match(_canonical(cand["name"]))
             if cand_norm in (norm, norm_canonical) or cand_norm_can in (norm, norm_canonical):
                 return _found(cand["id"], cand)
 
-    # Not found — insert new row
-    res = client.table("restaurants").upsert(data, on_conflict="slug").execute()
-    rid = res.data[0]["id"]
+    # Not found — insert
+    sql, params = _build_insert("restaurants", data, on_conflict="slug")
+    row = pgpool.fetchone(sql, params)
+    rid = str(row["id"])
     invalidate_domain_cache()
     return rid
 
 
 def upsert_listing(data: dict) -> str:
-    """Upsert platform_listing by restaurant_id + platform. Returns id."""
-    res = (
-        get_client()
-        .table("platform_listings")
-        .upsert(data, on_conflict="restaurant_id,platform")
-        .execute()
+    sql, params = _build_insert(
+        "platform_listings", data, on_conflict="restaurant_id,platform"
     )
-    return res.data[0]["id"]
+    row = pgpool.fetchone(sql, params)
+    return str(row["id"])
 
 
 def patch_listing(listing_id: str, data: dict) -> None:
-    """Patch specific fields on a platform_listing row by id."""
-    get_client().table("platform_listings").update(data).eq("id", listing_id).execute()
+    sql, params = _build_update("platform_listings", data, "id", listing_id)
+    pgpool.execute(sql, params)
 
 
 def upsert_promotions(listing_id: str, promotions: list[dict]) -> int:
-    """Replace all promotions for a listing. Returns count saved."""
-    client = get_client()
-    client.table("promotions").delete().eq("listing_id", listing_id).execute()
+    pgpool.execute("DELETE FROM promotions WHERE listing_id = %s", [listing_id])
     if not promotions:
         return 0
-    rows = [{"listing_id": listing_id, **p} for p in promotions]
-    res = client.table("promotions").insert(rows).execute()
-    return len(res.data)
+    saved = 0
+    for p in promotions:
+        sql, params = _build_insert("promotions", {"listing_id": listing_id, **p})
+        pgpool.fetchone(sql, params)
+        saved += 1
+    return saved
 
 
 def delete_menu_items(listing_id: str) -> None:
-    """Delete all menu items for a listing."""
-    get_client().table("menu_items").delete().eq("listing_id", listing_id).execute()
+    pgpool.execute("DELETE FROM menu_items WHERE listing_id = %s", [listing_id])
 
 
 def insert_menu_items(listing_id: str, items: list[dict]) -> int:
-    """Delete existing items for listing, insert new ones. Returns count.
-
-    Also bumps last_scraped_at on the listing so the frontend can show staleness.
-    """
-    from datetime import datetime, timezone
-    client = get_client()
-    client.table("menu_items").delete().eq("listing_id", listing_id).execute()
-    now = datetime.now(timezone.utc).isoformat()
-    client.table("platform_listings").update({"last_scraped_at": now}).eq("id", listing_id).execute()
-    if not items:
-        return 0
-    rows = [{**item, "listing_id": listing_id} for item in items]
-    total = 0
-    for i in range(0, len(rows), _MENU_INSERT_CHUNK):
-        res = client.table("menu_items").insert(rows[i : i + _MENU_INSERT_CHUNK]).execute()
-        total += len(res.data)
-    return total
+    with pgpool.get_pool().connection() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM menu_items WHERE listing_id = %s", [listing_id])
+        cur.execute(
+            "UPDATE platform_listings SET last_scraped_at = now() WHERE id = %s",
+            [listing_id],
+        )
+        if not items:
+            return 0
+        total = 0
+        for item in items:
+            row = {**item, "listing_id": listing_id}
+            cols = ", ".join(row.keys())
+            ph = ", ".join(["%s"] * len(row))
+            # NOTE: column names come from scraper-controlled item dicts (hardcoded
+            # field names), never end-user input — safe to interpolate.
+            cur.execute(
+                f"INSERT INTO menu_items ({cols}) VALUES ({ph})",
+                [_coerce(v) for v in row.values()],
+            )
+            total += 1
+        return total
 
 
 
 
 def run_exists(run_id: str) -> bool:
-    """Return True if a scraper_run with this id exists."""
-    client = get_client()
-    res = client.table("scraper_runs").select("id").eq("id", run_id).limit(1).execute()
-    return bool(res.data)
+    row = pgpool.fetchone("SELECT id FROM scraper_runs WHERE id = %s LIMIT 1", [run_id])
+    return row is not None
 
 
 def create_run(platform: str) -> str:
-    """Insert a scraper_run row with status=running. Returns run id."""
-    client = get_client()
-    res = (
-        client.table("scraper_runs")
-        .insert({"platform": platform, "status": "running"})
-        .execute()
+    row = pgpool.fetchone(
+        "INSERT INTO scraper_runs (platform, status) VALUES (%s, 'running') RETURNING id",
+        [platform],
     )
-    return res.data[0]["id"]
+    return str(row["id"])
 
 
 def update_run_progress(run_id: str, records_saved: int) -> None:
-    get_client().table("scraper_runs").update({
-        "records_saved": records_saved,
-    }).eq("id", run_id).execute()
+    pgpool.execute(
+        "UPDATE scraper_runs SET records_saved = %s WHERE id = %s",
+        [records_saved, run_id],
+    )
 
 
-def finish_run(
-    run_id: str,
-    status: str,
-    records_saved: int = 0,
-    error_msg: str | None = None,
-) -> None:
-    client = get_client()
-    from datetime import datetime, timezone
-    client.table("scraper_runs").update({
-        "status": status,
-        "records_saved": records_saved,
-        "finished_at": datetime.now(timezone.utc).isoformat(),
-        "error_msg": error_msg,
-    }).eq("id", run_id).execute()
+def finish_run(run_id: str, status: str, records_saved: int = 0,
+               error_msg: str | None = None) -> None:
+    pgpool.execute(
+        "UPDATE scraper_runs SET status = %s, records_saved = %s, "
+        "finished_at = now(), error_msg = %s WHERE id = %s",
+        [status, records_saved, error_msg, run_id],
+    )
 
 
 def get_runs(limit: int = 50, offset: int = 0) -> list[dict]:
-    client = get_client()
-    res = (
-        client.table("scraper_runs")
-        .select("*")
-        .order("started_at", desc=True)
-        .range(offset, offset + limit - 1)
-        .execute()
+    return pgpool.fetchall(
+        "SELECT * FROM scraper_runs ORDER BY started_at DESC LIMIT %s OFFSET %s",
+        [limit, offset],
     )
-    return res.data
 
 
 def get_run(run_id: str) -> dict | None:
-    client = get_client()
-    res = client.table("scraper_runs").select("*").eq("id", run_id).execute()
-    return res.data[0] if res.data else None
+    return pgpool.fetchone("SELECT * FROM scraper_runs WHERE id = %s", [run_id])
 
 
 def get_last_run_per_platform() -> dict[str, dict]:
-    """Returns {platform: run_row} for the most recent run of each platform."""
     platforms = ("ubereats", "deliveroo", "takeaway", "direct", "direct_menu", "dom_menu", "match")
-    rows = (
-        get_client()
-        .table("scraper_runs")
-        .select("*")
-        .in_("platform", list(platforms))
-        .order("started_at", desc=True)
-        .limit(140)
-        .execute()
-    ).data or []
+    rows = pgpool.fetchall(
+        "SELECT * FROM scraper_runs WHERE platform = ANY(%s) "
+        "ORDER BY started_at DESC LIMIT 140",
+        [list(platforms)],
+    )
     seen: dict[str, dict] = {}
     for row in rows:
         p = row["platform"]
@@ -392,34 +381,21 @@ def get_last_run_per_platform() -> dict[str, dict]:
 
 
 def get_last_successful_run(platform: str) -> dict | None:
-    """Return the most recent successful run for a platform, or None."""
-    res = (
-        get_client()
-        .table("scraper_runs")
-        .select("*")
-        .eq("platform", platform)
-        .eq("status", "success")
-        .order("started_at", desc=True)
-        .limit(1)
-        .execute()
+    return pgpool.fetchone(
+        "SELECT * FROM scraper_runs WHERE platform = %s AND status = 'success' "
+        "ORDER BY started_at DESC LIMIT 1",
+        [platform],
     )
-    return res.data[0] if res.data else None
 
 
 def get_last_successful_run_batch(platforms: list[str]) -> dict[str, dict]:
-    """Single query for last successful run across multiple platforms."""
     if not platforms:
         return {}
-    rows = (
-        get_client()
-        .table("scraper_runs")
-        .select("platform,status,started_at,finished_at,records_saved")
-        .eq("status", "success")
-        .in_("platform", platforms)
-        .order("finished_at", desc=True)
-        .limit(len(platforms) * 5)
-        .execute()
-        .data
+    rows = pgpool.fetchall(
+        "SELECT platform, status, started_at, finished_at, records_saved "
+        "FROM scraper_runs WHERE status = 'success' AND platform = ANY(%s) "
+        "ORDER BY finished_at DESC LIMIT %s",
+        [platforms, len(platforms) * 5],
     )
     result: dict[str, dict] = {}
     for row in rows:
@@ -430,121 +406,65 @@ def get_last_successful_run_batch(platforms: list[str]) -> dict[str, dict]:
 
 
 def delete_stale_listings(days: int = 30) -> int:
-    """Delete platform_listings older than `days` days. Returns count deleted."""
-    from datetime import datetime, timezone, timedelta
-    client = get_client()
-    threshold = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-    result = (
-        client.table("platform_listings")
-        .delete()
-        .not_.is_("last_scraped_at", "null")
-        .lt("last_scraped_at", threshold)
-        .execute()
+    return pgpool.execute(
+        "DELETE FROM platform_listings WHERE last_scraped_at IS NOT NULL "
+        "AND last_scraped_at < now() - make_interval(days => %s)",
+        [days],
     )
-    return len(result.data) if result.data else 0
 
 
 def prune_stale_menu_items(days: int = 30) -> int:
-    """Delete menu_items for listings not scraped in the last N days.
-
-    Only touches listings where last_scraped_at IS NOT NULL — avoids removing
-    data from listings that have never been through a scraper (e.g. manual imports).
-    """
-    from datetime import datetime, timezone, timedelta
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-    client = get_client()
-    stale = (
-        client.table("platform_listings")
-        .select("id")
-        .not_.is_("last_scraped_at", "null")
-        .lt("last_scraped_at", cutoff)
-        .execute()
-    ).data
+    stale = pgpool.fetchall(
+        "SELECT id FROM platform_listings WHERE last_scraped_at IS NOT NULL "
+        "AND last_scraped_at < now() - make_interval(days => %s)",
+        [days],
+    )
     if not stale:
         return 0
     ids = [row["id"] for row in stale]
-    deleted = 0
-    # PostgREST `in_` builds a URL query param; chunk to keep it under typical limits.
-    for i in range(0, len(ids), 200):
-        res = (
-            client.table("menu_items")
-            .delete()
-            .in_("listing_id", ids[i : i + 200])
-            .execute()
-        )
-        deleted += len(res.data)
-    return deleted
+    return pgpool.execute(
+        "DELETE FROM menu_items WHERE listing_id = ANY(%s)", [ids]
+    )
 
 
 def orphan_stale_runs(max_age_hours: int = 2) -> int:
-    """Mark any 'running' rows older than max_age_hours as failed/orphaned.
-
-    Called on backend startup to clean up runs that were interrupted by a
-    previous restart and will never finish.
-    """
-    from datetime import datetime, timezone, timedelta
-    now = datetime.now(timezone.utc)
-    cutoff = (now - timedelta(hours=max_age_hours)).isoformat()
-    res = (
-        get_client()
-        .table("scraper_runs")
-        .update({
-            "status": "failed",
-            "finished_at": now.isoformat(),
-            "error_msg": "orphaned — backend restarted",
-        })
-        .eq("status", "running")
-        .lt("started_at", cutoff)
-        .execute()
+    return pgpool.execute(
+        "UPDATE scraper_runs SET status = 'failed', finished_at = now(), "
+        "error_msg = 'orphaned — backend restarted' "
+        "WHERE status = 'running' AND started_at < now() - make_interval(hours => %s)",
+        [max_age_hours],
     )
-    return len(res.data)
 
 
-def get_restaurants(
-    limit: int = 100,
-    offset: int = 0,
-    search: str | None = None,
-) -> list[dict]:
-    client = get_client()
-    q = client.table("restaurants").select("*").order("id").range(offset, offset + limit - 1)
+def get_restaurants(limit: int = 100, offset: int = 0, search: str | None = None) -> list[dict]:
     if search:
-        q = q.ilike("name", f"%{search}%")
-    return q.execute().data
+        return pgpool.fetchall(
+            "SELECT * FROM restaurants WHERE name ILIKE %s ORDER BY id LIMIT %s OFFSET %s",
+            [f"%{search}%", limit, offset],
+        )
+    return pgpool.fetchall(
+        "SELECT * FROM restaurants ORDER BY id LIMIT %s OFFSET %s", [limit, offset]
+    )
 
 
 def set_restaurant_chain(restaurant_id: str, is_chain: bool) -> dict:
-    client = get_client()
-    result = (
-        client.table("restaurants")
-        .update({"is_chain": is_chain})
-        .eq("id", restaurant_id)
-        .execute()
+    return pgpool.fetchone(
+        "UPDATE restaurants SET is_chain = %s WHERE id = %s RETURNING *",
+        [is_chain, restaurant_id],
     )
-    return result.data[0]
 
 
 def get_menu_items(listing_id: str) -> list[dict]:
-    client = get_client()
-    return (
-        client.table("menu_items")
-        .select("*")
-        .eq("listing_id", listing_id)
-        .limit(2000)
-        .execute()
-        .data
+    return pgpool.fetchall(
+        "SELECT * FROM menu_items WHERE listing_id = %s LIMIT 2000", [listing_id]
     )
 
 
 def get_listings_with_urls(platform: str) -> list[dict]:
-    """Return all platform_listings for a platform that have a URL."""
-    client = get_client()
-    return (
-        client.table("platform_listings")
-        .select("id, restaurant_id, url, delivery_fee, min_order")
-        .eq("platform", platform)
-        .not_.is_("url", "null")
-        .execute()
-        .data
+    return pgpool.fetchall(
+        "SELECT id, restaurant_id, url, delivery_fee, min_order FROM platform_listings "
+        "WHERE platform = %s AND url IS NOT NULL",
+        [platform],
     )
 
 
@@ -552,72 +472,70 @@ _GEO_RANK = {"uber_eats": 3, "direct": 3, "deliveroo_venue": 2, "deliveroo": 1}
 
 
 def patch_restaurant_geo(restaurant_id: str, lat: float, lng: float, geo_source: str) -> None:
-    """Update restaurant coords only if incoming source outranks the current one."""
-    client = get_client()
-    existing = client.table("restaurants").select("geo_source").eq("id", restaurant_id).limit(1).execute()
-    if existing.data:
-        current_src = existing.data[0].get("geo_source")
+    existing = pgpool.fetchone(
+        "SELECT geo_source FROM restaurants WHERE id = %s LIMIT 1", [restaurant_id]
+    )
+    if existing:
+        current_src = existing.get("geo_source")
         if _GEO_RANK.get(current_src, 0) >= _GEO_RANK.get(geo_source, 0):
             return
-    client.table("restaurants").update(
-        {"lat": lat, "lng": lng, "geo_source": geo_source}
-    ).eq("id", restaurant_id).execute()
+    pgpool.execute(
+        "UPDATE restaurants SET lat = %s, lng = %s, geo_source = %s WHERE id = %s",
+        [lat, lng, geo_source, restaurant_id],
+    )
 
 
 def patch_restaurant_website(restaurant_id: str, website: str | None, order_url: str | None) -> None:
-    from datetime import datetime, timezone
-    get_client().table("restaurants").update({
-        "website": website,
-        "order_url": order_url,
-        "website_searched_at": datetime.now(timezone.utc).isoformat(),
-    }).eq("id", restaurant_id).execute()
+    pgpool.execute(
+        "UPDATE restaurants SET website = %s, order_url = %s, website_searched_at = now() "
+        "WHERE id = %s",
+        [website, order_url, restaurant_id],
+    )
     invalidate_domain_cache()
 
 
 def patch_restaurant_phone(restaurant_id: str, phone: str) -> None:
-    """Write phone to restaurants row only if currently empty."""
-    existing = get_client().table("restaurants").select("phone").eq("id", restaurant_id).limit(1).execute()
-    if existing.data and not existing.data[0].get("phone"):
-        get_client().table("restaurants").update({"phone": phone}).eq("id", restaurant_id).execute()
+    existing = pgpool.fetchone(
+        "SELECT phone FROM restaurants WHERE id = %s LIMIT 1", [restaurant_id]
+    )
+    if existing and not existing.get("phone"):
+        pgpool.execute(
+            "UPDATE restaurants SET phone = %s WHERE id = %s", [phone, restaurant_id]
+        )
 
 
 def mark_restaurant_searched(restaurant_id: str) -> None:
-    from datetime import datetime, timezone
-    get_client().table("restaurants").update({
-        "website_searched_at": datetime.now(timezone.utc).isoformat(),
-    }).eq("id", restaurant_id).execute()
+    pgpool.execute(
+        "UPDATE restaurants SET website_searched_at = now() WHERE id = %s",
+        [restaurant_id],
+    )
 
 
-def insert_claim(
-    owner_email: str,
-    inquiry_type: str = "add_url",
-    restaurant_id: str | None = None,
-    direct_order_url: str | None = None,
-    restaurant_name_free: str | None = None,
-) -> str:
-    """Insert an owner inquiry (verified=False). Returns claim id."""
-    client = get_client()
-    res = client.table("restaurant_claims").insert({
-        "restaurant_id": restaurant_id,
-        "owner_email": owner_email,
-        "direct_order_url": direct_order_url,
-        "inquiry_type": inquiry_type,
-        "restaurant_name_free": restaurant_name_free,
-        "verified": False,
-    }).execute()
-    return res.data[0]["id"]
+def insert_claim(owner_email: str, inquiry_type: str = "add_url",
+                 restaurant_id: str | None = None, direct_order_url: str | None = None,
+                 restaurant_name_free: str | None = None) -> str:
+    row = pgpool.fetchone(
+        "INSERT INTO restaurant_claims "
+        "(restaurant_id, owner_email, direct_order_url, inquiry_type, "
+        " restaurant_name_free, verified) "
+        "VALUES (%s, %s, %s, %s, %s, false) RETURNING id",
+        [restaurant_id, owner_email, direct_order_url, inquiry_type, restaurant_name_free],
+    )
+    return str(row["id"])
 
 
 def get_claims(verified: bool | None = None) -> list[dict]:
-    """Return claims, optionally filtered by verified status."""
-    client = get_client()
-    q = client.table("restaurant_claims").select(
-        "id, restaurant_id, owner_email, direct_order_url, inquiry_type, "
-        "restaurant_name_free, verified, claimed_at, restaurants(name)"
+    base = (
+        "SELECT c.id, c.restaurant_id, c.owner_email, c.direct_order_url, "
+        "c.inquiry_type, c.restaurant_name_free, c.verified, c.claimed_at, "
+        "json_build_object('name', r.name) AS restaurants "
+        "FROM restaurant_claims c LEFT JOIN restaurants r ON r.id = c.restaurant_id"
     )
     if verified is not None:
-        q = q.eq("verified", verified)
-    return q.order("claimed_at", desc=True).execute().data
+        return pgpool.fetchall(
+            base + " WHERE c.verified = %s ORDER BY c.claimed_at DESC", [verified]
+        )
+    return pgpool.fetchall(base + " ORDER BY c.claimed_at DESC")
 
 
 def _validate_order_url(url: str) -> None:
@@ -627,37 +545,32 @@ def _validate_order_url(url: str) -> None:
 
 
 def approve_claim(claim_id: str) -> None:
-    """Approve a claim: for add_url type, update restaurants.order_url and upsert direct listing."""
-    client = get_client()
-    rows = client.table("restaurant_claims").select(
-        "id, restaurant_id, direct_order_url, inquiry_type"
-    ).eq("id", claim_id).execute().data
-    if not rows:
+    claim = pgpool.fetchone(
+        "SELECT id, restaurant_id, direct_order_url, inquiry_type "
+        "FROM restaurant_claims WHERE id = %s", [claim_id]
+    )
+    if not claim:
         raise ValueError(f"Claim not found: {claim_id!r}")
-    claim = rows[0]
-
-    if claim.get("inquiry_type") == "add_url" and claim.get("restaurant_id") and claim.get("direct_order_url"):
+    if (claim.get("inquiry_type") == "add_url" and claim.get("restaurant_id")
+            and claim.get("direct_order_url")):
         _validate_order_url(claim["direct_order_url"])
-
-        client.table("restaurants").update(
-            {"order_url": claim["direct_order_url"]}
-        ).eq("id", claim["restaurant_id"]).execute()
-
+        pgpool.execute(
+            "UPDATE restaurants SET order_url = %s WHERE id = %s",
+            [claim["direct_order_url"], claim["restaurant_id"]],
+        )
         upsert_listing({
             "restaurant_id": claim["restaurant_id"],
             "platform": "direct",
             "url": claim["direct_order_url"],
             "is_available": True,
         })
-
-    client.table("restaurant_claims").update(
-        {"verified": True}
-    ).eq("id", claim_id).execute()
+    pgpool.execute(
+        "UPDATE restaurant_claims SET verified = true WHERE id = %s", [claim_id]
+    )
 
 
 def reject_claim(claim_id: str) -> None:
-    """Delete a claim (rejected — not approved)."""
-    get_client().table("restaurant_claims").delete().eq("id", claim_id).execute()
+    pgpool.execute("DELETE FROM restaurant_claims WHERE id = %s", [claim_id])
 
 
 # ---------------------------------------------------------------------------
@@ -665,157 +578,94 @@ def reject_claim(claim_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 def load_restaurants_for_match() -> list[dict]:
-    """Load ALL restaurants with the fields the matcher scores on.
-
-    Supabase/PostgREST caps a single response at 1000 rows, so page through
-    with .range() until a short page is returned — otherwise the matcher would
-    silently ignore every restaurant past the first 1000.
-    """
-    client = get_client()
-    cols = "id, name, website, phone, lat, lng, geo_source, cuisine, created_at, is_chain"
-    page = 1000
-    offset = 0
-    rows: list[dict] = []
-    while True:
-        res = (
-            client.table("restaurants")
-            .select(cols)
-            .is_("merged_into", "null")  # skip already-merged losers
-            .order("id")
-            .range(offset, offset + page - 1)
-            .execute()
-        )
-        batch = res.data or []
-        rows.extend(batch)
-        if len(batch) < page:
-            break
-        offset += page
-    return rows
+    return pgpool.fetchall(
+        "SELECT id, name, website, phone, lat, lng, geo_source, cuisine, created_at, "
+        "is_chain FROM restaurants WHERE merged_into IS NULL ORDER BY id"
+    )
 
 
-def enqueue_decision(
-    *, survivor_id: str, loser_id: str, score: float,
-    features: dict, status: str,
-) -> str:
-    """Insert/replace a match decision row (queue or audit log). Returns id.
-
-    Upsert on the unordered-pair unique index so re-runs don't duplicate.
-    """
-    client = get_client()
-    # Validate before interpolating into PostgREST filter DSL — `.or_()` accepts
-    # raw strings and would otherwise be a filter-injection vector.
+def enqueue_decision(*, survivor_id: str, loser_id: str, score: float,
+                     features: dict, status: str) -> str:
     s = _validate_uuid(survivor_id)
     l = _validate_uuid(loser_id)
     if s == l:
         raise ValueError("survivor_id and loser_id must differ")
-    existing = (
-        client.table("restaurant_match_decisions")
-        .select("id")
-        .or_(
-            f"and(survivor_id.eq.{s},loser_id.eq.{l}),"
-            f"and(survivor_id.eq.{l},loser_id.eq.{s})"
-        )
-        .limit(1)
-        .execute()
+    existing = pgpool.fetchone(
+        "SELECT id FROM restaurant_match_decisions "
+        "WHERE (survivor_id = %s AND loser_id = %s) "
+        "   OR (survivor_id = %s AND loser_id = %s) LIMIT 1",
+        [s, l, l, s],
     )
-    row = {
-        "survivor_id": survivor_id,
-        "loser_id": loser_id,
-        "score": score,
-        "features": features,
-        "status": status,
-    }
-    if existing.data:
-        did = existing.data[0]["id"]
-        client.table("restaurant_match_decisions").update(row).eq("id", did).execute()
-        return did
-    res = client.table("restaurant_match_decisions").insert(row).execute()
-    return res.data[0]["id"]
+    if existing:
+        did = existing["id"]
+        pgpool.execute(
+            "UPDATE restaurant_match_decisions "
+            "SET survivor_id = %s, loser_id = %s, score = %s, features = %s, status = %s "
+            "WHERE id = %s",
+            [survivor_id, loser_id, score, _coerce(features), status, did],
+        )
+        return str(did)
+    row = pgpool.fetchone(
+        "INSERT INTO restaurant_match_decisions "
+        "(survivor_id, loser_id, score, features, status) "
+        "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+        [survivor_id, loser_id, score, _coerce(features), status],
+    )
+    return str(row["id"])
 
 
 def merge_restaurants(survivor_id: str, loser_id: str) -> None:
-    """Merge loser into survivor atomically via the merge_restaurants_atomic RPC.
-
-    The previous Python-side multi-step implementation could leave the DB in an
-    inconsistent state if any single .execute() failed mid-merge; the SQL
-    function wraps the entire sequence in one transaction with row locks.
-    """
     if survivor_id == loser_id:
         return
     s = _validate_uuid(survivor_id)
     l = _validate_uuid(loser_id)
-    client = get_client()
-    client.rpc(
-        "merge_restaurants_atomic",
-        {"p_survivor": s, "p_loser": l},
-    ).execute()
+    pgpool.execute("SELECT merge_restaurants_atomic(%s, %s)", [s, l])
 
 
 def delete_decisions(ids: list[str]) -> None:
-    """Delete match decision rows by id — used to prune stale SEPARATE verdicts."""
     if not ids:
         return
     validated = [_validate_uuid(i) for i in ids]
-    client = get_client()
-    client.table("restaurant_match_decisions").delete().in_("id", validated).execute()
+    pgpool.execute(
+        "DELETE FROM restaurant_match_decisions WHERE id = ANY(%s)", [validated]
+    )
 
 
 def get_stale_queued_decisions() -> list[dict]:
-    """Queued decisions where geo_dist was null at scoring time (both sides may now be venue-grade)."""
-    client = get_client()
-    res = (
-        client.table("restaurant_match_decisions")
-        .select("*")
-        .eq("status", "queued")
-        .execute()
+    rows = pgpool.fetchall(
+        "SELECT * FROM restaurant_match_decisions WHERE status = 'queued'"
     )
-    return [r for r in res.data if r.get("features", {}).get("geo_dist") is None]
+    return [r for r in rows if (r.get("features") or {}).get("geo_dist") is None]
 
 
 def get_queued_decisions(limit: int = 100, offset: int = 0) -> list[dict]:
-    """Pending review-queue rows, newest first. Bounded to prevent OOM.
-
-    Each row is enriched with `survivor_listings` / `loser_listings`
-    (platform + url) so the reviewer can open each restaurant on every
-    platform to compare before approving/rejecting.
-    """
-    client = get_client()
-    res = (
-        client.table("restaurant_match_decisions")
-        .select("*")
-        .eq("status", "queued")
-        .order("created_at", desc=True)
-        .range(offset, offset + limit - 1)
-        .execute()
+    rows = pgpool.fetchall(
+        "SELECT * FROM restaurant_match_decisions WHERE status = 'queued' "
+        "ORDER BY created_at DESC LIMIT %s OFFSET %s",
+        [limit, offset],
     )
-    rows = res.data or []
     if not rows:
         return rows
-
-    # Collect every restaurant id involved, fetch their listings in one query.
     rid_set: set[str] = set()
     for d in rows:
         if d.get("survivor_id"):
             rid_set.add(d["survivor_id"])
         if d.get("loser_id"):
             rid_set.add(d["loser_id"])
-
     listings_by_rid: dict[str, list[dict]] = {}
     if rid_set:
-        lres = (
-            client.table("platform_listings")
-            .select("restaurant_id, platform, url")
-            .in_("restaurant_id", list(rid_set))
-            .execute()
+        lrows = pgpool.fetchall(
+            "SELECT restaurant_id, platform, url FROM platform_listings "
+            "WHERE restaurant_id = ANY(%s)",
+            [list(rid_set)],
         )
-        for row in lres.data or []:
+        for row in lrows:
             rid = row.get("restaurant_id")
             if not rid or not row.get("url"):
                 continue
             listings_by_rid.setdefault(rid, []).append(
                 {"platform": row.get("platform"), "url": row["url"]}
             )
-
     for d in rows:
         d["survivor_listings"] = listings_by_rid.get(d.get("survivor_id"), [])
         d["loser_listings"] = listings_by_rid.get(d.get("loser_id"), [])
@@ -823,124 +673,75 @@ def get_queued_decisions(limit: int = 100, offset: int = 0) -> list[dict]:
 
 
 def resolve_decision(decision_id: str, *, approve: bool, resolved_by: str) -> None:
-    """Approve (-> merge) or reject a queued decision."""
-    from datetime import datetime, timezone
-    client = get_client()
-    row = (
-        client.table("restaurant_match_decisions")
-        .select("id, survivor_id, loser_id, status")
-        .eq("id", decision_id)
-        .limit(1)
-        .execute()
+    d = pgpool.fetchone(
+        "SELECT id, survivor_id, loser_id, status FROM restaurant_match_decisions "
+        "WHERE id = %s LIMIT 1", [decision_id]
     )
-    if not row.data:
+    if not d:
         return
-    d = row.data[0]
     if approve:
         merge_restaurants(d["survivor_id"], d["loser_id"])
-    client.table("restaurant_match_decisions").update({
-        "status": "approved" if approve else "rejected",
-        "resolved_at": datetime.now(timezone.utc).isoformat(),
-        "resolved_by": resolved_by,
-    }).eq("id", decision_id).execute()
+    pgpool.execute(
+        "UPDATE restaurant_match_decisions SET status = %s, resolved_at = now(), "
+        "resolved_by = %s WHERE id = %s",
+        ["approved" if approve else "rejected", resolved_by, decision_id],
+    )
 
 
 def load_menu_items_for_match() -> dict[str, set[str]]:
-    """Return {restaurant_id: {normalized_item_name, ...}} for menu overlap scoring.
-
-    Joins menu_items -> platform_listings -> restaurants. Returns only restaurants
-    with >= 1 item. Normalizes names: strip accents, lowercase, keep [a-z0-9].
-    """
     import re as _re
     import unicodedata as _ud
-
-    client = get_client()
+    rows = pgpool.fetchall(
+        "SELECT mi.title, pl.restaurant_id "
+        "FROM menu_items mi JOIN platform_listings pl ON pl.id = mi.listing_id"
+    )
     result: dict[str, set[str]] = {}
-    page = 1000
-    offset = 0
-    while True:
-        res = (
-            client.table("menu_items")
-            .select("title, platform_listings(restaurant_id)")
-            .range(offset, offset + page - 1)
-            .execute()
-        )
-        batch = res.data or []
-        for row in batch:
-            rid_obj = row.get("platform_listings") or {}
-            rid = str(rid_obj.get("restaurant_id", "")) if isinstance(rid_obj, dict) else ""
-            if not rid or rid == "None":
-                continue
-            raw = row.get("title") or ""
-            nfkd = _ud.normalize("NFD", raw)
-            no_acc = "".join(ch for ch in nfkd if _ud.category(ch) != "Mn")
-            norm = _re.sub(r"[^a-z0-9]", "", no_acc.lower())
-            if norm and len(norm) >= 3:
-                result.setdefault(rid, set()).add(norm)
-        if len(batch) < page:
-            break
-        offset += page
+    for row in rows:
+        rid = str(row.get("restaurant_id") or "")
+        if not rid or rid == "None":
+            continue
+        raw = row.get("title") or ""
+        nfkd = _ud.normalize("NFD", raw)
+        no_acc = "".join(ch for ch in nfkd if _ud.category(ch) != "Mn")
+        norm = _re.sub(r"[^a-z0-9]", "", no_acc.lower())
+        if norm and len(norm) >= 3:
+            result.setdefault(rid, set()).add(norm)
     return result
 
 
 def load_slugs_for_match() -> dict[str, list[str]]:
-    """Return {restaurant_id: [url_path_segment, ...]} from platform_listings.url.
-
-    Extracts the last meaningful path segment from each listing URL so the
-    location-token detector can read e.g. 'sushi-palace-ixelles' from a
-    Deliveroo/UberEats URL. No 'slug' column exists on platform_listings.
-    """
     from urllib.parse import urlparse
-    client = get_client()
+    rows = pgpool.fetchall(
+        "SELECT restaurant_id, url FROM platform_listings WHERE url IS NOT NULL"
+    )
     result: dict[str, list[str]] = {}
-    page = 1000
-    offset = 0
-    while True:
-        res = (
-            client.table("platform_listings")
-            .select("restaurant_id, url")
-            .not_.is_("url", "null")
-            .range(offset, offset + page - 1)
-            .execute()
-        )
-        batch = res.data or []
-        for row in batch:
-            rid = str(row.get("restaurant_id") or "")
-            url = row.get("url") or ""
-            if not rid or rid == "None" or not url:
-                continue
-            try:
-                path = urlparse(url).path.rstrip("/")
-                segments = [s for s in path.split("/") if s]
-                # Skip UUID/hash-like final segments (e.g. UberEats
-                # /store/{slug}/{UUID} — last segment is opaque, second-to-last
-                # is the human-readable slug).
-                slug = None
-                for seg in reversed(segments):
-                    if len(seg) >= 3 and not re.match(r'^[A-Za-z0-9_\-]{20,}$', seg):
-                        slug = seg
-                        break
-                if slug:
-                    result.setdefault(rid, []).append(slug)
-            except Exception:
-                continue
-        if len(batch) < page:
-            break
-        offset += page
+    for row in rows:
+        rid = str(row.get("restaurant_id") or "")
+        url = row.get("url") or ""
+        if not rid or rid == "None" or not url:
+            continue
+        try:
+            path = urlparse(url).path.rstrip("/")
+            segments = [s for s in path.split("/") if s]
+            slug = None
+            for seg in reversed(segments):
+                if len(seg) >= 3 and not re.match(r'^[A-Za-z0-9_\-]{20,}$', seg):
+                    slug = seg
+                    break
+            if slug:
+                result.setdefault(rid, []).append(slug)
+        except Exception:
+            continue
     return result
 
 
 def load_listing_addresses_for_match() -> dict[str, dict]:
-    """Return {restaurant_id: {"street_address": ..., "postal_code": ...}} from platform_listings."""
-    client = get_client()
-    res = (
-        client.table("platform_listings")
-        .select("restaurant_id, street_address, postal_code")
-        .not_.is_("street_address", "null")
-        .execute()
+    rows = pgpool.fetchall(
+        "SELECT restaurant_id, street_address, postal_code FROM platform_listings "
+        "WHERE street_address IS NOT NULL"
     )
     result: dict[str, dict] = {}
-    for row in res.data or []:
+    for row in rows:
         rid = str(row.get("restaurant_id") or "")
         if not rid or rid == "None":
             continue
@@ -950,3 +751,102 @@ def load_listing_addresses_for_match() -> dict[str, dict]:
                 "postal_code": row.get("postal_code"),
             }
     return result
+
+
+# ---------------------------------------------------------------------------
+# Public reads (frontend) — return PostgREST-shaped nested JSON
+# ---------------------------------------------------------------------------
+
+def get_public_restaurants() -> list[dict]:
+    """Homepage: every non-merged restaurant with its listings (short shape)."""
+    return pgpool.fetchall(
+        """
+        SELECT r.id, r.name, r.cuisine, r.neighborhood, r.lat, r.lng,
+               r.order_url, r.image_url, r.is_chain,
+               COALESCE(
+                 json_agg(
+                   json_build_object(
+                     'platform', pl.platform, 'delivery_fee', pl.delivery_fee,
+                     'eta_min', pl.eta_min, 'url_type', pl.url_type,
+                     'is_available', pl.is_available, 'opening_hours', pl.opening_hours,
+                     'last_scraped_at', pl.last_scraped_at
+                   )
+                 ) FILTER (WHERE pl.id IS NOT NULL), '[]'
+               ) AS platform_listings
+        FROM restaurants r
+        LEFT JOIN platform_listings pl ON pl.restaurant_id = r.id
+        WHERE r.merged_into IS NULL
+        GROUP BY r.id
+        """
+    )
+
+def get_public_restaurant_detail(restaurant_id: str) -> dict | None:
+    """Detail page: one restaurant, listings with nested menu_items + promotions."""
+    _validate_uuid(restaurant_id)
+    return pgpool.fetchone(
+        """
+        SELECT r.id, r.name, r.neighborhood, r.cuisine, r.phone,
+               r.order_url, r.image_url,
+               COALESCE(
+                 json_agg(
+                   json_build_object(
+                     'id', pl.id, 'platform', pl.platform, 'url', pl.url,
+                     'url_type', pl.url_type, 'is_available', pl.is_available,
+                     'opening_hours', pl.opening_hours, 'delivery_fee', pl.delivery_fee,
+                     'min_order', pl.min_order, 'eta_min', pl.eta_min,
+                     'eta_max', pl.eta_max, 'rating', pl.rating,
+                     'last_scraped_at', pl.last_scraped_at,
+                     'menu_items', COALESCE((
+                       SELECT json_agg(json_build_object(
+                         'title', mi.title, 'price', mi.price,
+                         'catalog_name', mi.catalog_name, 'image_url', mi.image_url,
+                         'description', mi.description))
+                       FROM menu_items mi WHERE mi.listing_id = pl.id), '[]'),
+                     'promotions', COALESCE((
+                       SELECT json_agg(json_build_object(
+                         'promo_type', pr.promo_type, 'label', pr.label, 'value', pr.value))
+                       FROM promotions pr WHERE pr.listing_id = pl.id), '[]')
+                   )
+                 ) FILTER (WHERE pl.id IS NOT NULL), '[]'
+               ) AS platform_listings
+        FROM restaurants r
+        LEFT JOIN platform_listings pl ON pl.restaurant_id = r.id
+        WHERE r.id = %s
+        GROUP BY r.id
+        """,
+        [restaurant_id],
+    )
+
+def get_public_deals() -> list[dict]:
+    """Deals page: promotions joined to listing + restaurant (nested shape)."""
+    return pgpool.fetchall(
+        """
+        SELECT p.id, p.promo_type, p.label, p.value, p.min_order,
+               json_build_object(
+                 'platform', pl.platform, 'url', pl.url, 'rating', pl.rating,
+                 'review_count', pl.review_count, 'is_available', pl.is_available,
+                 'opening_hours', pl.opening_hours,
+                 'restaurants', json_build_object(
+                   'id', r.id, 'name', r.name, 'cuisine', r.cuisine,
+                   'neighborhood', r.neighborhood)
+               ) AS platform_listings
+        FROM promotions p
+        JOIN platform_listings pl ON pl.id = p.listing_id
+        JOIN restaurants r ON r.id = pl.restaurant_id
+        WHERE p.promo_type NOT IN ('other', 'spend_save')
+        """
+    )
+
+def get_latest_run(platform: str, since_iso: str | None = None) -> dict | None:
+    """Most recent run for a platform, optionally only if started since a cutoff."""
+    if since_iso:
+        return pgpool.fetchone(
+            "SELECT started_at FROM scraper_runs WHERE platform = %s "
+            "AND started_at >= %s ORDER BY started_at DESC LIMIT 1",
+            [platform, since_iso],
+        )
+    return pgpool.fetchone(
+        "SELECT started_at FROM scraper_runs WHERE platform = %s "
+        "ORDER BY started_at DESC LIMIT 1",
+        [platform],
+    )

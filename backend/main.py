@@ -14,7 +14,7 @@ from starlette.requests import Request
 import auth
 import scheduler as sched
 import ws as ws_mod
-from routers import scrapers, runs, schedule, data, websites, claims as claims_router_mod, cleanup
+from routers import scrapers, runs, schedule, data, websites, claims as claims_router_mod, cleanup, public
 from routers.auth_router import router as auth_router
 
 _PUBLIC_PATHS = {"/api/auth/login"}
@@ -34,6 +34,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         if path in _PUBLIC_POST_PATHS and request.method == "POST":
             return await call_next(request)
+        # Public read API for the frontend — unauthenticated GETs.
+        if path.startswith("/api/public/") and request.method == "GET":
+            return await call_next(request)
 
         # WebSocket: token comes as ?token= query param (browsers can't send headers)
         if path.startswith("/ws/"):
@@ -47,7 +50,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-_REQUIRED_ENV = ("SUPABASE_URL", "SUPABASE_SERVICE_KEY", "JWT_SECRET", "ADMIN_PASSWORD")
+_REQUIRED_ENV = ("DATABASE_URL", "JWT_SECRET", "ADMIN_PASSWORD")
 
 
 def _check_required_env() -> None:
@@ -62,6 +65,8 @@ def _check_required_env() -> None:
 async def lifespan(app: FastAPI):
     _check_required_env()
     import db
+    import pgpool
+    pgpool.get_pool()  # open the pool eagerly so a bad DATABASE_URL fails fast
     # On a fresh process start, any run still marked 'running' is orphaned —
     # the previous process was killed and those runs will never finish.
     cleaned = db.orphan_stale_runs(max_age_hours=0)
@@ -70,10 +75,8 @@ async def lifespan(app: FastAPI):
         logging.getLogger(__name__).warning("Startup: marked %d orphaned runs as failed", cleaned)
     sched.start()
     yield
-    # Graceful shutdown: let in-flight jobs finish (bounded by APScheduler's own
-    # job timeouts). wait=False previously killed scrapers mid-write.
     sched.shutdown()
-    db.close_client()
+    db.close_client()  # closes the pool via the back-compat shim
 
 
 app = FastAPI(title="Forkeur Backend", lifespan=lifespan, docs_url=None, redoc_url=None)
@@ -95,6 +98,7 @@ app.include_router(data.router, prefix="/api")
 app.include_router(websites.router, prefix="/api")
 app.include_router(claims_router_mod.router, prefix="/api")
 app.include_router(cleanup.router, prefix="/api")
+app.include_router(public.router, prefix="/api")
 
 
 @app.websocket("/ws/{run_id}")

@@ -1,9 +1,8 @@
 import { cache } from 'react'
-import { cookies } from 'next/headers'
-import { createClient } from '@/utils/supabase/server'
 import type { Platform } from '@/lib/basket'
 import type { DealItem, DealType } from '@/lib/deals'
 import { normalizeTitle } from '@/lib/normalize-title'
+import { backendFetch } from '@/lib/backend'
 export { normalizeTitle }
 
 const STALE_THRESHOLD_MS = 72 * 60 * 60 * 1000
@@ -157,10 +156,6 @@ type RawRestaurantDetail = {
   platform_listings: RawListingDetail[]
 }
 
-async function getSupabase() {
-  const cookieStore = await cookies()
-  return createClient(cookieStore)
-}
 
 function feeCents(fee: number | null): number | null {
   return fee != null ? Math.round(fee * 100) : null
@@ -180,16 +175,7 @@ export async function getRestaurants(): Promise<{
   restaurants: RestaurantSummary[]
   cuisines: string[]
 }> {
-  const supabase = await getSupabase()
-
-  const { data, error } = await supabase
-    .from('restaurants')
-    .select(`
-      id, name, cuisine, neighborhood, lat, lng, order_url, image_url, is_chain,
-      platform_listings ( platform, delivery_fee, eta_min, url_type, is_available, opening_hours, last_scraped_at )
-    `)
-
-  if (error) throw new Error(`getRestaurants: ${error.message}`)
+  const data = await backendFetch<RawRestaurantRow[]>('/api/public/restaurants', { revalidate: 3600 })
 
   const threshold = new Date(Date.now() - STALE_THRESHOLD_MS)
 
@@ -289,21 +275,7 @@ export async function getRestaurants(): Promise<{
 }
 
 export async function getDeals(): Promise<DealItem[]> {
-  const supabase = await getSupabase()
-
-  const { data, error } = await supabase
-    .from('promotions')
-    .select(`
-      id, promo_type, label, value, min_order,
-      platform_listings (
-        platform, url, rating, review_count, is_available, opening_hours,
-        restaurants ( id, name, cuisine, neighborhood )
-      )
-    `)
-    .neq('promo_type', 'other')
-    .neq('promo_type', 'spend_save')
-
-  if (error) throw new Error(`getDeals: ${error.message}`)
+  const data = await backendFetch<RawPromoRow[]>('/api/public/deals', { revalidate: 3600 })
 
   return ((data ?? []) as unknown as RawPromoRow[]).flatMap((p): DealItem[] => {
     const listing = p.platform_listings
@@ -333,23 +305,8 @@ export async function getDeals(): Promise<DealItem[]> {
 export const getRestaurantWithListings = cache(async (
   id: string
 ): Promise<RestaurantDetail | null> => {
-  const supabase = await getSupabase()
-
-  const { data, error } = await supabase
-    .from('restaurants')
-    .select(`
-      id, name, neighborhood, cuisine, phone, order_url, image_url,
-      platform_listings (
-        id, platform, url, url_type, is_available, opening_hours,
-        delivery_fee, min_order, eta_min, eta_max, rating, last_scraped_at,
-        menu_items ( title, price, catalog_name, image_url, description ),
-        promotions ( promo_type, label, value )
-      )
-    `)
-    .eq('id', id)
-    .single()
-
-  if (error) return null
+  const data = await backendFetch<RawRestaurantDetail | null>(`/api/public/restaurants/${encodeURIComponent(id)}`, { revalidate: 3600 }).catch(() => null)
+  if (!data) return null
 
   const raw = data as unknown as RawRestaurantDetail
   const threshold = new Date(Date.now() - STALE_THRESHOLD_MS)
