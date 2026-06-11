@@ -2,6 +2,7 @@ from __future__ import annotations
 import asyncio
 import re
 from typing import Callable
+import httpx
 from models import ScraperConfig, ScraperResult
 from scrapers.base import (
     browser_session, new_page, wait_for_cf_clear,
@@ -169,7 +170,143 @@ _PROMO_EVAL = """
 """
 
 
-async def scrape_menu_page(page, listing_id: str, url: str) -> tuple[str, list[dict], list[str], dict | None]:
+_PHONE_NORM_RE = re.compile(r"[^\d+]")
+
+
+def _name_score(a: str, b: str) -> float:
+    """Simple word-overlap score 0–1 between two restaurant names."""
+    wa = set(re.sub(r"[^\w\s]", "", a.lower()).split())
+    wb = set(re.sub(r"[^\w\s]", "", b.lower()).split())
+    if not wa or not wb:
+        return 0.0
+    return len(wa & wb) / max(len(wa), len(wb))
+
+
+async def _osm_phone(lat: float, lng: float, name: str) -> str | None:
+    """Query Overpass API for a restaurant near lat/lng, return phone if name matches."""
+    query = (
+        f"[out:json][timeout:10];"
+        f"(node(around:120,{lat},{lng})[amenity];"
+        f"way(around:120,{lat},{lng})[amenity];);"
+        f"out tags;"
+    )
+    try:
+        async with httpx.AsyncClient(timeout=12, follow_redirects=True) as client:
+            resp = await client.post(
+                "https://overpass-api.de/api/interpreter",
+                data={"data": query},
+                headers={"User-Agent": "Forkeur/1.0"},
+            )
+        elements = resp.json().get("elements", [])
+        best_phone: str | None = None
+        best_score = 0.3  # minimum confidence threshold
+        for el in elements:
+            tags = el.get("tags", {})
+            phone = tags.get("phone") or tags.get("contact:phone")
+            if not phone:
+                continue
+            osm_name = tags.get("name", "")
+            score = _name_score(name, osm_name)
+            if score > best_score:
+                best_score = score
+                best_phone = phone
+        return best_phone
+    except Exception:
+        return None
+
+
+async def _extract_modal_info(page) -> dict:
+    """Click 'À propos' → 'Info' tab, return {'vat': ..., 'phone': ..., 'address': ...}."""
+    result: dict = {}
+    try:
+        btn = page.locator('[class*="actions__"] button').last
+        await btn.click(timeout=5000)
+        await page.wait_for_selector('[role="dialog"]', timeout=5000)
+        try:
+            await page.get_by_role("tab", name=re.compile(r"^Info$", re.I)).click(timeout=3000)
+            await page.wait_for_timeout(400)
+        except Exception:
+            pass
+        extracted: dict = await page.evaluate("""
+        () => {
+            const dlg = document.querySelector('[role="dialog"]');
+            if (!dlg) return {};
+            const text = dlg.innerText || '';
+            const vat = (text.match(/BE\\s*\\d{10}/i) || [])[0];
+            // phone: Belgian mobile/landline patterns
+            const phoneM = text.match(/(?:\\+32|0032|0)[\\s.-]?(?:\\d[\\s.-]?){8,9}(?!\\d)/);
+            return {
+                vat: vat ? vat.replace(/\\s+/g,'').toUpperCase() : null,
+                phone: phoneM ? phoneM[0].trim() : null,
+            };
+        }
+        """)
+        result = extracted or {}
+        try:
+            await page.keyboard.press("Escape")
+        except Exception:
+            pass
+    except Exception:
+        pass
+    return result
+
+
+async def _kbo_phone(vat: str) -> str | None:
+    """Return phone from Belgian KBO registry, or None."""
+    digits = re.sub(r"[^0-9]", "", vat)
+    if len(digits) != 10:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+            resp = await client.get(
+                "https://kbopub.economie.fgov.be/kbopub/zoeknummerform.html",
+                params={"nummer": digits},
+                headers={"User-Agent": "Mozilla/5.0"},
+            )
+        html = resp.text
+        idx = html.find("Telefoonnummer")
+        if idx < 0:
+            return None
+        snippet = html[idx: idx + 400]
+        m = re.search(r'colspan="3">\s*([+\d\s()./-]{7,25})\s*<', snippet)
+        if not m:
+            return None
+        phone = m.group(1).strip()
+        if not re.search(r"\d{4}", phone) or "geen" in phone.lower():
+            return None
+        return phone
+    except Exception:
+        return None
+
+
+async def _lookup_phone(
+    page,
+    name: str,
+    lat: float | None,
+    lng: float | None,
+) -> str | None:
+    """Multi-source phone lookup. Priority: OSM → modal-direct → KBO."""
+    # 1. OSM Overpass (no modal needed, concurrent-friendly)
+    if lat is not None and lng is not None:
+        phone = await _osm_phone(lat, lng, name)
+        if phone:
+            return phone
+
+    # 2. À propos modal — may contain phone directly, always has VAT
+    modal = await _extract_modal_info(page)
+    if modal.get("phone"):
+        return modal["phone"]
+
+    # 3. KBO via VAT number
+    if modal.get("vat"):
+        phone = await _kbo_phone(modal["vat"])
+        if phone:
+            return phone
+
+    return None
+
+
+async def scrape_menu_page(page, listing_id: str, url: str, name: str = "") -> tuple[str, list[dict], list[str], dict | None]:
     """Navigate to menu page, scroll fully, extract items and JSON-LD venue data.
 
     Returns (listing_id, items, promo_lines, restaurant_info).
@@ -228,6 +365,19 @@ async def scrape_menu_page(page, listing_id: str, url: str) -> tuple[str, list[d
 
         promo_dom = await page.evaluate(_PROMO_EVAL)
         promo_lines = promo_dom.get("promoLines") or []
+
+        # If no phone from JSON-LD, try OSM → modal direct → KBO
+        if not (restaurant_info or {}).get("phone"):
+            phone = await _lookup_phone(
+                page,
+                name,
+                (restaurant_info or {}).get("lat"),
+                (restaurant_info or {}).get("lng"),
+            )
+            if phone:
+                if restaurant_info is None:
+                    restaurant_info = {}
+                restaurant_info["phone"] = phone
 
         return (listing_id, items, promo_lines, restaurant_info)
 
@@ -344,7 +494,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 log_fn(f"Menu worker {wid}: {r['name']}")
                 menu_page = await new_page(browser, lang="fr-BE")
                 try:
-                    _, items, promo_lines, rinfo = await scrape_menu_page(menu_page, lid, url)
+                    _, items, promo_lines, rinfo = await scrape_menu_page(menu_page, lid, url, r["name"])
                     if rinfo and (rinfo.get("lat") is not None or rinfo.get("neighborhood")):
                         enriched: dict = {"name": r["name"], "slug": r["slug"]}
                         if rinfo.get("lat") is not None:
