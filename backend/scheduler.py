@@ -240,4 +240,4 @@ def start() -> None:
 
 
 def shutdown() -> None:
-    _scheduler.shutdown(wait=True)
+    _scheduler.shutdown(wait=False)
