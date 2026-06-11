@@ -140,6 +140,43 @@ async def _venue_coords_from_page(page) -> dict | None:
     return None
 
 
+async def _phone_from_page(page) -> str | None:
+    """Extract venue phone from a Deliveroo restaurant page.
+
+    The phone is NOT in JSON-LD or initial __NEXT_DATA__ (``"phone":""``). It is
+    lazy-rendered behind the "Informations" button as a ``tel:`` link
+    (e.g. ``<a href="tel:+32483641918">Appeler X au +32483641918</a>``).
+    Strategy: click the Informations button (matched by leading text, since the
+    Deliveroo CSS classes are build-hashed and unstable), wait for the tel link,
+    then strip the ``tel:`` prefix. Returns None if no phone is exposed.
+    """
+    try:
+        clicked = await page.evaluate("""() => {
+            const b = [...document.querySelectorAll('button')]
+                .find(x => /^Informations/i.test((x.innerText || '').trim()));
+            if (b) { b.click(); return true; }
+            return false;
+        }""")
+        if not clicked:
+            return None
+        try:
+            await page.wait_for_selector('a[href^="tel:"]', timeout=4000)
+        except Exception:
+            return None
+        href = await page.evaluate(
+            "() => { const a = document.querySelector('a[href^=\"tel:\"]');"
+            " return a ? a.getAttribute('href') : null; }"
+        )
+        if isinstance(href, str) and href.startswith("tel:"):
+            phone = href[4:].strip()
+            # Belgian numbers: +32… or 0… , 9–13 chars after stripping.
+            if phone and (phone.startswith("+") or phone.startswith("0")) and len(phone) >= 9:
+                return phone
+    except Exception:
+        pass
+    return None
+
+
 def _parse_dom_items(dom_output: dict) -> list[dict]:
     """Parse menu items from DOM eval output.
 
@@ -468,6 +505,10 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                         db.patch_listing(lid, addr_patch)
                         log_fn(f"  Venue address: {addr_patch}")
                     tel = venue.get("telephone")
+                    if not tel:
+                        # JSON-LD never carries telephone on Deliveroo; fall back to
+                        # the "Informations" panel which exposes a tel: link.
+                        tel = await _phone_from_page(page)
                     if tel:
                         db.patch_restaurant_phone(rid, tel)
                         log_fn(f"  Venue phone: {tel}")
