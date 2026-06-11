@@ -492,7 +492,7 @@ export default function BasketSimulator({ menuItems, listings, phone, matchRate 
       )}
 
       {/* Spacer so content isn't hidden behind sticky bar */}
-      {basket.length > 0 && <div className="h-20" />}
+      {basket.length > 0 && <div className="h-40" />}
 
       {/* Sticky basket bar */}
       {basket.length > 0 && (
