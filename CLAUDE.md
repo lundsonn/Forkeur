@@ -70,7 +70,8 @@ cd forkeur-app && npm run dev   # :3000
 
 ## Production Server
 
-- **IP:** `178.104.57.72` (Hetzner Cloud, Ubuntu, hostname `ubuntu-4gb-nbg1-1`)
+- **IP:** `178.104.57.72` (Hetzner Cloud, Ubuntu, hostname `ubuntu-4gb-nbg1-1` — the box actually has **8 GB RAM** + 2 GB swap + 4 cores; the hostname is stale from a since-resized plan)
+- **Scraper RAM:** each Playwright scraper (ubereats/deliveroo/takeaway/dom_menu) peaks ~2 GB; running 2 concurrently peaks ~5.5 GB / 8 GB. Parallelize with a launch gate that holds when MemAvailable < ~1.8 GB to keep margin.
 - **SSH:** `ssh -i ~/.ssh/id_ed25519 root@178.104.57.72`
 - **App location:** `/opt/forkeur/`
 - **Services:** `systemctl restart forkeur-backend` / `forkeur-frontend` / `postgresql` / `pgbouncer`
