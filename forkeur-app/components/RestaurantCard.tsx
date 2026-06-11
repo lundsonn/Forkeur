@@ -41,12 +41,14 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge, 
   const cheapestFeeCents = cheapest?.delivery_fee_cents ?? null
 
   return (
-    <a
-      href={href}
-      className={`block py-4 cursor-pointer select-none ${!isLast ? 'border-b border-stone-100' : ''} ${isClosed ? 'opacity-60' : ''}`}
+    <div
+      className={`relative py-4 cursor-pointer select-none ${!isLast ? 'border-b border-stone-100' : ''} ${isClosed ? 'opacity-60' : ''}`}
     >
+      {/* Stretched link overlay — sibling, not parent, so nested CTA anchors stay valid HTML */}
+      <a href={href} aria-label={name} className="absolute inset-0 z-0" />
+
       {/* Header */}
-      <div className="flex items-start gap-3 mb-3">
+      <div className="relative z-10 pointer-events-none flex items-start gap-3 mb-3">
         {image_url && (
           <Image
             src={image_url}
@@ -65,7 +67,7 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge, 
           <p className="text-xs text-stone-400 truncate">{cuisine.join(' · ')}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0 mt-0.5">
-          {cheapestFeeCents != null && (
+          {cheapestFeeCents != null && cheapestFeeCents > 0 && (
             <span className="text-xs text-stone-500">
               from <span className="font-bold text-stone-900">{centsToEuro(cheapestFeeCents)}</span>
             </span>
@@ -73,7 +75,7 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge, 
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); setCollapsed((v) => !v) }}
-            className="text-stone-300 hover:text-stone-500 min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors"
+            className="pointer-events-auto text-stone-300 hover:text-stone-500 min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors"
             aria-label={collapsed ? 'Expand' : 'Collapse'}
           >
             {collapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
@@ -83,7 +85,7 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge, 
 
       {/* Platform rows */}
       {!collapsed && sortedTiles.length > 0 && (
-        <div className="space-y-1.5 mb-3">
+        <div className="relative z-10 pointer-events-none space-y-1.5 mb-3">
           {sortedTiles.map((l) => {
             const isCheapest = l.platform === cheapest?.platform
             const delta =
@@ -93,6 +95,8 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge, 
             return (
               <div
                 key={l.platform}
+                data-testid={`fee-tile-${l.platform}`}
+                data-cheapest={isCheapest ? 'true' : undefined}
                 className={`flex items-center gap-2.5 px-3 py-2 rounded-xl ${isCheapest ? 'bg-green-50' : 'bg-stone-50'}`}
               >
                 <PlatformLogo platform={l.platform} size={16} />
@@ -116,13 +120,13 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge, 
       )}
 
       {/* Direct CTA — only for actionable types; 'website'/'phone' belong on the detail page */}
-      {order_url && (direct_url_type === 'ordering' || direct_url_type === 'menu') && (
+      {order_url && (direct_url_type === 'ordering' || direct_url_type === 'menu' || direct_url_type === 'website') && (
         <a
           href={order_url}
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
-          className="flex items-center justify-center gap-1.5 w-full py-2.5 bg-orange-500 text-white text-sm font-semibold rounded-xl hover:bg-orange-600 active:bg-orange-700 transition-colors mb-2"
+          className="relative z-10 pointer-events-auto flex items-center justify-center gap-1.5 w-full py-2.5 bg-orange-500 text-white text-sm font-semibold rounded-xl hover:bg-orange-600 active:bg-orange-700 transition-colors mb-2"
         >
           {directBadge}
         </a>
@@ -130,10 +134,10 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge, 
 
       {/* Compare all */}
       {!collapsed && sortedTiles.length > 1 && (
-        <p className="text-center text-xs text-stone-400 mt-0.5">
+        <p className="relative z-10 pointer-events-none text-center text-xs text-stone-400 mt-0.5">
           {tCard('compare_all', { count: sortedTiles.length })} ›
         </p>
       )}
-    </a>
+    </div>
   )
 }

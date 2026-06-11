@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, Suspense } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import type { RestaurantSummary } from '@/lib/queries'
@@ -16,7 +16,7 @@ type SortBy = 'best' | 'cheapest' | 'fastest'
 
 export default function HomepageClient({
   restaurants,
-  cuisines: _cuisines,
+  cuisines,
 }: {
   restaurants: RestaurantSummary[]
   cuisines: string[]
@@ -24,6 +24,7 @@ export default function HomepageClient({
   const PAGE_SIZE = 20
 
   const [search, setSearch] = useState('')
+  const [selectedCuisine, setSelectedCuisine] = useState<string | null>(null)
   const [selectedNeighborhood, setSelectedNeighborhood] = useState<string | null>(null)
   const [neighborhoodSheetOpen, setNeighborhoodSheetOpen] = useState(false)
   const [sortBy, setSortBy] = useState<SortBy>('best')
@@ -37,6 +38,7 @@ export default function HomepageClient({
   const tNav = useTranslations('nav')
   const tHero = useTranslations('hero')
   const tSearch = useTranslations('search')
+  const tFilters = useTranslations('filters')
   const tResults = useTranslations('results')
   const tDirect = useTranslations('direct')
   const tCard = useTranslations('card')
@@ -76,7 +78,8 @@ export default function HomepageClient({
     const base = restaurants.filter((r) => {
       const matchSearch = r.name.toLowerCase().includes(search.toLowerCase())
       const matchNeighborhood = !selectedNeighborhood || r.neighborhood === selectedNeighborhood
-      return matchSearch && matchNeighborhood
+      const matchCuisine = !selectedCuisine || r.cuisine.includes(selectedCuisine)
+      return matchSearch && matchNeighborhood && matchCuisine
     })
 
     if (sortBy === 'best') return base
@@ -96,7 +99,7 @@ export default function HomepageClient({
       if (mb.minEta === null) return -1
       return ma.minEta - mb.minEta
     })
-  }, [restaurants, search, selectedNeighborhood, sortBy, metrics])
+  }, [restaurants, search, selectedNeighborhood, selectedCuisine, sortBy, metrics])
 
   const hasFilter = !!(search || selectedNeighborhood)
 
@@ -176,6 +179,33 @@ export default function HomepageClient({
         )}
       </div>
 
+      {/* Cuisine pills */}
+      {cuisines.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1 mb-4 scrollbar-none">
+          <button
+            type="button"
+            onClick={() => { setSelectedCuisine(null); setVisibleCount(PAGE_SIZE) }}
+            className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+              !selectedCuisine ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+            }`}
+          >
+            {tFilters('all')}
+          </button>
+          {cuisines.map((c) => (
+            <button
+              type="button"
+              key={c}
+              onClick={() => { setSelectedCuisine(selectedCuisine === c ? null : c); setVisibleCount(PAGE_SIZE) }}
+              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                selectedCuisine === c ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+              }`}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* How it works */}
       <div className="overflow-hidden flex items-start gap-0 mb-6">
         {([
@@ -247,10 +277,12 @@ export default function HomepageClient({
       </div>
 
       {view === 'map' ? (
-        <MapView
-          restaurants={filtered}
-          height="calc(100vh - 240px)"
-        />
+        <Suspense fallback={<div className="rounded-xl border border-stone-200 bg-stone-50 animate-pulse h-[calc(100vh-240px)]" />}>
+          <MapView
+            restaurants={filtered}
+            height="calc(100vh - 240px)"
+          />
+        </Suspense>
       ) : (
         <>
           {/* List label */}
