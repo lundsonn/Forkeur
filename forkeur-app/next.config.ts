@@ -15,7 +15,7 @@ const CSP = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
-  "connect-src 'self' https://*.supabase.co https://www.google-analytics.com",
+  "connect-src 'self' https://www.google-analytics.com",
   "frame-src https://www.google.com",
   "frame-ancestors 'none'",
   "base-uri 'self'",

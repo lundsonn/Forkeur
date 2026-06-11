@@ -1,107 +1,0 @@
-=== Match-Rate Audit ===
-
-Fetching platform_listings...
-  1644 listings loaded
-  265 restaurants with 2+ platforms
-  Fetching menu_items for 589 listings...
-  listing batch 300/589, total items: 1000  listing batch 300/589, total items: 2000  listing batch 300/589, total items: 3000  listing batch 300/589, total items: 4000  listing batch 300/589, total items: 5000  listing batch 300/589, total items: 6000  listing batch 300/589, total items: 7000  listing batch 300/589, total items: 8000  listing batch 300/589, total items: 9000  listing batch 300/589, total items: 10000  listing batch 300/589, total items: 11000  listing batch 300/589, total items: 12000  listing batch 300/589, total items: 13000  listing batch 300/589, total items: 14000  listing batch 300/589, total items: 15000  listing batch 300/589, total items: 15519  listing batch 589/589, total items: 16519  listing batch 589/589, total items: 17519  listing batch 589/589, total items: 18519  listing batch 589/589, total items: 19519  listing batch 589/589, total items: 20519  listing batch 589/589, total items: 21519  listing batch 589/589, total items: 22519  listing batch 589/589, total items: 23519  listing batch 589/589, total items: 24519  listing batch 589/589, total items: 25519  listing batch 589/589, total items: 26519  listing batch 589/589, total items: 27519  listing batch 589/589, total items: 28519  listing batch 589/589, total items: 29519  listing batch 589/589, total items: 29572
-
-════════════════════════════════════════════════════════════════
-  MATCH-RATE AUDIT REPORT
-════════════════════════════════════════════════════════════════
-
-Restaurants analyzed : 191
-Total unique keys    : 17,862
-  ✓ Matched (2+ platforms) : 5,160 (28.9%)
-  ✗ Orphaned (1 platform)  : 12,702 (71.1%)
-
-── Per-restaurant match-rate distribution ──
-  Mean   : 33.4%
-  Median : 23.7%
-  p10    : 0.0%
-  p25    : 5.4%
-  p75    : 56.3%
-  p90    : 84.6%
-
-── Bucket distribution (per restaurant) ──
-  0-25%    ██████████░░░░░░░░░░ 98 restaurants (51.3%)
-  25-50%   ████░░░░░░░░░░░░░░░░ 38 restaurants (19.9%)
-  50-75%   ███░░░░░░░░░░░░░░░░░ 26 restaurants (13.6%)
-  75-100%  ███░░░░░░░░░░░░░░░░░ 29 restaurants (15.2%)
-
-── Near-miss rescue potential (orphaned items that gain a cross-platform match) ──
-
-  1. Strip leading number    → rescues 14 orphans
-     "Chicken Wings (6)" [deliveroo]
-       ↔ "Chicken Wings 6" [uber_eats]
-     "Spicy Chicken Wings (6)" [deliveroo]
-       ↔ "Spicy Chicken Wings 6" [uber_eats]
-     "Salmon box 24" [takeaway]
-       ↔ "Salmon box (18 pièces)" [deliveroo]
-     "Black box 92" [takeaway]
-       ↔ "Black box (92 pièces)" [deliveroo]
-     "Sushi box 5" [takeaway]
-       ↔ "Sushi box (5 pièces)" [deliveroo]
-
-  2. Strip parentheticals    → rescues 0 orphans
-
-  3. Strip trailing size tokens → rescues 0 orphans
-
-  4. Token sort              → rescues 0 orphans
-
-── 20 worst offenders (≥10 unique keys, lowest match rate) ──
-
-  Name                               Platforms                     Keys    Rate
-  ──────────────────────────────────────────────────────────────
-  Goodfellas                         uber_eats, takeaway           237     0.0%
-  Le Pain Quotidien - Louise         uber_eats, deliveroo          160     0.0%
-  Proxy Delhaize                     uber_eats, deliveroo          58      0.0%
-  PAUL                               uber_eats, deliveroo          62      0.0%
-  Sushi Shop                         uber_eats, takeaway           144     0.0%
-      [uber_eats] California Saba Moutarde - 6 pièces
-      [takeaway] California Saba Moutarde
-      [uber_eats] Spring Crevette Nanban - 6 pièces
-      [takeaway] Spring Crevette Nanban
-      [uber_eats] Signature Maguro Spicy - 8 pièces
-      [takeaway] Signature Maguro Spicy
-
-  Orient Kitchen                     uber_eats, takeaway           133     0.0%
-      [uber_eats] 5. Potage au nids d'hirondelles/Bird's nest soup
-      [takeaway] Potages aux nids d'hirondelles
-
-  Au Bois d'Ébène                    deliveroo, takeaway           104     0.0%
-  An Ngon                            uber_eats, takeaway           142     0.0%
-      [uber_eats] 13. Bún bò huế
-      [takeaway] Bun bo hue soup
-
-  Mpoko Bazar                        takeaway, deliveroo           50      0.0%
-      [takeaway] Poulet sauce arachide
-      [deliveroo] POULET ARACHIDE
-      [takeaway] Box beignet 12 beignets
-      [deliveroo] Box 12 beignets
-
-  Librairie Louise x Mike Night      deliveroo, uber_eats          61      0.0%
-  Pokawa - Toison d'Or               takeaway, deliveroo           127     0.0%
-      [takeaway] Saimin Aiguillettes Végétales
-      [deliveroo] Red & Mango Poké Aiguillettes végétales 🍉
-      [takeaway] Saimin Crevettes
-      [deliveroo] Poké Crevettes 🦐
-      [takeaway] Saimin Poulet
-      [deliveroo] Poké Saumon
-
-  Épicerie De La Source              deliveroo, uber_eats          59      0.0%
-  IL Mandolino                       deliveroo, takeaway           83      0.0%
-  Wok O'Clock                        deliveroo, uber_eats          38      0.0%
-  Panos + Delhaize Shop & Go by Q... deliveroo, uber_eats          75      0.0%
-  Al Dente                           uber_eats, takeaway           66      0.0%
-  Librairie Laeken                   deliveroo, uber_eats          56      0.0%
-  Carrefour Market                   deliveroo, uber_eats          71      0.0%
-  Sos Lunch                          takeaway, uber_eats           103     0.0%
-      [takeaway] Tomate mozzarella
-      [uber_eats] Salade Tomate Mozza
-      [takeaway] Américain préparé
-      [uber_eats] Sandwich Américain Préparé
-
-  Snack Délice Halal                 takeaway, deliveroo           27      0.0%
-JSON written to: /Users/gege/Documents/Claude/Projects/Vibe coder/food-price-compare/forkeur-app/scripts/output/match-rate-results.json
-
