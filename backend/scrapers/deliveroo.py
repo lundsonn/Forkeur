@@ -91,10 +91,13 @@ async def _venue_coords_from_page(page) -> dict | None:
                         street = (a.address1 || '').trim() || null;
                         postal = (a.postCode || '').toString().trim() || null;
                         // postCode is usually null; Belgian 4-digit postcode is
-                        // embedded in address1 (e.g. "Rue Belliard 189, Brussels, 1040").
+                        // embedded at the END of address1
+                        // (e.g. "Rue Belliard 189, Brussels, 1040"). Take the LAST
+                        // 4-digit group — a leading house number can also be 4 digits
+                        // ("1423 Bergensesteenweg, Brussels, 1070" → 1070, not 1423).
                         if (!postal && street) {
-                            const m = street.match(/\\b(\\d{4})\\b/);
-                            if (m) postal = m[1];
+                            const ms = street.match(/\\b(\\d{4})\\b/g);
+                            if (ms && ms.length) postal = ms[ms.length - 1];
                         }
                     }
                     const cl = root.customerLocation;
