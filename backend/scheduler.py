@@ -84,12 +84,14 @@ async def _run_scraper(platform: str) -> None:
 
 
 def _persist_schedule(config: ScheduleConfigIn) -> None:
+    # updated_at omitted: the column defaults to now() on insert. (The old
+    # Supabase code passed the string "now()", which does not cast to
+    # timestamptz under plain SQL.)
     db.get_client().table("scraper_schedules").upsert({
         "platform": config.platform,
         "cron": config.cron,
         "address": DEFAULT_ADDRESS,
         "max_items": None,
-        "updated_at": "now()",
     }, on_conflict="platform").execute()
 
 
