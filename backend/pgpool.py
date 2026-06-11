@@ -31,6 +31,12 @@ def get_pool() -> ConnectionPool:
                     min_size=2,
                     max_size=10,
                     kwargs={"row_factory": dict_row},
+                    # PgBouncer transaction pooling multiplexes server
+                    # connections per-transaction, so server-side prepared
+                    # statements created on one backend break when the client
+                    # lands on another ("prepared statement does not exist").
+                    # Disable them pool-wide.
+                    configure=lambda conn: setattr(conn, "prepare_threshold", None),
                     open=True,
                 )
     return _pool

@@ -850,3 +850,165 @@ def get_latest_run(platform: str, since_iso: str | None = None) -> dict | None:
         "ORDER BY started_at DESC LIMIT 1",
         [platform],
     )
+
+
+# ---------------------------------------------------------------------------
+# PostgREST compatibility shim
+# ---------------------------------------------------------------------------
+# direct.py, direct_menu.py, dom_menu/, scheduler.py, website_finder.py and a
+# few one-off scripts were written against the Supabase python client's
+# query-builder and were never ported to explicit SQL during the
+# self-hosted-Postgres migration. Instead of rewriting each call site,
+# get_client() returns a minimal builder that translates the exact subset of
+# the PostgREST API those modules use into parameterised SQL via pgpool.
+# Identifiers come from hardcoded module strings (never user input) but are
+# still validated to be safe SQL identifiers.
+
+_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _check_ident(name: str) -> str:
+    if not _IDENT_RE.match(name.strip()):
+        raise ValueError(f"unsafe SQL identifier: {name!r}")
+    return name.strip()
+
+
+def _check_cols(cols: str) -> str:
+    if cols.strip() == "*":
+        return "*"
+    parts = [_check_ident(c) for c in cols.split(",")]
+    return ", ".join(parts)
+
+
+class _Result:
+    __slots__ = ("data",)
+
+    def __init__(self, data):
+        self.data = data
+
+
+class _Query:
+    """Accumulates a PostgREST-style chain, then runs one SQL statement."""
+
+    def __init__(self, table: str):
+        self._table = _check_ident(table)
+        self._op = "select"
+        self._cols = "*"
+        self._payload = None
+        self._on_conflict = None
+        self._where: list[tuple[str, list]] = []
+        self._negate = False
+
+    # operation selectors ------------------------------------------------
+    def select(self, cols: str = "*"):
+        self._op, self._cols = "select", _check_cols(cols)
+        return self
+
+    def insert(self, data):
+        self._op, self._payload = "insert", data
+        return self
+
+    def update(self, data):
+        self._op, self._payload = "update", data
+        return self
+
+    def upsert(self, data, on_conflict=None):
+        self._op, self._payload, self._on_conflict = "upsert", data, on_conflict
+        return self
+
+    def delete(self):
+        self._op = "delete"
+        return self
+
+    # filters ------------------------------------------------------------
+    @property
+    def not_(self):
+        self._negate = True
+        return self
+
+    def _push(self, pos: str, neg: str, params: list):
+        self._where.append((neg if self._negate else pos, params))
+        self._negate = False
+        return self
+
+    def eq(self, col, val):
+        c = _check_ident(col)
+        return self._push(f"{c} = %s", f"{c} <> %s", [val])
+
+    def neq(self, col, val):
+        c = _check_ident(col)
+        return self._push(f"{c} <> %s", f"{c} = %s", [val])
+
+    def is_(self, col, _val="null"):
+        # only ever called as .is_(col, 'null') / .not_.is_(col, 'null')
+        c = _check_ident(col)
+        return self._push(f"{c} IS NULL", f"{c} IS NOT NULL", [])
+
+    def in_(self, col, vals):
+        c = _check_ident(col)
+        vals = list(vals)
+        if not vals:
+            return self._push("false", "true", [])
+        ph = ", ".join(["%s"] * len(vals))
+        return self._push(f"{c} IN ({ph})", f"{c} NOT IN ({ph})", vals)
+
+    # terminal -----------------------------------------------------------
+    def _where_clause(self) -> tuple[str, list]:
+        if not self._where:
+            return "", []
+        frags, params = [], []
+        for frag, p in self._where:
+            frags.append(frag)
+            params.extend(p)
+        return " WHERE " + " AND ".join(frags), params
+
+    def execute(self) -> "_Result":
+        if self._op == "select":
+            where, params = self._where_clause()
+            rows = pgpool.fetchall(
+                f"SELECT {self._cols} FROM {self._table}{where}", params
+            )
+            return _Result(rows)
+
+        if self._op in ("insert", "upsert"):
+            rows = self._payload if isinstance(self._payload, list) else [self._payload]
+            out = []
+            for row in rows:
+                sql, params = _build_insert(
+                    self._table, row,
+                    on_conflict=self._on_conflict if self._op == "upsert" else None,
+                    returning="*",
+                )
+                r = pgpool.fetchone(sql, params)
+                if r is not None:
+                    out.append(r)
+            return _Result(out)
+
+        if self._op == "update":
+            sets = ", ".join(f"{_check_ident(c)} = %s" for c in self._payload.keys())
+            set_params = [_coerce(v) for v in self._payload.values()]
+            where, where_params = self._where_clause()
+            pgpool.execute(
+                f"UPDATE {self._table} SET {sets}{where}", set_params + where_params
+            )
+            return _Result([])
+
+        if self._op == "delete":
+            where, params = self._where_clause()
+            pgpool.execute(f"DELETE FROM {self._table}{where}", params)
+            return _Result([])
+
+        raise ValueError(f"unsupported op {self._op!r}")  # pragma: no cover
+
+
+class _PgRestClient:
+    def table(self, name: str) -> _Query:
+        return _Query(name)
+
+
+_pgrest_client = _PgRestClient()
+
+
+def get_client() -> _PgRestClient:
+    """Back-compat: a PostgREST-style builder backed by the psycopg3 pool."""
+    return _pgrest_client

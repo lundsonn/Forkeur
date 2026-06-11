@@ -6,9 +6,9 @@ Compare restaurant prices across UberEats, Deliveroo, Takeaway, and direct order
 
 ```
 Forkeur/              ← repo root
-├── backend/          ← Python scraper manager (FastAPI + APScheduler + Playwright)
-├── forkeur-app/      ← Next.js 15 consumer app (App Router + Supabase)
-└── supabase/         ← DB migrations (applied to remote Supabase project)
+├── backend/          ← Python scraper manager (FastAPI + APScheduler + Playwright); owns all DB access
+├── forkeur-app/      ← Next.js 15 consumer app (App Router); reads via FastAPI public endpoints
+└── supabase/         ← historical migration files (schema source for the self-hosted DB)
 ```
 
 **`Forkeur/`** directory inside the repo root is dead code — ignore it.
@@ -16,18 +16,23 @@ Forkeur/              ← repo root
 
 ## Database
 
-Supabase project: `ltpicouyzdmamblzwcgc`
+**Self-hosted PostgreSQL 16** on the production server (migrated off hosted Supabase, 2026-06-11). Architecture: `Next.js → FastAPI (psycopg3 sync pool) → PgBouncer:5432 (transaction mode) → PostgreSQL:5433`. The backend owns all DB access; the frontend never touches Postgres directly — it reads through the unauthenticated `/api/public/*` endpoints (`backend/routers/public.py`).
+
+- Connection: backend reads `DATABASE_URL` (points at PgBouncer on `127.0.0.1:5432`, db `forkeur`, role `forkeur_app`). Pool lives in `backend/pgpool.py` (`prepare_threshold=None` — required under PgBouncer transaction pooling).
+- `backend/db.py` is the DB layer: typed helpers (`upsert_restaurant`, `upsert_listing`, …) plus a PostgREST-compat `get_client()` shim used by the not-yet-ported scrapers (`direct.py`, `direct_menu.py`, `dom_menu/`, `scheduler.py`).
+- Schema source: `supabase/migrations/` (dumped from old Supabase, sanitized, applied to `/opt/forkeur/ops/selfhosted_schema.sql`). The old Supabase project `ltpicouyzdmamblzwcgc` is kept as a cold fallback only.
 
 Tables:
 - `restaurants` — master list (includes `phone`, `website`, `lat`, `lng`)
 - `platform_listings` — one row per restaurant per platform (`uber_eats` | `deliveroo` | `takeaway` | `direct`)
 - `menu_items` — menu items linked to platform_listings
 - `promotions` — structured promotions (one row per promo per listing; types: `free_delivery`, `bogo`, `pct_discount`, `abs_discount`, `free_item`, `spend_save`, `other`)
-- `scraper_runs` — run history (platforms: `ubereats` | `deliveroo` | `takeaway` | `fees` | `direct`)
-- `claims` — user-submitted data corrections
+- `scraper_runs` — run history (platforms: `ubereats` | `deliveroo` | `takeaway` | `fees` | `direct` | `direct_menu` | `dom_menu` | `match`)
+- `restaurant_claims` — user-submitted data corrections / owner inquiries
+- `restaurant_match_decisions` — cross-platform de-duplication queue/audit log
+- `scraper_schedules` — persisted cron schedules
 
-MCP wired: `.mcp.json` → use Supabase MCP tools for schema/query work.
-6 migrations applied: `supabase/migrations/`
+> The Supabase MCP tools in `.mcp.json` still point at the old hosted project — they are **not** the live DB anymore. For schema/query work on the live DB, use `psql` against the server (PgBouncer `127.0.0.1:5432` or Postgres `127.0.0.1:5433`).
 
 > **Platform naming gotcha:** `platform_listings.platform` uses `uber_eats` (underscore), while `scraper_runs.platform` uses `ubereats` (no underscore).
 
@@ -68,7 +73,8 @@ cd forkeur-app && npm run dev   # :3000
 - **IP:** `178.104.57.72` (Hetzner Cloud, Ubuntu, hostname `ubuntu-4gb-nbg1-1`)
 - **SSH:** `ssh -i ~/.ssh/id_ed25519 root@178.104.57.72`
 - **App location:** `/opt/forkeur/`
-- **Services:** `systemctl restart forkeur-backend` / `forkeur-frontend`
+- **Services:** `systemctl restart forkeur-backend` / `forkeur-frontend` / `postgresql` / `pgbouncer`
+- **Database:** PostgreSQL 16 on `127.0.0.1:5433`; PgBouncer (transaction mode) on `127.0.0.1:5432` → db `forkeur`, role `forkeur_app`. Daily `pg_dump` backup to `/backups` via `/etc/cron.d/forkeur-backup` (keep 7d). Schema at `/opt/forkeur/ops/selfhosted_schema.sql`.
 - **Backend API:** `http://localhost:8000` (internal only)
 - **Auth:** POST `/api/auth/login` with `{"password":"<ADMIN_PASSWORD>"}` → Bearer token (JWT, 30-day expiry; requires `JWT_SECRET` env var)
 - **Deploy:** `cd /opt/forkeur && git pull && systemctl restart forkeur-backend`
@@ -79,5 +85,5 @@ cd forkeur-app && npm run dev   # :3000
 
 - Backend: Python 3.12+, `uv` for packages (`uv run <cmd>`, never activate venv manually)
 - Frontend: Next.js 15 App Router — Server Components by default, `'use client'` only when needed
-- Supabase client: `utils/supabase/server.ts` in Server Components, `utils/supabase/client.ts` in Client Components
+- Frontend data: read through `forkeur-app/lib/backend.ts` (`backendFetch`) → FastAPI `/api/public/*`. No direct DB/Supabase client.
 - Tests: `pytest` (backend), `vitest` (frontend)
