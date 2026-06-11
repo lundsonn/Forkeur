@@ -77,41 +77,70 @@ async def _venue_coords_from_page(page) -> dict | None:
     """
     try:
         result = await page.evaluate("""() => {
-            // Strategy 1: JSON-LD with Restaurant + geo
-            for (const script of document.querySelectorAll('script[type="application/ld+json"]')) {
-                try {
-                    const d = JSON.parse(script.textContent);
-                    const items = Array.isArray(d) ? d : [d];
-                    for (const item of items) {
-                        if (item['@type'] === 'Restaurant' && item.geo) {
-                            const lat = parseFloat(item.geo.latitude);
-                            const lng = parseFloat(item.geo.longitude);
-                            if (!isNaN(lat) && !isNaN(lng)) {
-                                const addr = item.address || {};
-                                const street = (addr.streetAddress || '').trim() || null;
-                                const postal = (addr.postalCode || '').toString().trim() || null;
-                                const tel = (item.telephone || '').trim() || null;
-                                return { lat, lng, street_address: street, postal_code: postal, telephone: tel };
-                            }
+            let lat = null, lng = null, street = null, postal = null, tel = null;
+
+            // Strategy 1: __NEXT_DATA__ menuPage — carries the real venue address.
+            // Deliveroo serves NO Restaurant JSON-LD on .be menu pages, so this is
+            // the primary (and only) source of street_address + postal_code.
+            // Note: no venue lat/lng here — only customerLocation (zone centroid).
+            try {
+                const root = window.__NEXT_DATA__?.props?.initialState?.menuPage?.menu?.metas?.root;
+                if (root) {
+                    const a = root.restaurant?.location?.address;
+                    if (a) {
+                        street = (a.address1 || '').trim() || null;
+                        postal = (a.postCode || '').toString().trim() || null;
+                        // postCode is usually null; Belgian 4-digit postcode is
+                        // embedded in address1 (e.g. "Rue Belliard 189, Brussels, 1040").
+                        if (!postal && street) {
+                            const m = street.match(/\\b(\\d{4})\\b/);
+                            if (m) postal = m[1];
                         }
                     }
-                } catch {}
+                    const cl = root.customerLocation;
+                    if (cl && cl.lat != null && cl.lon != null) {
+                        const la = parseFloat(cl.lat), lo = parseFloat(cl.lon);
+                        if (!isNaN(la) && !isNaN(lo)) { lat = la; lng = lo; }
+                    }
+                }
+            } catch {}
+
+            // Strategy 2: JSON-LD Restaurant + geo (fallback if ever present —
+            // gives venue-accurate coords and may carry address/telephone).
+            if (lat === null || street === null) {
+                for (const script of document.querySelectorAll('script[type="application/ld+json"]')) {
+                    try {
+                        const d = JSON.parse(script.textContent);
+                        const items = Array.isArray(d) ? d : [d];
+                        for (const item of items) {
+                            if (item['@type'] === 'Restaurant') {
+                                if (item.geo) {
+                                    const la = parseFloat(item.geo.latitude);
+                                    const lo = parseFloat(item.geo.longitude);
+                                    if (!isNaN(la) && !isNaN(lo)) { lat = la; lng = lo; }
+                                }
+                                const addr = item.address || {};
+                                if (!street) street = (addr.streetAddress || '').trim() || null;
+                                if (!postal) postal = (addr.postalCode || '').toString().trim() || null;
+                                if (!tel) tel = (item.telephone || '').trim() || null;
+                            }
+                        }
+                    } catch {}
+                }
             }
-            // Strategy 2: __NEXT_DATA__ — scan props for lat/lng keys (coords only)
-            try {
-                const nd = window.__NEXT_DATA__;
-                if (nd) {
+
+            // Strategy 3: __NEXT_DATA__ deep coord scan (coords only, last resort).
+            if (lat === null) {
+                try {
                     function findCoords(obj, depth) {
                         if (depth > 8 || !obj || typeof obj !== 'object') return null;
                         if ('latitude' in obj && 'longitude' in obj) {
-                            const lat = parseFloat(obj.latitude);
-                            const lng = parseFloat(obj.longitude);
-                            if (!isNaN(lat) && !isNaN(lng)) return { lat, lng, street_address: null, postal_code: null };
+                            const la = parseFloat(obj.latitude), lo = parseFloat(obj.longitude);
+                            if (!isNaN(la) && !isNaN(lo)) return { lat: la, lng: lo };
                         }
                         if ('lat' in obj && ('lng' in obj || 'lon' in obj)) {
-                            const lat = parseFloat(obj.lat);
-                            const lng = parseFloat(obj.lng ?? obj.lon);
-                            if (!isNaN(lat) && !isNaN(lng)) return { lat, lng, street_address: null, postal_code: null };
+                            const la = parseFloat(obj.lat), lo = parseFloat(obj.lng ?? obj.lon);
+                            if (!isNaN(la) && !isNaN(lo)) return { lat: la, lng: lo };
                         }
                         for (const v of Object.values(obj)) {
                             const r = findCoords(v, depth + 1);
@@ -119,22 +148,29 @@ async def _venue_coords_from_page(page) -> dict | None:
                         }
                         return null;
                     }
-                    const r = findCoords(nd.props, 0);
-                    if (r) return r;
-                }
-            } catch {}
-            return null;
+                    const r = findCoords(window.__NEXT_DATA__?.props, 0);
+                    if (r) { lat = r.lat; lng = r.lng; }
+                } catch {}
+            }
+
+            return { lat, lng, street_address: street, postal_code: postal, telephone: tel };
         }""")
-        if result and result.get("lat") is not None and result.get("lng") is not None:
+        if not result:
+            return None
+        street = result.get("street_address")
+        postal = result.get("postal_code")
+        tel = result.get("telephone")
+        out: dict = {"street_address": street, "postal_code": postal, "telephone": tel}
+        # Coords only kept when inside the Brussels box (customerLocation can be
+        # a far-off zone centroid; reject out-of-area values).
+        if result.get("lat") is not None and result.get("lng") is not None:
             lat, lng = float(result["lat"]), float(result["lng"])
-            if 50.4 < lat < 51.1 and 3.9 < lng < 4.8:  # Brussels + surrounding area
-                return {
-                    "lat": lat,
-                    "lng": lng,
-                    "street_address": result.get("street_address"),
-                    "postal_code": result.get("postal_code"),
-                    "telephone": result.get("telephone"),
-                }
+            if 50.4 < lat < 51.1 and 3.9 < lng < 4.8:
+                out["lat"] = lat
+                out["lng"] = lng
+        # Return only if we got SOMETHING useful (address or coords).
+        if out.get("street_address") or out.get("postal_code") or out.get("lat") is not None:
+            return out
     except Exception:
         pass
     return None
@@ -493,8 +529,9 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 # Try to extract actual venue coords + address (JSON-LD / __NEXT_DATA__)
                 venue = await _venue_coords_from_page(page)
                 if venue:
-                    db.patch_restaurant_geo(rid, venue["lat"], venue["lng"], "deliveroo_venue")
-                    log_fn(f"  Venue coords: {venue['lat']:.5f}, {venue['lng']:.5f}")
+                    if venue.get("lat") is not None and venue.get("lng") is not None:
+                        db.patch_restaurant_geo(rid, venue["lat"], venue["lng"], "deliveroo_venue")
+                        log_fn(f"  Venue coords: {venue['lat']:.5f}, {venue['lng']:.5f}")
                     # Persist street_address + postal_code onto the platform_listing
                     # (DB columns live on platform_listings). Null/absent → skipped.
                     addr_patch = {
