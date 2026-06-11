@@ -71,13 +71,19 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
 
         log_fn("Waiting for first feed API response...")
         try:
-            async with asyncio.timeout(15):
+            async with asyncio.timeout(25):
                 await feed_event.wait()
         except asyncio.TimeoutError:
             pass
 
         if not feed_pages:
-            raise TimeoutError("Feed API not captured")
+            # NOT a bare TimeoutError: that aliases asyncio.TimeoutError, which
+            # the router treats as a wall-clock run timeout and mislabels as
+            # "timed out after N min". This is a distinct, retryable condition —
+            # UberEats never returned a restaurant feed (address not selected or
+            # an anti-bot interstitial). Raise a plain RuntimeError so the run is
+            # labelled accurately and the router's transient-retry path engages.
+            raise RuntimeError("Feed API not captured (no restaurant feed returned)")
 
         # Scroll to load all pages — UberEats uses infinite scroll with getFeedV1 per batch
         log_fn("Scrolling to load all restaurants...")

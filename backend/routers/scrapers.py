@@ -65,6 +65,7 @@ def _is_transient_error(e: Exception) -> bool:
         or "42501" in msg
         or "connection" in msg
         or "econnreset" in msg
+        or "feed api not captured" in msg
     )
 
 
