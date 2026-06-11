@@ -189,6 +189,15 @@ export default function BasketSimulator({ menuItems, listings, phone, matchRate 
   const [basket, setBasket] = useState<BasketItem[]>([])
   const [sheetOpen, setSheetOpen] = useState(false)
   const [selectedItem, setSelectedItem] = useState<MenuItemWithPrices | null>(null)
+  const prevBasketLengthRef = React.useRef(0)
+
+  // When basket first appears (0→1 items), scroll down so sticky bar doesn't cover menu rows
+  useEffect(() => {
+    if (prevBasketLengthRef.current === 0 && basket.length === 1) {
+      window.scrollBy({ top: 160, behavior: 'smooth' })
+    }
+    prevBasketLengthRef.current = basket.length
+  }, [basket.length])
 
   const tBasket = useTranslations('basket')
   const tCard = useTranslations('card')
