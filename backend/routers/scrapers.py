@@ -208,7 +208,12 @@ async def health_check():
             statuses[platform] = "never_run"
         else:
             finished = run.get("finished_at") or run.get("started_at")
-            ts = datetime.fromisoformat(finished.replace("Z", "+00:00"))
+            if isinstance(finished, str):
+                ts = datetime.fromisoformat(finished.replace("Z", "+00:00"))
+            else:
+                ts = finished
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
             statuses[platform] = "ok" if ts >= cutoff else "stale"
 
     overall = "ok" if all(v == "ok" for v in statuses.values()) else "degraded"

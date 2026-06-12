@@ -88,7 +88,8 @@ def test_health_check_uses_batch_query():
     client = TestClient(app)
 
     from datetime import datetime, timezone, timedelta
-    recent = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    # Use real datetime objects to mirror production psycopg3 rows (timestamptz).
+    recent = datetime.now(timezone.utc) - timedelta(hours=1)
 
     batch_result = {
         "ubereats":  {"platform": "ubereats",  "status": "success", "started_at": recent, "finished_at": recent, "records_saved": 10},
@@ -112,6 +113,60 @@ def test_health_check_uses_batch_query():
             ["ubereats", "deliveroo", "takeaway"]
         )
         mock_db.get_last_successful_run.assert_not_called()
+
+
+def test_health_check_handles_datetime_objects():
+    """Regression: production rows carry datetime objects, not ISO strings.
+
+    Calling ``.replace("Z", "+00:00")`` on a datetime triggers
+    ``datetime.replace()`` with a positional str → TypeError → 500.
+    """
+    app = _make_app()
+    client = TestClient(app)
+
+    from datetime import datetime, timezone, timedelta
+    recent = datetime.now(timezone.utc) - timedelta(hours=1)
+
+    batch_result = {
+        "ubereats":  {"platform": "ubereats",  "status": "success", "started_at": recent, "finished_at": recent, "records_saved": 10},
+        "deliveroo": {"platform": "deliveroo", "status": "success", "started_at": recent, "finished_at": recent, "records_saved": 8},
+        "takeaway":  {"platform": "takeaway",  "status": "success", "started_at": recent, "finished_at": recent, "records_saved": 5},
+    }
+
+    with patch("routers.scrapers.db") as mock_db:
+        mock_db.get_last_successful_run_batch.return_value = batch_result
+
+        response = client.get("/api/scrapers/health")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "ok"
+        assert data["platforms"]["ubereats"] == "ok"
+
+
+def test_health_check_handles_iso_string():
+    """Keep the str branch covered: callers passing ISO strings still work."""
+    app = _make_app()
+    client = TestClient(app)
+
+    from datetime import datetime, timezone, timedelta
+    recent = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+
+    batch_result = {
+        "ubereats":  {"platform": "ubereats",  "status": "success", "started_at": recent, "finished_at": recent, "records_saved": 10},
+        "deliveroo": {"platform": "deliveroo", "status": "success", "started_at": recent, "finished_at": recent, "records_saved": 8},
+        "takeaway":  {"platform": "takeaway",  "status": "success", "started_at": recent, "finished_at": recent, "records_saved": 5},
+    }
+
+    with patch("routers.scrapers.db") as mock_db:
+        mock_db.get_last_successful_run_batch.return_value = batch_result
+
+        response = client.get("/api/scrapers/health")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "ok"
+        assert data["platforms"]["ubereats"] == "ok"
 
 
 def test_health_check_never_run():

@@ -13,14 +13,14 @@ import alerting
 import db
 
 _log = logging.getLogger("forkeur.scheduler")
-_scheduler = AsyncIOScheduler()
+_scheduler = AsyncIOScheduler(timezone="Europe/Brussels")
 _schedules: dict[str, ScheduleConfigIn] = {}
 
 _CLEANUP_JOB_ID = "daily_cleanup"
-_CLEANUP_CRON = "0 4 * * *"   # 04:00 UTC daily
+_CLEANUP_CRON = "0 4 * * *"   # 04:00 Brussels local daily
 
 _DIGEST_JOB_ID = "daily_digest"
-_DIGEST_CRON = "0 19 * * *"   # 19:00 UTC = 21:00 Brussels (CEST)
+_DIGEST_CRON = "0 19 * * *"   # 19:00 Brussels local daily
 
 _BATCH_JOB_ID = "batch_all"
 
@@ -130,7 +130,7 @@ def add_or_update_schedule(config: ScheduleConfigIn) -> ScheduleConfigOut:
     if config.enabled:
         _persist_schedule(config)
         parts = [p.strip() for p in config.cron.split("|") if p.strip()]
-        trigger = OrTrigger([CronTrigger.from_crontab(p) for p in parts]) if len(parts) > 1 else CronTrigger.from_crontab(parts[0])
+        trigger = OrTrigger([CronTrigger.from_crontab(p, timezone="Europe/Brussels") for p in parts]) if len(parts) > 1 else CronTrigger.from_crontab(parts[0], timezone="Europe/Brussels")
         job = _scheduler.add_job(
             _run_scraper,
             trigger,
@@ -239,9 +239,16 @@ async def _run_match() -> None:
 
 
 async def _run_daily_cleanup() -> None:
-    pruned = await asyncio.to_thread(db.prune_stale_menu_items, days=30)
-    if pruned:
-        _noop(f"Daily cleanup: pruned {pruned} stale menu items")
+    run_id = db.create_run("cleanup")
+    try:
+        deleted = await asyncio.to_thread(db.delete_stale_listings, days=30)
+        pruned = await asyncio.to_thread(db.prune_stale_menu_items, days=30)
+        db.finish_run(run_id, "success", records_saved=deleted + pruned)
+        if deleted or pruned:
+            _noop(f"Daily cleanup: deleted {deleted} stale listings, pruned {pruned} menu items")
+    except Exception as e:
+        db.finish_run(run_id, "failed", error_msg=str(e))
+        alerting.send_failure_alert("cleanup", str(e), run_id)
 
 
 async def _run_daily_digest() -> None:
@@ -251,20 +258,20 @@ async def _run_daily_digest() -> None:
 def start() -> None:
     _scheduler.add_job(
         _run_daily_cleanup,
-        CronTrigger.from_crontab(_CLEANUP_CRON),
+        CronTrigger.from_crontab(_CLEANUP_CRON, timezone="Europe/Brussels"),
         id=_CLEANUP_JOB_ID,
         replace_existing=True,
     )
     _scheduler.add_job(
         _run_daily_digest,
-        CronTrigger.from_crontab(_DIGEST_CRON),
+        CronTrigger.from_crontab(_DIGEST_CRON, timezone="Europe/Brussels"),
         id=_DIGEST_JOB_ID,
         replace_existing=True,
     )
     for config in _load_persisted_schedules():
         _schedules[config.platform] = config
         parts = [p.strip() for p in config.cron.split("|") if p.strip()]
-        trigger = OrTrigger([CronTrigger.from_crontab(p) for p in parts]) if len(parts) > 1 else CronTrigger.from_crontab(parts[0])
+        trigger = OrTrigger([CronTrigger.from_crontab(p, timezone="Europe/Brussels") for p in parts]) if len(parts) > 1 else CronTrigger.from_crontab(parts[0], timezone="Europe/Brussels")
         _scheduler.add_job(
             _run_scraper,
             trigger,
