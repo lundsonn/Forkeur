@@ -1036,3 +1036,26 @@ def test_block_candidates_handles_decimal_coords():
     pairs = matching.block_candidates([a, b])  # must not raise TypeError
     ids = {tuple(sorted((str(x["id"]), str(y["id"])))) for x, y in pairs}
     assert ("d1", "d2") in ids
+
+
+def test_normalize_slug_rejects_structural_and_commune():
+    # generic platform path segments are not restaurant identifiers
+    assert matching._normalize_slug("menu") == ""
+    assert matching._normalize_slug("store") == ""
+    assert matching._normalize_slug("restaurant") == ""
+    # bare commune names are not restaurant identifiers
+    assert matching._normalize_slug("st-gilles") == ""
+    assert matching._normalize_slug("ixelles-nord") == ""
+    # real restaurant slugs still normalize
+    assert matching._normalize_slug("barbq-brasserie") == "barbqbrasserie"
+    assert matching._normalize_slug("wok-up-bruxelles") == "wokup"
+
+
+def test_unrelated_restaurants_sharing_menu_slug_do_not_match():
+    # the prod incident: two different restaurants whose only slug is "menu"
+    a = _r("Kung Fu Kitchen", id="k1", lat=50.8668, lng=4.3729, geo_source="deliveroo_venue")
+    b = _r("By Grill", id="k2", lat=50.8668, lng=4.3729, geo_source="deliveroo_venue")
+    slugs = {"k1": ["menu"], "k2": ["menu"]}
+    f = matching.score_pair(a, b, menus={}, chain_names=set(), slugs=slugs)
+    assert f.slug_match is False
+    assert matching.decide(f) != matching.Decision.AUTO_MERGE

@@ -109,18 +109,40 @@ def _canonical(name: str) -> str:
     return name
 
 
+# Structural URL path segments that are NOT restaurant identifiers. Platform
+# URLs like deliveroo.be/menu/... and ubereats.com/be/store/... leave these as
+# the only usable path segment for some listings; without this blocklist 150+
+# unrelated restaurants collapse to the slug "menu"/"store" and falsely match.
+_GENERIC_SLUGS = {
+    "menu", "store", "stores", "restaurant", "restaurants", "resto", "order",
+    "orders", "delivery", "checkout", "category", "categories", "shop", "be",
+    "fr", "nl", "en", "home", "food", "takeaway", "deliveroo", "ubereats",
+    # Deliveroo delivery-zone / commune path segments (abbreviated forms not in
+    # _BRUSSELS_LOCATIONS): these label a zone, never an individual restaurant.
+    "centre", "ixellesnord", "ixellessud", "stgilles", "stjosse", "stecatherine",
+    "quartiereuropeen", "everenord", "everesud", "cureghem", "placeduchatelain",
+    "boondael", "osseghem", "roodebeek", "jette", "uccle", "ukkel", "laeken",
+    "anderlecht", "schaerbeek", "molenbeek", "etterbeek", "woluwe", "forest",
+    "evere", "ganshoren", "koekelberg", "auderghem", "watermael", "berchem",
+}
+
+
 def _normalize_slug(slug: str) -> str:
     """Normalize a URL slug for cross-platform comparison.
 
     Strips hyphens/underscores, accents, city noise, then keeps [a-z0-9].
     'barbq-brasserie' → 'barbqbrasserie'; 'wok-up-bruxelles' → 'wokup'.
-    Returns '' for slugs that collapse to nothing meaningful (< 4 chars).
+    Returns '' for slugs that collapse to nothing meaningful (< 4 chars), are a
+    structural path segment ('menu', 'store'), or are a bare Brussels commune
+    name — none of which identify an individual restaurant.
     """
     s = _strip_accents(slug.lower())
     # Strip city noise embedded in slugs
     s = re.sub(r"[\-_]?(?:brussels|bruxelles|bxl|bsl)[\-_]?", "", s)
     s = re.sub(r"[^a-z0-9]", "", s)
-    return s if len(s) >= 4 else ""
+    if len(s) < 4 or s in _GENERIC_SLUGS or s in _BRUSSELS_LOCATIONS:
+        return ""
+    return s
 
 
 @lru_cache(maxsize=2048)
