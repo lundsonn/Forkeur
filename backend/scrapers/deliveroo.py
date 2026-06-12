@@ -1,5 +1,6 @@
 from __future__ import annotations
 import asyncio
+import os
 import re
 from typing import Callable
 from urllib.parse import urlparse, parse_qs
@@ -847,8 +848,10 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 except Exception:
                     pass
 
-        # 3 workers (not 4) — keeps full-batch peak RAM clear of the 8GB ceiling.
-        WORKERS = 3
+        # Menu-phase worker concurrency. Override with DELIVEROO_MENU_WORKERS.
+        # Default 3 keeps the full 6-scraper batch clear of the 8GB ceiling;
+        # raise it when running Deliveroo alone (or near-alone) and RAM allows.
+        WORKERS = int(os.environ.get("DELIVEROO_MENU_WORKERS", "3"))
         slices = [saved[w::WORKERS] for w in range(WORKERS)]
         log_fn(f"Phase 2: {n} menus across {WORKERS} parallel workers")
         await asyncio.gather(
