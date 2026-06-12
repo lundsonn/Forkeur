@@ -709,7 +709,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 # CSS class selectors are hashed (CSS modules) and change; use
                 # data-test* attributes first, then a broad text-node walk.
                 fee_text: str | None = await page.evaluate(
-                    """() => {
+                    r"""() => {
                         // 1. Semantic test attributes (stable across deploys)
                         for (const sel of [
                             '[data-test*="delivery"]',
@@ -747,7 +747,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                     log_fn(f"  Delivery fee: {fee}")
 
                 # Extract promotions from the restaurant page — richer than listing card
-                promo_texts: list[str] = await page.evaluate("""() => {
+                promo_texts: list[str] = await page.evaluate(r"""() => {
                     const results = [];
                     const seen = new Set();
 
