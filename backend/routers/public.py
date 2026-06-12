@@ -34,5 +34,5 @@ async def public_deals():
 
 
 @router.get("/scraper-runs/latest")
-async def public_latest_run(platform: str = "fees", since: str | None = None):
+async def public_latest_run(platform: str, since: str | None = None):
     return await asyncio.to_thread(db.get_latest_run, platform, since)

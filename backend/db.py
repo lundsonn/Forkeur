@@ -10,7 +10,8 @@ load_dotenv()
 
 
 def _build_insert(table: str, data: dict, on_conflict: str | None = None,
-                  returning: str = "id") -> tuple[str, list]:
+                  returning: str = "id",
+                  preserve_if_null: set[str] | None = None) -> tuple[str, list]:
     cols = list(data.keys())
     placeholders = ", ".join(["%s"] * len(cols))
     col_list = ", ".join(cols)
@@ -18,15 +19,35 @@ def _build_insert(table: str, data: dict, on_conflict: str | None = None,
     if on_conflict:
         # mirror Supabase upsert: on conflict, overwrite every non-conflict column.
         # on_conflict may be composite ("a,b") — exclude each conflict column.
+        # For columns in preserve_if_null, keep the existing value when the
+        # incoming EXCLUDED value is NULL (a fee-only refresh shouldn't wipe a
+        # previously-scraped rating, eta, etc.).
         conflict_cols = {c.strip() for c in on_conflict.split(",")}
+        preserve = preserve_if_null or set()
+        update_cols = [c for c in cols if c not in conflict_cols]
         updates = ", ".join(
-            f"{c} = EXCLUDED.{c}" for c in cols if c not in conflict_cols
+            f"{c} = COALESCE(EXCLUDED.{c}, {table}.{c})" if c in preserve
+            else f"{c} = EXCLUDED.{c}"
+            for c in update_cols
         )
         sql += f" ON CONFLICT ({on_conflict}) DO UPDATE SET {updates}" if updates \
             else f" ON CONFLICT ({on_conflict}) DO NOTHING"
     if returning:
         sql += f" RETURNING {returning}"
     return sql, [_coerce(v) for v in data.values()]
+
+
+# Fee/quality columns whose incoming NULL should NOT clobber a prior scrape:
+# a fee-only refresh (or a scrape that missed these) keeps the existing value.
+# Deliberately excludes is_available/discount_label/url/opening_hours/url_type/
+# street_address/postal_code — those must hard-update on every upsert.
+_PRESERVE_ON_NULL = {
+    "delivery_fee", "eta_min", "eta_max", "service_fee",
+    "min_order", "rating", "review_count",
+}
+
+# Fee/timing columns captured per-upsert into fee_snapshots for historical trends.
+_FEE_SNAPSHOT_KEYS = ("delivery_fee", "eta_min", "eta_max", "min_order")
 
 
 def _build_update(table: str, data: dict, where_col: str, where_val) -> tuple[str, list]:
@@ -283,12 +304,40 @@ def upsert_restaurant(data: dict) -> str:
     return rid
 
 
+def insert_fee_snapshot(listing_id: str, data: dict) -> None:
+    """Append a row to fee_snapshots for the present fee/timing keys.
+
+    Best-effort: any failure (e.g. the table not yet created pre-migration)
+    is swallowed so it can never break the listing upsert.
+    """
+    present = {k: data[k] for k in _FEE_SNAPSHOT_KEYS if data.get(k) is not None}
+    if not present:
+        return
+    cols = ["listing_id"] + list(present.keys())
+    vals = [listing_id] + list(present.values())
+    placeholders = ", ".join(["%s"] * len(cols))
+    col_list = ", ".join(cols)
+    try:
+        pgpool.execute(
+            f"INSERT INTO fee_snapshots ({col_list}) VALUES ({placeholders})", vals
+        )
+    except Exception:  # pragma: no cover - defensive (missing table, etc.)
+        pass
+
+
 def upsert_listing(data: dict) -> str:
     sql, params = _build_insert(
-        "platform_listings", data, on_conflict="restaurant_id,platform"
+        "platform_listings", data, on_conflict="restaurant_id,platform",
+        preserve_if_null=_PRESERVE_ON_NULL,
     )
     row = pgpool.fetchone(sql, params)
-    return str(row["id"])
+    lid = str(row["id"])
+    # Always refresh freshness so a fee-only refresh keeps the listing visible.
+    pgpool.execute(
+        "UPDATE platform_listings SET last_scraped_at = now() WHERE id = %s", [lid]
+    )
+    insert_fee_snapshot(lid, data)
+    return lid
 
 
 def patch_listing(listing_id: str, data: dict) -> None:
@@ -328,8 +377,11 @@ def insert_menu_items(listing_id: str, items: list[dict]) -> int:
             ph = ", ".join(["%s"] * len(row))
             # NOTE: column names come from scraper-controlled item dicts (hardcoded
             # field names), never end-user input — safe to interpolate.
+            # Stamp scraped_at = now() so insert-time freshness is recorded even
+            # when last_scraped_at on the listing later goes NULL (drives the
+            # COALESCE cleanup predicates and reaps immortal rows).
             cur.execute(
-                f"INSERT INTO menu_items ({cols}) VALUES ({ph})",
+                f"INSERT INTO menu_items ({cols}, scraped_at) VALUES ({ph}, now())",
                 [_coerce(v) for v in row.values()],
             )
             total += 1
@@ -419,17 +471,19 @@ def get_last_successful_run_batch(platforms: list[str]) -> dict[str, dict]:
 
 
 def delete_stale_listings(days: int = 30) -> int:
+    # COALESCE last_scraped_at→scraped_at so a row that never had its listing
+    # freshness bumped (NULL last_scraped_at) is still reaped via insert time.
     return pgpool.execute(
-        "DELETE FROM platform_listings WHERE last_scraped_at IS NOT NULL "
-        "AND last_scraped_at < now() - make_interval(days => %s)",
+        "DELETE FROM platform_listings "
+        "WHERE COALESCE(last_scraped_at, scraped_at) < now() - make_interval(days => %s)",
         [days],
     )
 
 
 def prune_stale_menu_items(days: int = 30) -> int:
     stale = pgpool.fetchall(
-        "SELECT id FROM platform_listings WHERE last_scraped_at IS NOT NULL "
-        "AND last_scraped_at < now() - make_interval(days => %s)",
+        "SELECT id FROM platform_listings "
+        "WHERE COALESCE(last_scraped_at, scraped_at) < now() - make_interval(days => %s)",
         [days],
     )
     if not stale:
@@ -788,6 +842,7 @@ def get_public_restaurants() -> list[dict]:
                ) AS platform_listings
         FROM restaurants r
         LEFT JOIN platform_listings pl ON pl.restaurant_id = r.id
+          AND pl.last_scraped_at > now() - interval '72 hours'
         WHERE r.merged_into IS NULL
         GROUP BY r.id
         """
@@ -848,6 +903,7 @@ def get_public_deals() -> list[dict]:
         JOIN platform_listings pl ON pl.id = p.listing_id
         JOIN restaurants r ON r.id = pl.restaurant_id
         WHERE p.promo_type NOT IN ('other', 'spend_save')
+          AND pl.last_scraped_at >= now() - interval '72 hours'
         """
     )
 
