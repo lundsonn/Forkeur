@@ -728,7 +728,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                             const t = node.textContent.trim();
                             if (t.length > 0 && t.length < 80 &&
                                 /delivery|livraison|bezorgkosten/i.test(t) &&
-                                /€\s*\d|\d[,.]\d\s*€|free|gratuit|gratis/i.test(t)) {
+                                /€\s*\d|\d+[,.]\d+\s*€|free|gratuit|gratis/i.test(t)) {
                                 return t;
                             }
                         }
