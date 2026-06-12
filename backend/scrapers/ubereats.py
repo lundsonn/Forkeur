@@ -171,15 +171,18 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                     except ValueError:
                         continue  # junk entry filtered by db._is_junk
                     hours = _parse_regular_hours(r.get("_store") or {})
+                    eta_min = _parse_eta_min(r.get("eta"))
+                    eta_max = _parse_eta_max(r.get("eta"))
+                    delivery_fee = r.get("delivery_fee")
                     lid = db.upsert_listing({
                         "restaurant_id": rid,
                         "platform": "uber_eats",
                         "url": r.get("url"),
                         "rating": _parse_float(r.get("rating")),
-                        "eta_min": _parse_eta_min(r.get("eta")),
-                        "eta_max": _parse_eta_max(r.get("eta")),
-                        "delivery_fee": r.get("delivery_fee"),
                         "discount_label": r.get("discount"),
+                        **({"eta_min": eta_min} if eta_min is not None else {}),
+                        **({"eta_max": eta_max} if eta_max is not None else {}),
+                        **({"delivery_fee": delivery_fee} if delivery_fee is not None else {}),
                         **({"opening_hours": hours} if hours else {}),
                     })
                     promos = _parse_promotions(r.get("_store") or {})
@@ -733,13 +736,24 @@ def _parse_menu_items(store_data: dict) -> list[dict]:
                 image_url = ci.get("imageUrl") or None
                 description = ci.get("itemDescription") or ci.get("description") or None
                 if title:
-                    items.append({
+                    item: dict = {
                         "title": title,
                         "price": price_eur,
                         "catalog_name": catalog_name,
                         "image_url": image_url,
                         "description": description,
-                    })
+                    }
+                    # dietaryInfo.certifications → allergen/dietary labels
+                    dietary = ci.get("dietaryInfo") or {}
+                    certs = dietary.get("certifications") or []
+                    allergens = [
+                        c["name"].lower().replace("_", " ")
+                        for c in certs
+                        if isinstance(c, dict) and c.get("name")
+                    ]
+                    if allergens:
+                        item["allergens"] = allergens
+                    items.append(item)
     return items
 
 

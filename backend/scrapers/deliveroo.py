@@ -698,6 +698,41 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
 
                 log_fn(f"  Extracted {len(items)} items via DOM")
 
+                # Enrich with allergen/dietary tags from __NEXT_DATA__ (no extra HTTP calls).
+                # Deliveroo stores dietaryTags per item in the hydrated state tree.
+                if items:
+                    allergen_map: dict = await page.evaluate("""() => {
+                        try {
+                            const metas = window.__NEXT_DATA__?.props?.initialState?.menuPage?.menu?.metas;
+                            if (!metas) return {};
+                            const found = [];
+                            function walk(obj, depth) {
+                                if (!obj || typeof obj !== 'object' || depth > 8) return;
+                                if (Array.isArray(obj)) {
+                                    for (const el of obj) walk(el, depth + 1);
+                                } else {
+                                    if (typeof obj.name === 'string' && Array.isArray(obj.dietaryTags) && obj.dietaryTags.length) {
+                                        found.push(obj);
+                                    }
+                                    for (const v of Object.values(obj)) walk(v, depth + 1);
+                                }
+                            }
+                            walk(metas, 0);
+                            const out = {};
+                            for (const item of found) {
+                                const tags = item.dietaryTags.map(t => t.text).filter(Boolean);
+                                if (tags.length) out[item.name.toLowerCase()] = tags;
+                            }
+                            return out;
+                        } catch { return {}; }
+                    }""")
+                    if allergen_map:
+                        for item in items:
+                            tags = allergen_map.get(item["title"].lower())
+                            if tags:
+                                item["allergens"] = [t.lower() for t in tags]
+                        log_fn(f"  Allergens found for {sum(1 for i in items if 'allergens' in i)}/{len(items)} items")
+
                 if items:
                     db.insert_menu_items(lid, items)
                     menu_items_saved += len(items)
