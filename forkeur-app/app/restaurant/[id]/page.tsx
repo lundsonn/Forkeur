@@ -162,17 +162,31 @@ export default async function Page({
             : data.direct_url_type === 'phone' ? tCard('direct_cta_phone')
             : tDirect('badge_long')
           return (
-            <a
-              href={data.order_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`mt-3 flex items-center justify-center gap-2 w-full py-3 rounded-xl font-semibold text-sm transition-colors text-white ${isActionable ? 'bg-[#D85A30] hover:bg-[#c04e28]' : 'bg-[#888780] hover:bg-[#7a7a73]'}`}
-            >
-              <DirectIcon size={16} aria-hidden="true" />
-              {label}
-            </a>
+            <>
+              <a
+                href={data.order_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`mt-3 flex items-center justify-center gap-2 w-full py-3 rounded-xl font-semibold text-sm transition-colors text-white ${isActionable ? 'bg-[#D85A30] hover:bg-[#c04e28]' : 'bg-[#888780] hover:bg-[#7a7a73]'}`}
+              >
+                <DirectIcon size={16} aria-hidden="true" />
+                {label}
+              </a>
+              {/* Phone shown via a tel: link is only as trustworthy as our source — flag low-confidence numbers */}
+              {data.direct_url_type === 'phone' && data.phone_confidence === 'low' && (
+                <p className="mt-1.5 text-[11px] text-stone-500 text-center">
+                  {tDetail('phone_unverified')}
+                </p>
+              )}
+            </>
           )
         })()}
+        {/* The venue only takes orders via a platform already compared above — no extra "order direct" upside */}
+        {data.order_channel === 'covered_platform' && (
+          <p className="mt-3 text-[11px] text-stone-500">
+            {tDetail('order_covered_platform')}
+          </p>
+        )}
       </div>
 
       {allStale ? (
@@ -351,7 +365,7 @@ export default async function Page({
                     </p>
                   </div>
                 ) : (
-                  <BasketSimulator menuItems={data.menuItems} listings={data.listings} phone={data.phone} matchRate={matchRate} />
+                  <BasketSimulator menuItems={data.menuItems} listings={data.listings} phone={data.phone} phoneConfidence={data.phone_confidence} orderChannel={data.order_channel} matchRate={matchRate} />
                 )}
               </div>
             )

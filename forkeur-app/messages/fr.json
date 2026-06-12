@@ -144,7 +144,9 @@
     "order_from_restaurant": "commande au restaurant",
     "menu_prices_eyebrow": "Prix du menu",
     "build_order_eyebrow": "Composez votre commande",
-    "build_order_sub": "Ajoutez ce que vous voulez — on vous montre la plateforme la moins chère, frais inclus."
+    "build_order_sub": "Ajoutez ce que vous voulez — on vous montre la plateforme la moins chère, frais inclus.",
+    "phone_unverified": "Non vérifié — nous n'avons pas pu confirmer ce numéro",
+    "order_covered_platform": "Cet établissement ne prend les commandes que via les apps comparées ci-dessus."
   },
   "hours": {
     "closed": "Fermé",

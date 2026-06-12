@@ -15,6 +15,7 @@ dependencies = [
   "psycopg[binary]>=3.3.4",
   "psycopg-pool>=3.3.1",
   "pyjwt>=2.13.0",
+  "phonenumbers>=9.0.32",
 ]
 
 [tool.pytest.ini_options]

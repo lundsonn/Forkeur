@@ -44,7 +44,15 @@ def test_verify_token_rejects_empty():
 
 def test_token_contains_admin_claim():
     token = auth.create_token()
-    decoded = jwt.decode(token, os.environ["JWT_SECRET"], algorithms=["HS256"])
+    # Tokens now carry aud/iss claims that pyjwt validates on decode, so the
+    # audience/issuer must be supplied or decode raises InvalidAudienceError.
+    decoded = jwt.decode(
+        token,
+        os.environ["JWT_SECRET"],
+        algorithms=["HS256"],
+        audience="forkeur-admin",
+        issuer="forkeur-backend",
+    )
     assert decoded["admin"] is True
 
 

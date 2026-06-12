@@ -55,3 +55,25 @@ export function normalizeTitle(title: string): string {
   const filtered = tokens.filter(t => !STOPWORDS.has(t))
   return (filtered.length >= 2 ? filtered : tokens).join(' ')
 }
+
+/**
+ * Same cleaning pipeline as normalizeTitle but WITHOUT token sort and WITHOUT
+ * stopword filtering. Use for fuzzy similarity scoring — Jaro-Winkler is
+ * order-sensitive, so token sort distorts the distance calculation.
+ */
+export function normalizeForFuzzy(title: string): string {
+  let s = title
+    .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '')
+    .normalize('NFD').replace(/\p{Mn}/gu, '')
+    .replace(/['']/g, '')
+    .toLowerCase()
+  const noParens = s.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim()
+  if (noParens) s = noParens
+  const noSize = s.replace(TRAILING_SIZE, '').trim()
+  if (noSize) s = noSize
+  const noLeadQty = s.replace(LEADING_QTY, '').trim()
+  if (noLeadQty) s = noLeadQty
+  const noMenuNum = s.replace(LEADING_MENU_NUM, '').trim()
+  if (noMenuNum) s = noMenuNum
+  return s.replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim()
+}

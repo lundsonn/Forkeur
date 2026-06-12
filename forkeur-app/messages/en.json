@@ -144,7 +144,9 @@
     "order_from_restaurant": "order from restaurant",
     "menu_prices_eyebrow": "Menu prices",
     "build_order_eyebrow": "Build your exact order",
-    "build_order_sub": "Add what you want — we'll show the cheapest platform for your basket, all fees in."
+    "build_order_sub": "Add what you want — we'll show the cheapest platform for your basket, all fees in.",
+    "phone_unverified": "Unverified — we couldn't corroborate this number",
+    "order_covered_platform": "This venue only takes orders through the apps compared above."
   },
   "hours": {
     "closed": "Closed",

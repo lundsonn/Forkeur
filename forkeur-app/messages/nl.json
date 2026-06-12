@@ -144,7 +144,9 @@
     "order_from_restaurant": "bestel bij het restaurant",
     "menu_prices_eyebrow": "Menuprijzen",
     "build_order_eyebrow": "Stel je bestelling samen",
-    "build_order_sub": "Voeg toe wat je wilt — wij tonen het goedkoopste platform, kosten inbegrepen."
+    "build_order_sub": "Voeg toe wat je wilt — wij tonen het goedkoopste platform, kosten inbegrepen.",
+    "phone_unverified": "Niet geverifieerd — we konden dit nummer niet bevestigen",
+    "order_covered_platform": "Deze zaak neemt alleen bestellingen aan via de apps die hierboven worden vergeleken."
   },
   "hours": {
     "closed": "Gesloten",

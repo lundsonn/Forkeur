@@ -1,7 +1,8 @@
 import { cache } from 'react'
 import type { Platform } from '@/lib/basket'
 import type { DealItem, DealType } from '@/lib/deals'
-import { normalizeTitle } from '@/lib/normalize-title'
+import { normalizeTitle, normalizeForFuzzy } from '@/lib/normalize-title'
+import { jaroWinkler } from '@/lib/fuzzy-title'
 import { backendFetch } from '@/lib/backend'
 export { normalizeTitle }
 
@@ -69,6 +70,8 @@ export type RestaurantDetail = {
   city: string
   cuisine: string[]
   phone: string | null
+  phone_confidence: 'high' | 'medium' | 'low' | null
+  order_channel: 'direct' | 'covered_platform' | 'unknown' | null
   order_url: string | null
   direct_url_type: string | null
   image_url: string | null
@@ -151,6 +154,8 @@ type RawRestaurantDetail = {
   neighborhood: string | null
   cuisine: string | null
   phone: string | null
+  phone_confidence: 'high' | 'medium' | 'low' | null
+  order_channel: 'direct' | 'covered_platform' | 'unknown' | null
   order_url: string | null
   image_url: string | null
   platform_listings: RawListingDetail[]
@@ -361,10 +366,51 @@ export const getRestaurantWithListings = cache(async (
     }
   }
 
-  const matchableItems = Array.from(itemMap.values()).filter(
+  // Fuzzy-merge near-duplicates (e.g. "Cheeseburger" vs "Cheese Burger") that exact
+  // normalizeTitle missed. Guards prevent false positives: no shared platform, JW ≥ 0.88
+  // on natural-order titles, len ratio ≥ 0.75, price within ±20% when both have prices.
+  const ALL_PLATFORMS: Platform[] = ['uber_eats', 'deliveroo', 'takeaway', 'direct']
+  const entries = Array.from(itemMap.entries())
+  const absorbed = new Set<string>()
+  for (let i = 0; i < entries.length; i++) {
+    if (absorbed.has(entries[i][0])) continue
+    const [, itemA] = entries[i]
+    const normA = normalizeForFuzzy(itemA.name)
+    for (let j = i + 1; j < entries.length; j++) {
+      if (absorbed.has(entries[j][0])) continue
+      const [keyB, itemB] = entries[j]
+      // Items on the same platform are always distinct products
+      if (ALL_PLATFORMS.some(p => itemA.prices[p] !== null && itemB.prices[p] !== null)) continue
+      const normB = normalizeForFuzzy(itemB.name)
+      // Length ratio guard: prevents "Burger" merging with "Burger Deluxe"
+      const lenRatio = Math.min(normA.length, normB.length) / Math.max(normA.length, normB.length)
+      if (lenRatio < 0.75) continue
+      if (jaroWinkler(normA, normB) < 0.88) continue
+      // Price corroboration: cross-platform prices must be within 20%
+      const priceA = ALL_PLATFORMS.map(p => itemA.prices[p]).find(p => p != null)
+      const priceB = ALL_PLATFORMS.map(p => itemB.prices[p]).find(p => p != null)
+      if (priceA != null && priceB != null) {
+        const maxP = Math.max(priceA, priceB)
+        if (maxP > 0 && Math.abs(priceA - priceB) / maxP > 0.20) continue
+      }
+      // Merge B into A
+      for (const p of ALL_PLATFORMS) {
+        if (itemA.prices[p] === null && itemB.prices[p] !== null) {
+          itemA.prices[p] = itemB.prices[p]
+          if (itemA.platformTitles && itemB.platformTitles) itemA.platformTitles[p] = itemB.platformTitles[p]
+        }
+      }
+      if (!itemA.description && itemB.description) itemA.description = itemB.description
+      if (!itemA.image_url && itemB.image_url) itemA.image_url = itemB.image_url
+      absorbed.add(keyB)
+    }
+  }
+  const mergedItems = entries.filter(([key]) => !absorbed.has(key)).map(([, item]) => item)
+
+  const matchableItems = mergedItems.filter(
     (item) => Object.values(item.prices).filter((p) => p !== null).length >= 2
   ).length
-  const matchRate = itemMap.size > 0 ? matchableItems / itemMap.size : 0
+  const matchRate = mergedItems.length > 0 ? matchableItems / mergedItems.length : 0
 
   return {
     id: raw.id,
@@ -372,13 +418,15 @@ export const getRestaurantWithListings = cache(async (
     city: raw.neighborhood ?? 'Brussels',
     cuisine: raw.cuisine ? [raw.cuisine] : [],
     phone: raw.phone ?? null,
+    phone_confidence: raw.phone_confidence ?? null,
+    order_channel: raw.order_channel ?? null,
     order_url: raw.order_url ?? null,
     // Use unfiltered listings so url_type matches order_url (both come from the restaurants table,
     // not staleness-gated). Without this, a stale direct listing gives url_type=null → wrong label.
     direct_url_type: (raw.platform_listings ?? []).find((l) => l.platform === 'direct')?.url_type ?? null,
     image_url: raw.image_url ?? null,
     listings,
-    menuItems: Array.from(itemMap.values()),
+    menuItems: mergedItems,
     matchRate,
   }
 })

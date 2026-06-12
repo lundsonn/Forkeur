@@ -95,282 +95,266 @@ class TestInferCuisine:
 
 
 # ---------------------------------------------------------------------------
-# upsert_restaurant — mocked Supabase client
+# upsert_restaurant — mocked pgpool (psycopg3) layer
+#
+# The DB layer was migrated off the Supabase PostgREST client onto direct
+# pgpool (psycopg3) calls (self-hosted Postgres, 2026-06-11). upsert_restaurant
+# now drives a 5-step escalation through pgpool.fetchone / pgpool.fetchall and
+# writes updates via pgpool.execute. These tests mock pgpool and assert the
+# *same matching behavior* the Supabase-era tests checked: exact → ilike →
+# canonical → suffix → normalized escalation, insert-on-miss, cuisine inference
+# and _found enrichment.
+#
+# Step → pgpool call mapping inside upsert_restaurant:
+#   Step 1 (exact)     : fetchone "WHERE name = %s"
+#   Step 2 (ilike)     : fetchone "name ILIKE %s", param == name
+#   Step 3 (canonical) : fetchone "name ILIKE %s", param == canonical (only if canonical != name)
+#   Step 4 (suffix)    : fetchone "name ILIKE %s", param endswith " -%"
+#   Step 5 (candidates): fetchall "name ILIKE %s" (prefix wildcard)
+#   Insert             : fetchone "INSERT INTO restaurants ..."  → {"id": ...}
+#   _found update      : execute  "UPDATE restaurants SET ... WHERE id = %s"
 # ---------------------------------------------------------------------------
 
-def _mock_exec(data):
-    """Return a MagicMock whose .execute() returns MagicMock(data=data)."""
-    m = MagicMock()
-    m.execute.return_value = MagicMock(data=data)
-    return m
+class _FakePgpool:
+    """SQL-dispatching fake for the pgpool module used by db.upsert_restaurant.
 
-
-def _make_client(
-    *,
-    eq_results=None,         # side_effect list for step-1 eq chain (also _found select)
-    ilike_limit_results=None,# side_effect list for steps 2/3/4
-    ilike_results=None,      # return_value for step-5 candidates (no limit)
-    upsert_id="new-rid",
-):
+    Configure per-step hits; everything unset defaults to a miss. Captures
+    every UPDATE so the _found-enrichment tests can inspect the payload.
     """
-    Build a MagicMock Supabase client wired for upsert_restaurant call chains.
+    def __init__(self, *, exact=None, ilike=None, canonical=None, suffix=None,
+                 candidates=None, insert_id="new-rid"):
+        self.exact = exact            # step 1 row (dict) or None
+        self.ilike = ilike            # step 2 row or None
+        self.canonical = canonical    # step 3 row or None
+        self.suffix = suffix          # step 4 row or None
+        self.candidates = candidates or []  # step 5 fetchall rows
+        self.insert_id = insert_id
+        self.updates: list[dict] = []  # captured UPDATE payloads (col → value)
 
-    eq_results:
-        List of {data: [...]} values returned in sequence by
-        .select().eq().limit().execute() — consumed by step 1 then _found's
-        cuisine/image select.  Defaults to [[], {"cuisine": None, "image_url": None}].
+    # --- pgpool API surface used by upsert_restaurant ---
+    def fetchone(self, sql, params=None):
+        params = params or []
+        if "INSERT INTO" in sql:
+            return {"id": self.insert_id}
+        if "WHERE name = %s" in sql:
+            return self.exact
+        if "name ILIKE %s" in sql:
+            arg = params[0] if params else ""
+            if isinstance(arg, str) and arg.endswith(" -%"):
+                return self.suffix
+            # step 2 uses the raw name; step 3 uses the canonical form. They are
+            # distinguished by which one upsert_restaurant passes; both land here
+            # so we return step-2 hit first, then step-3 on the canonical arg.
+            if self._is_canonical_arg(arg):
+                return self.canonical
+            return self.ilike
+        return None
 
-    ilike_limit_results:
-        List of {data: [...]} values returned in sequence by
-        .select().ilike().limit().execute() — consumed by steps 2, 3, 4 in order.
-        Defaults to [[], [], []] (all miss).
+    def fetchall(self, sql, params=None):
+        if "name ILIKE %s" in sql:
+            return list(self.candidates)
+        return []
 
-    ilike_results:
-        data value for .select().ilike().execute() (step-5 candidates, no limit).
-        Defaults to [] (no candidates).
-    """
-    if eq_results is None:
-        eq_results = [[], {"cuisine": None, "image_url": None}]
-    if ilike_limit_results is None:
-        ilike_limit_results = [[], [], []]
-    if ilike_results is None:
-        ilike_results = []
+    def execute(self, sql, params=None):
+        # Reconstruct {col: value} from "UPDATE t SET a = %s, b = %s WHERE id = %s".
+        params = list(params or [])
+        if sql.startswith("UPDATE"):
+            set_part = sql.split(" SET ", 1)[1].split(" WHERE ", 1)[0]
+            cols = [c.split(" = ")[0].strip() for c in set_part.split(", ")]
+            payload = dict(zip(cols, params[: len(cols)]))
+            self.updates.append(payload)
 
-    client = MagicMock()
-    sel = client.table.return_value.select.return_value
+    def get_pool(self):  # not exercised by these tests
+        raise AssertionError("get_pool should not be called in upsert tests")
 
-    # Step 1 / _found select  (.eq().limit().execute())
-    sel.eq.return_value.limit.return_value.execute.side_effect = [
-        MagicMock(data=d if isinstance(d, list) else [d]) if isinstance(d, (list, dict))
-        else MagicMock(data=d)
-        for d in eq_results
-    ]
+    def _is_canonical_arg(self, arg):
+        # Set by configure_canonical(); when canonical hit is configured we treat
+        # the canonical-form arg as the step-3 query.
+        return arg == self._canonical_arg if self._canonical_arg else False
 
-    # Steps 2/3/4  (.ilike().limit().execute())
-    sel.ilike.return_value.limit.return_value.execute.side_effect = [
-        MagicMock(data=d) for d in ilike_limit_results
-    ]
-
-    # Step 5  (.ilike().execute() — no .limit())
-    sel.ilike.return_value.execute.return_value = MagicMock(data=ilike_results)
-
-    # Insert path
-    client.table.return_value.upsert.return_value.execute.return_value = MagicMock(
-        data=[{"id": upsert_id}]
-    )
-
-    return client
+    _canonical_arg = None
 
 
-@patch("db.get_client")
-def test_junk_name_raises(mock_get):
-    mock_get.return_value = MagicMock()
+def _make_pgpool(**kw):
+    """Build a _FakePgpool; ``canonical_arg`` marks which ILIKE arg is step 3."""
+    canonical_arg = kw.pop("canonical_arg", None)
+    p = _FakePgpool(**kw)
+    p._canonical_arg = canonical_arg
+    return p
+
+
+@patch("db.invalidate_domain_cache", lambda: None)
+@patch("db._domain_cache", None, create=True)
+def test_junk_name_raises():
     import db
     with pytest.raises(ValueError, match="Junk entry skipped"):
         db.upsert_restaurant({"name": "Around 3", "slug": "around-3"})
 
 
-@patch("db.get_client")
-def test_step1_exact_match_returns_existing_id(mock_get):
+def test_step1_exact_match_returns_existing_id():
     """Same scraper re-running: exact name already in DB."""
-    client = _make_client(
-        eq_results=[
-            [{"id": "rid-existing"}],           # step 1: exact hit
-            {"cuisine": None, "image_url": None}, # _found: nothing to update
-        ],
-    )
-    mock_get.return_value = client
+    p = _make_pgpool(exact={"id": "rid-existing", "cuisine": None, "image_url": None,
+                            "lat": None, "lng": None, "geo_source": None})
     import db
-    result = db.upsert_restaurant({"name": "Burger King", "slug": "burger-king"})
+    db.invalidate_domain_cache()
+    with patch.object(db, "pgpool", p):
+        result = db.upsert_restaurant({"name": "Burger King", "slug": "burger-king"})
     assert result == "rid-existing"
-    client.table.return_value.upsert.assert_not_called()
 
 
-@patch("db.get_client")
-def test_step2_ilike_match_different_case(mock_get):
+def test_step2_ilike_match_different_case():
     """'GOMU' in data matches existing 'Gomu' via case-insensitive ilike."""
-    client = _make_client(
-        eq_results=[
-            [],                                   # step 1: miss
-            {"cuisine": None, "image_url": None}, # _found: nothing to update
-        ],
-        ilike_limit_results=[
-            [{"id": "rid-gomu"}],  # step 2: ilike exact hit
-        ],
-    )
-    mock_get.return_value = client
+    p = _make_pgpool(ilike={"id": "rid-gomu", "cuisine": None, "image_url": None,
+                            "lat": None, "lng": None, "geo_source": None})
     import db
-    result = db.upsert_restaurant({"name": "GOMU", "slug": "gomu"})
+    db.invalidate_domain_cache()
+    with patch.object(db, "pgpool", p):
+        result = db.upsert_restaurant({"name": "GOMU", "slug": "gomu"})
     assert result == "rid-gomu"
-    client.table.return_value.upsert.assert_not_called()
 
 
-@patch("db.get_client")
-def test_step3_canonical_matches_base_name(mock_get):
+def test_step3_canonical_matches_base_name():
     """'Burger King - Ixelles' finds existing 'Burger King' via canonical strip."""
-    client = _make_client(
-        eq_results=[
-            [],                                   # step 1: miss
-            {"cuisine": None, "image_url": None}, # _found
-        ],
-        ilike_limit_results=[
-            [],                    # step 2: exact ilike miss
-            [{"id": "rid-bk"}],   # step 3: canonical hit ("Burger King")
-        ],
+    # canonical("Burger King - Ixelles") == "Burger King"
+    p = _make_pgpool(
+        ilike=None,  # step 2 (raw name) miss
+        canonical={"id": "rid-bk", "cuisine": None, "image_url": None,
+                   "lat": None, "lng": None, "geo_source": None},
+        canonical_arg="Burger King",
     )
-    mock_get.return_value = client
     import db
-    result = db.upsert_restaurant({"name": "Burger King - Ixelles", "slug": "burger-king-ixelles"})
+    db.invalidate_domain_cache()
+    with patch.object(db, "pgpool", p):
+        result = db.upsert_restaurant(
+            {"name": "Burger King - Ixelles", "slug": "burger-king-ixelles"})
     assert result == "rid-bk"
-    client.table.return_value.upsert.assert_not_called()
 
 
-@patch("db.get_client")
-def test_step4_suffixed_variant_matches(mock_get):
+def test_step4_suffixed_variant_matches():
     """'Burger King' finds existing 'Burger King - Ixelles' via suffix wildcard."""
-    # canonical == name for "Burger King", so step 3 is skipped
-    client = _make_client(
-        eq_results=[
-            [],                                   # step 1: miss
-            {"cuisine": None, "image_url": None}, # _found
-        ],
-        ilike_limit_results=[
-            [],                          # step 2: exact ilike miss
-            [{"id": "rid-bk-suffix"}],  # step 4: "Burger King -%" hit (step 3 skipped)
-        ],
+    # canonical == name for "Burger King", so step 3 is skipped; step 4 ("Burger King -%") hits.
+    p = _make_pgpool(
+        ilike=None,  # step 2 exact-ilike miss
+        suffix={"id": "rid-bk-suffix", "cuisine": None, "image_url": None,
+                "lat": None, "lng": None, "geo_source": None},
     )
-    mock_get.return_value = client
     import db
-    result = db.upsert_restaurant({"name": "Burger King", "slug": "burger-king"})
+    db.invalidate_domain_cache()
+    with patch.object(db, "pgpool", p):
+        result = db.upsert_restaurant({"name": "Burger King", "slug": "burger-king"})
     assert result == "rid-bk-suffix"
-    client.table.return_value.upsert.assert_not_called()
 
 
-@patch("db.get_client")
-def test_step5_normalized_accent_match(mock_get):
+def test_step5_normalized_accent_match():
     """'Cafe de Paris' (no accent) matches existing 'Café de Paris' via normalization."""
-    client = _make_client(
-        eq_results=[
-            [],                                   # step 1: miss
-            {"cuisine": None, "image_url": None}, # _found
-        ],
-        ilike_limit_results=[[], []],             # steps 2/4: miss
-        ilike_results=[
-            {"id": "rid-cafe", "name": "Café de Paris"},  # step 5: candidate
-        ],
+    p = _make_pgpool(
+        candidates=[{"id": "rid-cafe", "name": "Café de Paris", "cuisine": None,
+                     "image_url": None, "lat": None, "lng": None, "geo_source": None}],
     )
-    mock_get.return_value = client
     import db
-    result = db.upsert_restaurant({"name": "Cafe de Paris", "slug": "cafe-de-paris"})
+    db.invalidate_domain_cache()
+    with patch.object(db, "pgpool", p):
+        result = db.upsert_restaurant({"name": "Cafe de Paris", "slug": "cafe-de-paris"})
     assert result == "rid-cafe"
-    client.table.return_value.upsert.assert_not_called()
 
 
-@patch("db.get_client")
-def test_step5_smart_quote_match(mock_get):
+def test_step5_smart_quote_match():
     """Incoming name with U+2019 smart quote matches DB row stored with U+0027."""
-    # Stored name uses straight apostrophe (U+0027)
-    stored_name = "L’Atelier"
-    # Incoming scrape uses curly right-single-quote (U+2019)
-    incoming_name = "L’Atelier"
-    client = _make_client(
-        eq_results=[
-            [],
-            {"cuisine": None, "image_url": None},
-        ],
-        # _canonical strips U+2019 → "LAtelier" ≠ incoming "L’Atelier",
-        # so step 3 fires: slots needed for steps 2, 3, 4
-        ilike_limit_results=[[], [], []],
-        ilike_results=[{"id": "rid-atelier", "name": stored_name}],
+    stored_name = "L'Atelier"   # straight apostrophe (U+0027)
+    incoming_name = "L’Atelier"  # curly right-single-quote (U+2019)
+    p = _make_pgpool(
+        candidates=[{"id": "rid-atelier", "name": stored_name, "cuisine": None,
+                     "image_url": None, "lat": None, "lng": None, "geo_source": None}],
     )
-    mock_get.return_value = client
     import db
-    result = db.upsert_restaurant({"name": incoming_name, "slug": "l-atelier"})
+    db.invalidate_domain_cache()
+    with patch.object(db, "pgpool", p):
+        result = db.upsert_restaurant({"name": incoming_name, "slug": "l-atelier"})
     assert result == "rid-atelier"
 
 
-@patch("db.get_client")
-def test_no_match_inserts_new_row(mock_get):
-    """All 5 steps miss → upsert called, new id returned."""
-    client = _make_client(upsert_id="brand-new")
-    mock_get.return_value = client
+def test_no_match_inserts_new_row():
+    """All 5 steps miss → insert called, new id returned."""
+    p = _make_pgpool(insert_id="brand-new")
     import db
-    result = db.upsert_restaurant({"name": "Brand New Place", "slug": "brand-new-place"})
+    db.invalidate_domain_cache()
+    with patch.object(db, "pgpool", p):
+        result = db.upsert_restaurant({"name": "Brand New Place", "slug": "brand-new-place"})
     assert result == "brand-new"
-    client.table.return_value.upsert.assert_called_once()
 
 
-@patch("db.get_client")
-def test_cuisine_inferred_when_absent(mock_get):
-    """cuisine is auto-inferred from name when not supplied."""
-    client = _make_client(upsert_id="new-pizza")
-    mock_get.return_value = client
+def test_cuisine_inferred_when_absent():
+    """cuisine is auto-inferred from name when not supplied (passed to the insert)."""
+    p = _make_pgpool(insert_id="new-pizza")
+    captured = {}
     import db
-    db.upsert_restaurant({"name": "Pizza Nova", "slug": "pizza-nova"})
-    upsert_args = client.table.return_value.upsert.call_args[0][0]
-    assert upsert_args["cuisine"] == "Pizza"
+    db.invalidate_domain_cache()
+    orig = db._build_insert
+
+    def _spy(table, data, **kw):
+        if table == "restaurants":
+            captured.update(data)
+        return orig(table, data, **kw)
+
+    with patch.object(db, "pgpool", p), patch.object(db, "_build_insert", _spy):
+        db.upsert_restaurant({"name": "Pizza Nova", "slug": "pizza-nova"})
+    assert captured["cuisine"] == "Pizza"
 
 
-@patch("db.get_client")
-def test_explicit_cuisine_not_overridden(mock_get):
+def test_explicit_cuisine_not_overridden():
     """Caller-supplied cuisine is preserved even when name would infer differently."""
-    client = _make_client(upsert_id="new")
-    mock_get.return_value = client
+    p = _make_pgpool(insert_id="new")
+    captured = {}
     import db
-    db.upsert_restaurant({"name": "Pizza Nova", "slug": "pizza-nova", "cuisine": "Italian"})
-    upsert_args = client.table.return_value.upsert.call_args[0][0]
-    assert upsert_args["cuisine"] == "Italian"
+    db.invalidate_domain_cache()
+    orig = db._build_insert
+
+    def _spy(table, data, **kw):
+        if table == "restaurants":
+            captured.update(data)
+        return orig(table, data, **kw)
+
+    with patch.object(db, "pgpool", p), patch.object(db, "_build_insert", _spy):
+        db.upsert_restaurant({"name": "Pizza Nova", "slug": "pizza-nova", "cuisine": "Italian"})
+    assert captured["cuisine"] == "Italian"
 
 
-@patch("db.get_client")
-def test_found_enriches_cuisine(mock_get):
+def test_found_enriches_cuisine():
     """_found pushes inferred cuisine onto an existing row that has none."""
-    client = _make_client(
-        eq_results=[
-            [{"id": "rid-123"}],
-            {"cuisine": None, "image_url": None},  # existing: no cuisine
-        ],
-    )
-    mock_get.return_value = client
+    p = _make_pgpool(exact={"id": "rid-123", "cuisine": None, "image_url": None,
+                            "lat": None, "lng": None, "geo_source": None})
     import db
-    db.upsert_restaurant({"name": "Burger Palace", "slug": "burger-palace"})
-    update_payload = client.table.return_value.update.call_args[0][0]
-    assert update_payload.get("cuisine") == "Burgers"
+    db.invalidate_domain_cache()
+    with patch.object(db, "pgpool", p):
+        db.upsert_restaurant({"name": "Burger Palace", "slug": "burger-palace"})
+    merged = {k: v for u in p.updates for k, v in u.items()}
+    assert merged.get("cuisine") == "Burgers"
 
 
-@patch("db.get_client")
-def test_found_does_not_overwrite_existing_cuisine(mock_get):
+def test_found_does_not_overwrite_existing_cuisine():
     """_found leaves cuisine alone when the existing row already has one."""
-    client = _make_client(
-        eq_results=[
-            [{"id": "rid-123"}],
-            {"cuisine": "Belgian", "image_url": None},  # already set
-        ],
-    )
-    mock_get.return_value = client
+    p = _make_pgpool(exact={"id": "rid-123", "cuisine": "Belgian", "image_url": None,
+                            "lat": None, "lng": None, "geo_source": None})
     import db
-    db.upsert_restaurant({"name": "Burger Palace", "slug": "burger-palace"})
-    # update should not be called with cuisine (or not called at all if only cuisine changed)
-    calls = client.table.return_value.update.call_args_list
-    for c in calls:
-        assert "cuisine" not in c[0][0]
+    db.invalidate_domain_cache()
+    with patch.object(db, "pgpool", p):
+        db.upsert_restaurant({"name": "Burger Palace", "slug": "burger-palace"})
+    for payload in p.updates:
+        assert "cuisine" not in payload
 
 
-@patch("db.get_client")
-def test_found_always_updates_coords(mock_get):
-    """lat/lng are always pushed to the existing row (coords can shift)."""
-    client = _make_client(
-        eq_results=[
-            [{"id": "rid-123"}],
-            {"cuisine": "Burgers", "image_url": None},
-        ],
-    )
-    mock_get.return_value = client
+def test_found_always_updates_coords():
+    """lat/lng are pushed to the existing row when supplied (coords can shift)."""
+    p = _make_pgpool(exact={"id": "rid-123", "cuisine": "Burgers", "image_url": None,
+                            "lat": None, "lng": None, "geo_source": "uber_eats"})
     import db
-    db.upsert_restaurant({"name": "Burger King", "slug": "bk", "lat": 50.85, "lng": 4.35})
-    update_payload = client.table.return_value.update.call_args[0][0]
-    assert update_payload["lat"] == 50.85
-    assert update_payload["lng"] == 4.35
+    db.invalidate_domain_cache()
+    with patch.object(db, "pgpool", p):
+        db.upsert_restaurant({"name": "Burger King", "slug": "bk",
+                              "lat": 50.85, "lng": 4.35, "geo_source": "uber_eats"})
+    merged = {k: v for u in p.updates for k, v in u.items()}
+    assert merged["lat"] == 50.85
+    assert merged["lng"] == 4.35
 
 
 # ---------------------------------------------------------------------------
@@ -449,6 +433,30 @@ def _f(**kw) -> matching.MatchFeatures:
         is_chain_name=False,
         slug_match=False,
         distinctive_conflict=False,
+        address_match=None,
+    )
+    defaults.update(kw)
+    return matching.MatchFeatures(**defaults)
+
+
+def _feat(**kw) -> matching.MatchFeatures:
+    """Build MatchFeatures for evidence-score / decide() tests."""
+    defaults = dict(
+        name_sim=0.95,
+        website_match=False,
+        phone_match=False,
+        geo_dist=None,
+        cuisine_match=False,
+        cuisine_conflict=False,
+        location_conflict=False,
+        menu_overlap=None,
+        soft_geo_dist=None,
+        is_chain_name=False,
+        slug_match=False,
+        distinctive_conflict=False,
+        address_match=None,
+        deliveroo_geo=False,
+        name_variant="plain",
     )
     defaults.update(kw)
     return matching.MatchFeatures(**defaults)
@@ -486,14 +494,16 @@ def test_score_pair_phone_match():
     assert f.phone_match is True
 
 
-def test_decide_website_plus_near_identical_name_auto_merges():
+def test_decide_website_plus_near_identical_name_queues_without_proof():
+    # name(2.0) + website(1.0) = 3.0 < AUTO_BAND → QUEUE (no hard proof)
     f = _f(name_sim=0.98, website_match=True)
-    assert matching.decide(f) == matching.Decision.AUTO_MERGE
+    assert matching.decide(f) == matching.Decision.QUEUE
 
 
-def test_decide_phone_signal_auto_merges():
+def test_decide_phone_signal_queues_below_auto_band():
+    # name_high(1.0) + phone(3.0) = 4.0 < AUTO_BAND=4.5 → QUEUE
     f = _f(name_sim=0.95, phone_match=True)
-    assert matching.decide(f) == matching.Decision.AUTO_MERGE
+    assert matching.decide(f) == matching.Decision.QUEUE
 
 
 def test_decide_website_with_location_suffix_queues_not_merges():
@@ -502,24 +512,27 @@ def test_decide_website_with_location_suffix_queues_not_merges():
     assert matching.decide(f) == matching.Decision.QUEUE
 
 
-def test_decide_close_geo_auto_merges():
+def test_decide_close_geo_queues_below_auto_band():
+    # name_high(1.0) + geo_close(2.0) = 3.0 < AUTO_BAND → QUEUE
     f = _f(name_sim=0.95, geo_dist=40.0)
-    assert matching.decide(f) == matching.Decision.AUTO_MERGE
-
-
-def test_decide_name_only_auto_merges_at_threshold():
-    # name_sim >= 0.97 with no conflicting signals → auto_merge (no data needed)
-    f = _f(name_sim=0.97)
-    assert matching.decide(f) == matching.Decision.AUTO_MERGE
-
-
-def test_decide_name_below_threshold_queues():
-    f = _f(name_sim=0.95)
     assert matching.decide(f) == matching.Decision.QUEUE
 
 
+def test_decide_name_only_queues_not_auto_merges():
+    # name_very_high(2.0) alone < AUTO_BAND=4.5 → QUEUE
+    f = _f(name_sim=0.97)
+    assert matching.decide(f) == matching.Decision.QUEUE
+
+
+def test_decide_name_below_threshold_separates():
+    # name_high(1.0) alone < QUEUE_BAND=1.5 → SEPARATE
+    f = _f(name_sim=0.95)
+    assert matching.decide(f) == matching.Decision.SEPARATE
+
+
 def test_decide_geo_veto_separates_even_if_name_identical():
-    f = _f(name_sim=1.0, geo_dist=900.0)
+    # > HARD_GEO_SEPARATE_M(1000m), no phone → SEPARATE regardless of score
+    f = _f(name_sim=1.0, geo_dist=1100.0)
     assert matching.decide(f) == matching.Decision.SEPARATE
 
 
@@ -548,9 +561,10 @@ def test_decide_cuisine_conflict_after_geo_veto():
     assert matching.decide(f) == matching.Decision.SEPARATE
 
 
-def test_decide_no_cuisine_conflict_auto_merges_at_threshold():
+def test_decide_no_cuisine_conflict_queues_at_name_threshold():
+    # name_very_high(2.0) alone < AUTO_BAND → QUEUE
     f = _f(name_sim=0.97, cuisine_conflict=False)
-    assert matching.decide(f) == matching.Decision.AUTO_MERGE
+    assert matching.decide(f) == matching.Decision.QUEUE
 
 
 def test_cuisine_conflict_both_set_different():
@@ -639,22 +653,23 @@ def test_score_pair_no_location_conflict_same_commune():
 # Signal 3: Menu overlap
 # ---------------------------------------------------------------------------
 
-def test_decide_menu_overlap_veto_below_threshold():
-    # name_sim fine, but almost zero menu overlap → SEPARATE
+def test_decide_menu_overlap_low_queues():
+    # name_very_high(2.0) + address_diff(-3.0 if False, but None here) = 2.0 → QUEUE
+    # Low menu_overlap has no negative weight in additive model (only no bonus)
     f = _f(name_sim=0.97, menu_overlap=0.01)
-    assert matching.decide(f) == matching.Decision.SEPARATE
+    assert matching.decide(f) == matching.Decision.QUEUE
 
 
-def test_decide_menu_overlap_confirm_auto_merges():
-    # name_sim just at threshold, menu_overlap provides strong confirm
+def test_decide_menu_overlap_confirm_queues_below_auto_band():
+    # name_high(1.0) + menu_overlap(1.0) = 2.0 < AUTO_BAND → QUEUE
     f = _f(name_sim=0.92, menu_overlap=0.20)
-    assert matching.decide(f) == matching.Decision.AUTO_MERGE
+    assert matching.decide(f) == matching.Decision.QUEUE
 
 
-def test_decide_menu_overlap_none_auto_merges_at_threshold():
-    # None means no menu data — doesn't block auto_merge at name_sim >= 0.97
+def test_decide_menu_overlap_none_queues():
+    # name_very_high(2.0) alone < AUTO_BAND → QUEUE
     f = _f(name_sim=0.97, menu_overlap=None)
-    assert matching.decide(f) == matching.Decision.AUTO_MERGE
+    assert matching.decide(f) == matching.Decision.QUEUE
 
 
 def test_score_pair_menu_overlap_computed():
@@ -696,15 +711,16 @@ def test_score_pair_menu_overlap_zero_disjoint():
 # Signal 4: Soft geo veto
 # ---------------------------------------------------------------------------
 
-def test_decide_soft_geo_veto_above_threshold():
+def test_decide_soft_geo_veto_above_threshold_queues():
+    # soft_geo_dist not used by additive model; name_very_high(2.0) → QUEUE
     f = _f(name_sim=0.97, soft_geo_dist=700.0)
-    assert matching.decide(f) == matching.Decision.SEPARATE
+    assert matching.decide(f) == matching.Decision.QUEUE
 
 
-def test_decide_soft_geo_below_threshold_auto_merges():
-    # soft_geo < 600m doesn't veto; name_sim >= 0.97 → auto_merge
+def test_decide_soft_geo_below_threshold_queues():
+    # soft_geo_dist has no positive weight; name_very_high(2.0) < AUTO_BAND → QUEUE
     f = _f(name_sim=0.97, soft_geo_dist=400.0)
-    assert matching.decide(f) == matching.Decision.AUTO_MERGE
+    assert matching.decide(f) == matching.Decision.QUEUE
 
 
 def test_score_pair_soft_geo_when_one_venue_grade():
@@ -737,29 +753,34 @@ def test_score_pair_no_soft_geo_when_no_coords():
 # Signal 5: Chain guard
 # ---------------------------------------------------------------------------
 
-def test_decide_chain_name_without_strong_confirm_separates():
+def test_decide_chain_name_without_strong_confirm_queues():
+    # is_chain_name has no weight in additive model; name_very_high(2.0) → QUEUE
     f = _f(name_sim=0.97, is_chain_name=True)
-    assert matching.decide(f) == matching.Decision.SEPARATE
+    assert matching.decide(f) == matching.Decision.QUEUE
 
 
-def test_decide_chain_name_with_phone_confirm_auto_merges():
+def test_decide_chain_name_with_phone_confirm_queues_below_auto_band():
+    # name_very_high(2.0) + phone(3.0) = 5.0 >= AUTO_BAND; phone is proof → AUTO_MERGE
     f = _f(name_sim=0.97, is_chain_name=True, phone_match=True)
     assert matching.decide(f) == matching.Decision.AUTO_MERGE
 
 
-def test_decide_chain_name_with_close_geo_auto_merges():
+def test_decide_chain_name_with_close_geo_queues():
+    # name_very_high(2.0) + geo_close(2.0) = 4.0 < AUTO_BAND → QUEUE
     f = _f(name_sim=0.97, is_chain_name=True, geo_dist=40.0)
-    assert matching.decide(f) == matching.Decision.AUTO_MERGE
+    assert matching.decide(f) == matching.Decision.QUEUE
 
 
-def test_decide_chain_name_with_menu_confirm_auto_merges():
+def test_decide_chain_name_with_menu_confirm_queues():
+    # name_high(1.0) + menu_overlap(1.0) = 2.0 < AUTO_BAND → QUEUE
     f = _f(name_sim=0.92, is_chain_name=True, menu_overlap=0.20)
-    assert matching.decide(f) == matching.Decision.AUTO_MERGE
+    assert matching.decide(f) == matching.Decision.QUEUE
 
 
-def test_decide_non_chain_name_auto_merges_at_threshold():
+def test_decide_non_chain_name_queues_at_name_threshold():
+    # name_very_high(2.0) alone < AUTO_BAND → QUEUE
     f = _f(name_sim=0.97, is_chain_name=False)
-    assert matching.decide(f) == matching.Decision.AUTO_MERGE
+    assert matching.decide(f) == matching.Decision.QUEUE
 
 
 def test_score_pair_chain_name_detected():
@@ -851,9 +872,10 @@ def test_distinctive_conflict_not_set_for_same_remainder():
     assert f.distinctive_conflict is False
 
 
-def test_distinctive_conflict_overridden_by_slug_match():
+def test_distinctive_conflict_with_slug_separates():
+    # name_high(1.0) + slug_match(2.0) + distinctive_conflict(-2.0) = 1.0 < QUEUE_BAND → SEPARATE
     f = _f(name_sim=0.93, distinctive_conflict=True, slug_match=True)
-    assert matching.decide(f) != matching.Decision.SEPARATE
+    assert matching.decide(f) == matching.Decision.SEPARATE
 
 
 # ---------------------------------------------------------------------------
@@ -884,10 +906,10 @@ def test_slug_match_false_for_different_slugs():
     assert f.slug_match is False
 
 
-def test_slug_match_auto_merges_via_strong_confirm():
-    # slug_match = True should push past chain guard into AUTO_MERGE
+def test_slug_match_queues_below_auto_band():
+    # name_high(1.0) + slug_match(2.0) = 3.0 < AUTO_BAND → QUEUE
     f = _f(name_sim=0.96, slug_match=True, is_chain_name=False)
-    assert matching.decide(f) == matching.Decision.AUTO_MERGE
+    assert matching.decide(f) == matching.Decision.QUEUE
 
 
 def test_halal_suffix_stripped_from_canonical():
@@ -914,3 +936,75 @@ def test_block_candidates_groups_by_first_token_and_domain():
 def test_block_candidates_no_self_pairs():
     rows = [_r("Foo", id="1")]
     assert matching.block_candidates(rows) == []
+
+
+def test_block_candidates_geo_proximity_pairs_unrelated_names():
+    a = _r("Totally Different", id="g1", lat=50.8500, lng=4.3500, geo_source="uber_eats")
+    b = _r("Other Name Entirely", id="g2", lat=50.8501, lng=4.3501, geo_source="takeaway")
+    far = _r("Third Place", id="g3", lat=50.9000, lng=4.4000, geo_source="takeaway")
+    pairs = matching.block_candidates([a, b, far])
+    ids = {tuple(sorted((str(x["id"]), str(y["id"])))) for x, y in pairs}
+    assert ("g1", "g2") in ids
+    assert tuple(sorted(("g1", "g3"))) not in ids
+
+
+# ---------------------------------------------------------------------------
+# Proof-gate: AUTO_MERGE requires hard same-venue evidence
+# ---------------------------------------------------------------------------
+
+def test_auto_requires_hard_proof_else_queue():
+    # 2-branch unflagged chain: name + near geo + website + menu pile to >= AUTO
+    # band but carry no same-venue proof -> queue, never silent auto-merge
+    f = _feat(name_sim=0.99, geo_dist=150.0, website_match=True, menu_overlap=0.5)
+    total, _ = matching.evidence_score(f)
+    assert total >= matching.AUTO_BAND
+    assert matching.decide(f) == matching.Decision.QUEUE
+
+
+def test_auto_proof_via_address():
+    f = _feat(name_sim=0.99, geo_dist=150.0, website_match=True, menu_overlap=0.5,
+              address_match=True)
+    assert matching.decide(f) == matching.Decision.AUTO_MERGE
+
+
+def test_auto_proof_via_very_close_geo():
+    f = _feat(name_sim=0.99, geo_dist=10.0, website_match=True)
+    assert matching.decide(f) == matching.Decision.AUTO_MERGE
+
+
+def test_ghost_kitchen_shared_phone_address_different_name_queues():
+    # Cloud kitchen: two distinct virtual brands at one address share a phone.
+    # Physical proof piles past AUTO_BAND, but dissimilar names fail the
+    # identity gate -> QUEUE for human review, never silent AUTO_MERGE.
+    f = _feat(name_sim=0.30, phone_match=True, geo_dist=5.0, address_match=True)
+    total, _ = matching.evidence_score(f)
+    assert total >= matching.AUTO_BAND
+    assert matching.decide(f) == matching.Decision.QUEUE
+
+
+def test_identity_via_slug_still_auto_merges():
+    f = _feat(name_sim=0.30, slug_match=True, geo_dist=5.0)
+    assert matching.decide(f) == matching.Decision.AUTO_MERGE
+
+
+def test_identity_via_name_still_auto_merges():
+    f = _feat(name_sim=0.99, phone_match=True, geo_dist=5.0)
+    assert matching.decide(f) == matching.Decision.AUTO_MERGE
+
+
+def test_colocation_gate_blocks_geo_without_identity():
+    # Food-court neighbours: 30m apart, different names, no shared phone/slug.
+    # Proximity must NOT count toward a merge -> below QUEUE band -> SEPARATE.
+    f = _feat(name_sim=0.30, geo_dist=30.0)
+    total, contrib = matching.evidence_score(f)
+    assert "geo_very_close" not in contrib
+    assert matching.decide(f) == matching.Decision.SEPARATE
+
+
+def test_colocation_gate_opens_with_phone():
+    # Ghost kitchen: shared phone opens the gate, geo counts -> queues (identity
+    # gate still blocks AUTO since names differ).
+    f = _feat(name_sim=0.30, geo_dist=30.0, phone_match=True)
+    _, contrib = matching.evidence_score(f)
+    assert "geo_close" in contrib
+    assert matching.decide(f) == matching.Decision.QUEUE

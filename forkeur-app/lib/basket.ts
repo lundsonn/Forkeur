@@ -1,4 +1,5 @@
 // lib/basket.ts
+import { fuzzyFindByTitle } from '@/lib/fuzzy-title'
 
 export type Platform = 'uber_eats' | 'deliveroo' | 'takeaway' | 'direct'
 export const PLATFORMS: Platform[] = ['uber_eats', 'deliveroo', 'takeaway', 'direct']
@@ -136,8 +137,7 @@ export function computeDirectOverlapFromMenu(
   const totalCount = activeItems.length
 
   const directCount = activeItems.filter(b => {
-    const key = b.name.toLowerCase()
-    const found = menuItems.find(m => m.name.toLowerCase() === key)
+    const found = fuzzyFindByTitle(b.name, menuItems)
     return found != null && found.prices.direct != null
   }).length
 
@@ -161,8 +161,7 @@ export function computeDirectSubtotalFromMenu(
 
   for (const b of basket) {
     if (b.qty <= 0) continue
-    const key = b.name.toLowerCase()
-    const found = menuItems.find(m => m.name.toLowerCase() === key)
+    const found = fuzzyFindByTitle(b.name, menuItems)
     if (found != null && found.prices.direct != null) {
       totalCents += found.prices.direct * b.qty
       hasAny = true

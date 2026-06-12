@@ -1,0 +1,1386 @@
+{
+  "same": [
+    {
+      "a": {
+        "name": "Pasta Express Etterbeek",
+        "phone": null,
+        "cuisine": "Italian",
+        "lat": 50.83692,
+        "lng": 4.388186,
+        "geo_source": "takeaway",
+        "is_chain": false,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Rue Général Leman 160",
+        "postal_code": "1040",
+        "slugs": [
+          "pasta-express-etterbeek"
+        ]
+      },
+      "b": {
+        "name": "PASTA EXPRESS",
+        "phone": "+32487998084",
+        "cuisine": "Italian",
+        "lat": 50.8369,
+        "lng": 4.3882,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "Generaal Lemanstraat 160",
+        "postal_code": "1040",
+        "slugs": [
+          "pasta-express-zero-stress"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Minaô",
+        "phone": null,
+        "cuisine": null,
+        "lat": 50.868145,
+        "lng": 4.375147,
+        "geo_source": "takeaway",
+        "is_chain": false,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Rue Général Eenens 20",
+        "postal_code": "1030",
+        "slugs": [
+          "minao-schaerbeek"
+        ]
+      },
+      "b": {
+        "name": "Minao",
+        "phone": "+3227057535",
+        "cuisine": null,
+        "lat": 50.8682,
+        "lng": 4.3751,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "20 Rue Général Eenens",
+        "postal_code": "1030",
+        "slugs": [
+          "minao-schaerbeek"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Mr. Cod",
+        "phone": null,
+        "cuisine": null,
+        "lat": 50.85754,
+        "lng": 4.31951,
+        "geo_source": "takeaway",
+        "is_chain": false,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Chaussee de Gand 386",
+        "postal_code": "1080",
+        "slugs": [
+          "mrcod"
+        ]
+      },
+      "b": {
+        "name": "Mr Cod",
+        "phone": "+32486955886",
+        "cuisine": null,
+        "lat": 50.8576,
+        "lng": 4.3195,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "Chau. de Gand 386",
+        "postal_code": "1080",
+        "slugs": [
+          "mr-cod"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Ai 6 Angoli Saint-Gilles",
+        "phone": null,
+        "cuisine": null,
+        "lat": 50.830227,
+        "lng": 4.35096,
+        "geo_source": "takeaway",
+        "is_chain": false,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Rue de la Croix de Pierre 43",
+        "postal_code": "1060",
+        "slugs": [
+          "ai-6-angoli-saint-gilles-1"
+        ]
+      },
+      "b": {
+        "name": "Pizzeria Trattoria Ai 6 angoli",
+        "phone": "+32498422465",
+        "cuisine": "Pizza",
+        "lat": 50.8303,
+        "lng": 4.351,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "Stenen-Kruisstraat 43",
+        "postal_code": "1060",
+        "slugs": [
+          "pizzeria-trattoria-ai-6-angoli"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Pizzeria Koçak Schaerbeek",
+        "phone": null,
+        "cuisine": "Pizza",
+        "lat": 50.858776,
+        "lng": 4.370245,
+        "geo_source": "takeaway",
+        "is_chain": false,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Chaussée de Haecht 135",
+        "postal_code": "1030",
+        "slugs": [
+          "pizzeria-kocak-1030"
+        ]
+      },
+      "b": {
+        "name": "Pizzeria Koçak",
+        "phone": "+3222184731",
+        "cuisine": "Pizza",
+        "lat": 50.8587,
+        "lng": 4.3703,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "135 Chaussée de Haecht",
+        "postal_code": "1030",
+        "slugs": [
+          "pizzeria-kocak"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Tsuki Sushi",
+        "phone": null,
+        "cuisine": "Asian",
+        "lat": 50.82462,
+        "lng": 4.296777,
+        "geo_source": "takeaway",
+        "is_chain": false,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Chaussée de Mons 986",
+        "postal_code": "1070",
+        "slugs": [
+          "tsuki-sushi"
+        ]
+      },
+      "b": {
+        "name": "Tsuki Sushi I Sushi Bar",
+        "phone": "+3225201233",
+        "cuisine": "Asian",
+        "lat": 50.8247,
+        "lng": 4.2967,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "986 Chaussée de Mons",
+        "postal_code": "1070",
+        "slugs": [
+          "tsuki-sushi-i-sushi-bar"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "La Smorfia Saint-Gilles",
+        "phone": "+32 2 252 24 70",
+        "cuisine": null,
+        "lat": 50.826687,
+        "lng": 4.350911,
+        "geo_source": "takeaway",
+        "is_chain": false,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Rue St.Bernard 135",
+        "postal_code": "1060",
+        "slugs": [
+          "la-smorfia-saint-gilles"
+        ]
+      },
+      "b": {
+        "name": "La Smorfia",
+        "phone": null,
+        "cuisine": null,
+        "lat": 50.8266,
+        "lng": 4.3509,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": null,
+        "postal_code": null,
+        "slugs": [
+          "la-smorfia"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Pizza King Family Koekelberg",
+        "phone": null,
+        "cuisine": "Pizza",
+        "lat": 50.856895,
+        "lng": 4.328356,
+        "geo_source": "takeaway",
+        "is_chain": false,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Chaussée de Gand 289",
+        "postal_code": "1081",
+        "slugs": [
+          "pizza-king-family-koekelberg-1"
+        ]
+      },
+      "b": {
+        "name": "Pizza King Family",
+        "phone": "+32472220550",
+        "cuisine": "Pizza",
+        "lat": 50.8568,
+        "lng": 4.3283,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "289 Chaussée de Gand",
+        "postal_code": "1081",
+        "slugs": [
+          "pizza-king-family"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Intermarché Saint Gilles",
+        "phone": null,
+        "cuisine": null,
+        "lat": 50.83201,
+        "lng": 4.34181,
+        "geo_source": "takeaway",
+        "is_chain": false,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Vorstse Steenweg 32",
+        "postal_code": "1060",
+        "slugs": [
+          "intermarche-saint-gilles-bruxelles"
+        ]
+      },
+      "b": {
+        "name": "Intermarché",
+        "phone": "+32472586516",
+        "cuisine": null,
+        "lat": 50.8319,
+        "lng": 4.3419,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "32 Chaussée de Forest",
+        "postal_code": "1060",
+        "slugs": [
+          "intermarche-saint-gilles"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Thai Wok Express Toison d'or",
+        "phone": null,
+        "cuisine": "Asian",
+        "lat": 50.83594,
+        "lng": 4.356699,
+        "geo_source": "takeaway",
+        "is_chain": false,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Gulden-Vlieslaan 46B",
+        "postal_code": "1050",
+        "slugs": [
+          "thai-wok-express-toison-dor-bruxelles"
+        ]
+      },
+      "b": {
+        "name": "Thai Wok Express",
+        "phone": "+32483363660",
+        "cuisine": "Asian",
+        "lat": 50.836,
+        "lng": 4.3565,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "Avenue de la Toison d'Or 46",
+        "postal_code": "1000",
+        "slugs": [
+          "thai-wok-express-brussels"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Pizzeria Zirar Saint-Denis",
+        "phone": null,
+        "cuisine": "Pizza",
+        "lat": 50.810463,
+        "lng": 4.317642,
+        "geo_source": "takeaway",
+        "is_chain": false,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Chaussée de Bruxelles 10",
+        "postal_code": "1190",
+        "slugs": [
+          "pizzeria-zirar-saint-denis"
+        ]
+      },
+      "b": {
+        "name": "Pizzeria Zirar",
+        "phone": "+32486616766",
+        "cuisine": "Pizza",
+        "lat": 50.8104,
+        "lng": 4.3179,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "Brusselsesteenweg 10",
+        "postal_code": "1190",
+        "slugs": [
+          "pizzeria-zirar"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Mia Pizza Auderghem",
+        "phone": null,
+        "cuisine": "Pizza",
+        "lat": 50.82162,
+        "lng": 4.405539,
+        "geo_source": "takeaway",
+        "is_chain": false,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Chaussée de Wavre 1239",
+        "postal_code": "1160",
+        "slugs": [
+          "snack-hankar"
+        ]
+      },
+      "b": {
+        "name": "Mia Pizza",
+        "phone": "+3226751376",
+        "cuisine": "Pizza",
+        "lat": 50.8217,
+        "lng": 4.406,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "Chaussée de Wavre 1239",
+        "postal_code": "1160",
+        "slugs": [
+          "mia-pizza-auderghem"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Pizza Minute",
+        "phone": null,
+        "cuisine": "Pizza",
+        "lat": 50.82742,
+        "lng": 4.344598,
+        "geo_source": "takeaway",
+        "is_chain": false,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Waterloosesteenweg 186",
+        "postal_code": "1060",
+        "slugs": [
+          "pizza-minute-saint-gilles-1"
+        ]
+      },
+      "b": {
+        "name": "PizzaMinute",
+        "phone": "+32495866661",
+        "cuisine": "Pizza",
+        "lat": 50.8274,
+        "lng": 4.3446,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "Chaussée de Waterloo 186",
+        "postal_code": "1060",
+        "slugs": [
+          "pizzaminute-saint-gilles"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Yaki Sainte-Catherine",
+        "phone": "+3225032858",
+        "cuisine": null,
+        "lat": 50.84672,
+        "lng": 4.35293,
+        "geo_source": "deliveroo_venue",
+        "is_chain": false,
+        "platforms": [
+          "deliveroo"
+        ],
+        "street_address": "Rue des Poissoniers 6B, Brussels, 1000",
+        "postal_code": "1000",
+        "slugs": [
+          "Brussels"
+        ]
+      },
+      "b": {
+        "name": "Yaki Sainte Catherine",
+        "phone": "+3225032858",
+        "cuisine": null,
+        "lat": 50.8493,
+        "lng": 4.3488,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "Rue des Poissonniers 6",
+        "postal_code": "1000",
+        "slugs": [
+          "yaki-sainte-catherine"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Pizzerie Pâton",
+        "phone": "+32494406235",
+        "cuisine": "Pizza",
+        "lat": 50.8141,
+        "lng": 4.3512,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "takeaway",
+          "uber_eats"
+        ],
+        "street_address": "Rue Vanderkindere 213",
+        "postal_code": "1180",
+        "slugs": [
+          "pizzerie-paton",
+          "pizzeria-paton"
+        ]
+      },
+      "b": {
+        "name": "Pizzeria Pâton",
+        "phone": "+32 2 770 28 63",
+        "cuisine": "Pizza",
+        "lat": 50.813736,
+        "lng": 4.351206,
+        "geo_source": "takeaway",
+        "is_chain": false,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Rue Vanderkindere 213",
+        "postal_code": "1180",
+        "slugs": [
+          "pizzeria-paton"
+        ]
+      }
+    }
+  ],
+  "different": [
+    {
+      "a": {
+        "name": "Tekince Kebap Resto",
+        "phone": null,
+        "cuisine": null,
+        "lat": 50.858715,
+        "lng": 4.370177,
+        "geo_source": "takeaway",
+        "is_chain": false,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Chaussée de Haecht 133",
+        "postal_code": "1030",
+        "slugs": [
+          "tekince-kebap-resto"
+        ]
+      },
+      "b": {
+        "name": "Pizzeria Koçak",
+        "phone": "+3222184731",
+        "cuisine": "Pizza",
+        "lat": 50.8587,
+        "lng": 4.3703,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "135 Chaussée de Haecht",
+        "postal_code": "1030",
+        "slugs": [
+          "pizzeria-kocak"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Baobab 2",
+        "phone": null,
+        "cuisine": "Asian",
+        "lat": 50.836575,
+        "lng": 4.364033,
+        "geo_source": "takeaway",
+        "is_chain": false,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Rue Francart 15",
+        "postal_code": "1050",
+        "slugs": [
+          "baobab-2"
+        ]
+      },
+      "b": {
+        "name": "Knees to Chin",
+        "phone": "+3227052430",
+        "cuisine": null,
+        "lat": 50.8365,
+        "lng": 4.3639,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "Francartstraat 18",
+        "postal_code": "1050",
+        "slugs": [
+          "knees-to-chin-st-boniface"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Hakko",
+        "phone": null,
+        "cuisine": null,
+        "lat": 50.858032,
+        "lng": 4.318873,
+        "geo_source": "takeaway",
+        "is_chain": false,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Avenue du Karreveld 1",
+        "postal_code": "1080",
+        "slugs": [
+          "hakko"
+        ]
+      },
+      "b": {
+        "name": "La Recette",
+        "phone": "+32465930106",
+        "cuisine": null,
+        "lat": 50.8581,
+        "lng": 4.3187,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "Avenue du Karreveld 3",
+        "postal_code": "1080",
+        "slugs": [
+          "la-recette"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Panos City Uccle",
+        "phone": null,
+        "cuisine": null,
+        "lat": 50.803383,
+        "lng": 4.337182,
+        "geo_source": "takeaway",
+        "is_chain": true,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "XAVIER DE BUE-STRAAT 39",
+        "postal_code": "1180",
+        "slugs": [
+          "panos-city-uccle"
+        ]
+      },
+      "b": {
+        "name": "JAP",
+        "phone": "+3225128396",
+        "cuisine": null,
+        "lat": 50.8035,
+        "lng": 4.3373,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "Xavier De Buestraat 41",
+        "postal_code": "1180",
+        "slugs": [
+          "jap"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Crusty's",
+        "phone": null,
+        "cuisine": null,
+        "lat": 50.829636,
+        "lng": 4.344301,
+        "geo_source": "takeaway",
+        "is_chain": false,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Chaussée de Waterloo 79",
+        "postal_code": "1060",
+        "slugs": [
+          "crustys-saint-gilles-bruxelles"
+        ]
+      },
+      "b": {
+        "name": "Pizza Theory",
+        "phone": "+32485871150",
+        "cuisine": "Pizza",
+        "lat": 50.8296,
+        "lng": 4.3446,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "79 Chaussée de Waterloo",
+        "postal_code": "1060",
+        "slugs": [
+          "pizza-theory"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Librairie Saint-Gilles",
+        "phone": null,
+        "cuisine": null,
+        "lat": 50.82522,
+        "lng": 4.3439,
+        "geo_source": "takeaway",
+        "is_chain": false,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Avenue Adolphe Demeur 65",
+        "postal_code": "1060",
+        "slugs": [
+          "librairie-saint-gilles"
+        ]
+      },
+      "b": {
+        "name": "Doughnuts & Sweets",
+        "phone": "+32489997368",
+        "cuisine": null,
+        "lat": 50.825,
+        "lng": 4.3439,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "Avenue Adolphe Demeur 40",
+        "postal_code": "1060",
+        "slugs": [
+          "doughnuts-%26-sweets"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Starbucks © Rogier",
+        "phone": null,
+        "cuisine": null,
+        "lat": 50.85535,
+        "lng": 4.359308,
+        "geo_source": "takeaway",
+        "is_chain": false,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Place Charles Rogier 1",
+        "postal_code": "1210",
+        "slugs": [
+          "starbucks-rogier"
+        ]
+      },
+      "b": {
+        "name": "Pasta Bar Rogier",
+        "phone": "+32494071363",
+        "cuisine": "Italian",
+        "lat": 50.8553,
+        "lng": 4.3589,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "1 Boulevard du Jardin Botanique",
+        "postal_code": "1000",
+        "slugs": [
+          "pasta-bar-rogier"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Ô Banh Mi",
+        "phone": "+3226495927",
+        "cuisine": null,
+        "lat": 50.83043,
+        "lng": 4.39046,
+        "geo_source": "deliveroo_venue",
+        "is_chain": false,
+        "platforms": [
+          "deliveroo"
+        ],
+        "street_address": "140 rue Philippe Baucq, Brussels, 1040",
+        "postal_code": "1040",
+        "slugs": [
+          "Brussels"
+        ]
+      },
+      "b": {
+        "name": "Snack Miracle",
+        "phone": "+32477978103",
+        "cuisine": null,
+        "lat": 50.8307,
+        "lng": 4.3905,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "Jachtlaan 7",
+        "postal_code": "1040",
+        "slugs": [
+          "snack-miracle"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Ô Banh Mi",
+        "phone": "+3226495927",
+        "cuisine": null,
+        "lat": 50.83043,
+        "lng": 4.39046,
+        "geo_source": "deliveroo_venue",
+        "is_chain": false,
+        "platforms": [
+          "deliveroo"
+        ],
+        "street_address": "140 rue Philippe Baucq, Brussels, 1040",
+        "postal_code": "1040",
+        "slugs": [
+          "Brussels"
+        ]
+      },
+      "b": {
+        "name": "BANH MI",
+        "phone": "+32490109389",
+        "cuisine": null,
+        "lat": 50.8187,
+        "lng": 4.3842,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "314 Chaussée de Boondael",
+        "postal_code": "1050",
+        "slugs": [
+          "banh-mi-boondael"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Krusty Smash Burger",
+        "phone": null,
+        "cuisine": "Burgers",
+        "lat": 50.863922,
+        "lng": 4.332574,
+        "geo_source": "takeaway",
+        "is_chain": false,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Chaussée de Jette 298",
+        "postal_code": "1081",
+        "slugs": [
+          "krusty-smash-burgers"
+        ]
+      },
+      "b": {
+        "name": "Krusty Smashburger",
+        "phone": "+32497678473",
+        "cuisine": "Burgers",
+        "lat": 50.8442,
+        "lng": 4.3274,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "65 Rue Ropsy Chaudron",
+        "postal_code": "1070",
+        "slugs": [
+          "krusty-smashburger"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Il Posticino Ristorante Pizzeria",
+        "phone": null,
+        "cuisine": "Pizza",
+        "lat": 50.86166,
+        "lng": 4.302801,
+        "geo_source": "takeaway",
+        "is_chain": false,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Gentsesteenweg 1027",
+        "postal_code": "1082",
+        "slugs": [
+          "il-posticino-ristorante-pizzeria-1"
+        ]
+      },
+      "b": {
+        "name": "Il Padrino Napolitaine",
+        "phone": "+32467811889",
+        "cuisine": "Pizza",
+        "lat": 50.8615,
+        "lng": 4.3026,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "1027 Chaussée de Gand",
+        "postal_code": "1082",
+        "slugs": [
+          "il-padrino-napolitaine"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "La siciliana di Giusy Mineo",
+        "phone": null,
+        "cuisine": null,
+        "lat": 50.814117,
+        "lng": 4.350299,
+        "geo_source": "takeaway",
+        "is_chain": false,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Vanderkinderestraat 238",
+        "postal_code": "1180",
+        "slugs": [
+          "la-siciliana-2"
+        ]
+      },
+      "b": {
+        "name": "Pizzeria Nomèa",
+        "phone": "+32491882122",
+        "cuisine": "Pizza",
+        "lat": 50.814,
+        "lng": 4.35,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "Rue Vanderkindere 232",
+        "postal_code": "1180",
+        "slugs": [
+          "pizzeria-nomea"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Fresh Tasty",
+        "phone": null,
+        "cuisine": null,
+        "lat": 50.84816,
+        "lng": 4.364446,
+        "geo_source": "takeaway",
+        "is_chain": false,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Rue de la Croix de Fer 20",
+        "postal_code": "1000",
+        "slugs": [
+          "fresh-tasty-1"
+        ]
+      },
+      "b": {
+        "name": "My Healthy house",
+        "phone": "+33694729638",
+        "cuisine": "Healthy",
+        "lat": 50.8481,
+        "lng": 4.3648,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "Rue de la Croix de Fer 49",
+        "postal_code": "1000",
+        "slugs": [
+          "my-healthy-house"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Woodiz Ixelles",
+        "phone": null,
+        "cuisine": null,
+        "lat": 50.83636,
+        "lng": 4.365513,
+        "geo_source": "takeaway",
+        "is_chain": true,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Rue Longue Vie 17",
+        "postal_code": "1050",
+        "slugs": [
+          "woodiz-ixelles"
+        ]
+      },
+      "b": {
+        "name": "Les 2 Orients",
+        "phone": "+32472090084",
+        "cuisine": null,
+        "lat": 50.8361,
+        "lng": 4.3657,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "Rue de la Paix 39",
+        "postal_code": "1050",
+        "slugs": [
+          "les-2-orients-ixelles"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Smash - Flagey",
+        "phone": null,
+        "cuisine": "Burgers",
+        "lat": 50.83043,
+        "lng": 4.39046,
+        "geo_source": "deliveroo_venue",
+        "is_chain": true,
+        "platforms": [
+          "deliveroo"
+        ],
+        "street_address": null,
+        "postal_code": null,
+        "slugs": [
+          "Brussels"
+        ]
+      },
+      "b": {
+        "name": "Snack Miracle",
+        "phone": "+32477978103",
+        "cuisine": null,
+        "lat": 50.8307,
+        "lng": 4.3905,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "Jachtlaan 7",
+        "postal_code": "1040",
+        "slugs": [
+          "snack-miracle"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Carrefour Express Cyriel Buysse",
+        "phone": null,
+        "cuisine": "Grocery",
+        "lat": 50.840042,
+        "lng": 4.305143,
+        "geo_source": "takeaway",
+        "is_chain": true,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Rue Cyriel Buysse 36",
+        "postal_code": "1070",
+        "slugs": [
+          "carrefour-express-cyriel-buysse-bruxelles"
+        ]
+      },
+      "b": {
+        "name": "Carrefour Market Tomberg",
+        "phone": null,
+        "cuisine": "Grocery",
+        "lat": 50.84248,
+        "lng": 4.427354,
+        "geo_source": "takeaway",
+        "is_chain": true,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Tomberg 96/114",
+        "postal_code": "1200",
+        "slugs": [
+          "carrefour-market-tomberg"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Panos Jette",
+        "phone": null,
+        "cuisine": null,
+        "lat": 50.87312,
+        "lng": 4.325835,
+        "geo_source": "takeaway",
+        "is_chain": true,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Rue Léon Theodor 9",
+        "postal_code": "1090",
+        "slugs": [
+          "panos-jette-1"
+        ]
+      },
+      "b": {
+        "name": "Panos City Uccle",
+        "phone": null,
+        "cuisine": null,
+        "lat": 50.803383,
+        "lng": 4.337182,
+        "geo_source": "takeaway",
+        "is_chain": true,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "XAVIER DE BUE-STRAAT 39",
+        "postal_code": "1180",
+        "slugs": [
+          "panos-city-uccle"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "McDonald's Bascule",
+        "phone": null,
+        "cuisine": "Burgers",
+        "lat": 50.815445,
+        "lng": 4.366794,
+        "geo_source": "takeaway",
+        "is_chain": true,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Chaussée de Waterloo 717",
+        "postal_code": "1180",
+        "slugs": [
+          "mcdonalds-bascule"
+        ]
+      },
+      "b": {
+        "name": "McDonald's Gare du nord",
+        "phone": null,
+        "cuisine": "Burgers",
+        "lat": 50.860455,
+        "lng": 4.360139,
+        "geo_source": "takeaway",
+        "is_chain": true,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Rue du Progrès 76",
+        "postal_code": "1030",
+        "slugs": [
+          "mcdonalds-brussels"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Quick Evere",
+        "phone": null,
+        "cuisine": "Burgers",
+        "lat": 50.878616,
+        "lng": 4.412051,
+        "geo_source": "takeaway",
+        "is_chain": true,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Haachtsesteenweg 1422",
+        "postal_code": "1130",
+        "slugs": [
+          "quick-evere"
+        ]
+      },
+      "b": {
+        "name": "Quick Bascule",
+        "phone": null,
+        "cuisine": "Burgers",
+        "lat": 50.817883,
+        "lng": 4.364163,
+        "geo_source": "takeaway",
+        "is_chain": true,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Chausée de Waterloo 605",
+        "postal_code": "1050",
+        "slugs": [
+          "quick-bascule-1"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Fritiko Ixelles",
+        "phone": null,
+        "cuisine": null,
+        "lat": 50.829765,
+        "lng": 4.378676,
+        "geo_source": "takeaway",
+        "is_chain": true,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Avenue de la Couronne 67",
+        "postal_code": "1050",
+        "slugs": [
+          "fritiko-ixelles"
+        ]
+      },
+      "b": {
+        "name": "Fritiko Ganshoren",
+        "phone": null,
+        "cuisine": null,
+        "lat": 50.869087,
+        "lng": 4.310612,
+        "geo_source": "takeaway",
+        "is_chain": true,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Keizer Karellaan 84",
+        "postal_code": "1083",
+        "slugs": [
+          "fritiko-ganshoren"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Panos + Delhaize Shop & Go by Q8 Vorst",
+        "phone": "+32479319180",
+        "cuisine": "Grocery",
+        "lat": 50.8186,
+        "lng": 4.3211,
+        "geo_source": "uber_eats",
+        "is_chain": true,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "279 Rue Saint-Denis",
+        "postal_code": "1190",
+        "slugs": [
+          "panos-%2B-delhaize-shop-%26-go-by-q8-vorst"
+        ]
+      },
+      "b": {
+        "name": "Panos",
+        "phone": "+3224283781",
+        "cuisine": "Grocery",
+        "lat": 50.81844,
+        "lng": 4.321086,
+        "geo_source": "takeaway",
+        "is_chain": true,
+        "platforms": [
+          "takeaway",
+          "uber_eats"
+        ],
+        "street_address": "27 Chaussée d'Ixelles",
+        "postal_code": "1050",
+        "slugs": [
+          "panos-city-brussel-porte-de-namur",
+          "delhaize-shopgo-panos-q8-vorst"
+        ]
+      }
+    }
+  ],
+  "ambiguous": [
+    {
+      "a": {
+        "name": "Late Night Pizza Saint-Gilles",
+        "phone": null,
+        "cuisine": "Pizza",
+        "lat": 50.83328,
+        "lng": 4.339988,
+        "geo_source": "takeaway",
+        "is_chain": false,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Place des Héros 2",
+        "postal_code": "1060",
+        "slugs": [
+          "late-night-pizza-saint-gilles"
+        ]
+      },
+      "b": {
+        "name": "Late Night Kap Saint-Gilles",
+        "phone": "+32467863658",
+        "cuisine": null,
+        "lat": 50.8333,
+        "lng": 4.3399,
+        "geo_source": "uber_eats",
+        "is_chain": false,
+        "platforms": [
+          "uber_eats"
+        ],
+        "street_address": "Place des Héros",
+        "postal_code": "1060",
+        "slugs": [
+          "late-night-kap-saint-gilles"
+        ]
+      }
+    },
+    {
+      "a": {
+        "name": "Carrefour City Anspach",
+        "phone": "+32 2 218 06 40",
+        "cuisine": "Grocery",
+        "lat": 50.84989,
+        "lng": 4.350984,
+        "geo_source": "takeaway",
+        "is_chain": true,
+        "platforms": [
+          "takeaway"
+        ],
+        "street_address": "Anspachlaan 21",
+        "postal_code": "1000",
+        "slugs": [
+          "carrefour-city-anspach-bruxelles"
+        ]
+      },
+      "b": {
+        "name": "Carrefour City",
+        "phone": "+3222177665",
+        "cuisine": "Grocery",
+        "lat": 50.8503,
+        "lng": 4.3514,
+        "geo_source": "uber_eats",
+        "is_chain": true,
+        "platforms": [
+          "deliveroo",
+          "uber_eats"
+        ],
+        "street_address": "15 Boulevard Anspach",
+        "postal_code": "1000",
+        "slugs": [
+          "carrefour-city-anspach",
+          "Brussels"
+        ]
+      }
+    }
+  ],
+  "_meta": {
+    "source": "prod DB dump 2026-06-12",
+    "labels": "same = same physical venue (must score >= queue band); different = distinct venues (must never auto-merge); ambiguous = pending user confirmation, excluded from contract tests"
+  }
+}

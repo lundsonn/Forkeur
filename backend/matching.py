@@ -27,6 +27,31 @@ MENU_OVERLAP_CONFIRM = 0.15  # >= 15% shared items → strong confirm
 DISTINCTIVE_REMAINDER_MIN = 0.84  # remainder JW below this → distinct venues
 VENUE_GRADE_SOURCES = {"uber_eats", "direct", "deliveroo_venue", "takeaway"}
 
+# --- Additive evidence model --------------------------------------------------
+HARD_GEO_SEPARATE_M = 1000.0   # both venue-grade coords > 1 km apart → always SEPARATE
+AUTO_BAND  = 4.5    # total >= AUTO_BAND → AUTO_MERGE (+ hard proof + identity)
+QUEUE_BAND = 1.5    # total >= QUEUE_BAND → QUEUE
+IDENTITY_AUTO_NAME_SIM = 0.80  # AUTO needs name agreement OR slug — see ghost-kitchen guard
+COLOCATION_GATE_NAME_SIM = 0.80  # geo/address count only above this name floor (or phone/slug/addr)
+
+WEIGHTS: dict[str, float] = {
+    "name_very_high":  2.0,   # name_sim >= 0.97
+    "name_high":       1.0,   # name_sim >= 0.92
+    "website":         1.0,
+    "phone":           3.0,
+    "geo_very_close":  3.0,   # <= 25 m  (100 m deliveroo)
+    "geo_close":       2.0,   # <= 75 m  (200 m deliveroo)
+    "geo_near":        1.0,   # <= 200 m (500 m deliveroo)
+    "menu_overlap":    1.0,
+    "address_same":    2.5,
+    "address_diff":   -3.0,
+    "cuisine_match":   0.5,
+    "cuisine_conflict":-2.0,
+    "location_conflict":-3.0,
+    "distinctive_conflict": -2.0,
+    "slug_match":      2.0,
+}
+
 _ARTICLES = {"le", "la", "les", "l", "au", "aux", "un", "une", "de", "du",
              "des", "the", "a", "el", "il"}
 
@@ -122,6 +147,27 @@ def significant_first_token(name: str) -> str:
     return toks[0] if toks else ""
 
 
+def _distinctive_tokens(name: str) -> set[str]:
+    """Brand-distinctive tokens of a name: len >= 4, not generic, not a commune.
+
+    'Pizzeria Trattoria Ai 6 angoli' → {'angoli', 'trattoria'... } minus generics
+    → {'angoli'}. Used by the co-location gate: two co-located listings that
+    share a distinctive token ('angoli') are plausibly the same venue even when
+    full-string name similarity is dragged down by prefixes/suffixes, whereas
+    pure neighbours ('Taste of Himalayan' / 'Pasta Commedia') share none.
+    """
+    out: set[str] = set()
+    for tok in _strip_location_tokens(normalize_name(name)).split():
+        if len(tok) >= 4 and tok not in _GENERIC_TOKENS and tok not in _ARTICLES:
+            out.add(tok)
+    return out
+
+
+def shares_distinctive_token(a_name: str, b_name: str) -> bool:
+    """True if two names share at least one brand-distinctive token."""
+    return bool(_distinctive_tokens(a_name) & _distinctive_tokens(b_name))
+
+
 def _distinctive_remainder(name: str) -> tuple[str, bool]:
     """Strip leading generic/article tokens; return (remainder, had_generic_prefix).
 
@@ -209,13 +255,55 @@ def _normalize_address(addr: str | None) -> str:
     return re.sub(r"[^a-z0-9]", "", s)
 
 
+_HOUSE_NUM_LEAD_RE = re.compile(r"^\s*(\d+)\s*[a-zA-Z]?\b")
+_HOUSE_NUM_TRAIL_RE = re.compile(r"\b(\d+)\s*[a-zA-Z]?\s*$")
+
+
+def _house_number(addr: str | None) -> str | None:
+    """Extract the house number from a raw street address.
+
+    Brussels addresses put the number either before ("135 Chaussée de Haecht")
+    or after ("Chaussée de Haecht 135") the street. We try the trailing form
+    first (the common NL/FR layout), then the leading form. A trailing letter
+    box suffix ("46B") is dropped so "46B" and "46" compare equal.
+    """
+    if not addr:
+        return None
+    s = addr.strip()
+    m = _HOUSE_NUM_TRAIL_RE.search(s)
+    if m:
+        return m.group(1)
+    m = _HOUSE_NUM_LEAD_RE.search(s)
+    if m:
+        return m.group(1)
+    return None
+
+
 def _match_address(a: dict, b: dict) -> bool | None:
-    """Compare address signals. True=confirmed same, False=conflict, None=insufficient data."""
+    """Compare address signals. True=confirmed same, False=conflict, None=insufficient data.
+
+    A raw string mismatch is NOT enough to declare a conflict: Brussels streets
+    are bilingual (FR "Chaussée de Gand" == NL "Gentsesteenweg") and the house
+    number floats to either end of the string. So when the normalized blobs
+    differ we only return False (the hard -3.0 veto) if the *house numbers*
+    differ; equal-or-missing numbers fall through to None and let geo/name
+    decide, since the street tokens alone can't disprove the same address.
+    """
     pca = (a.get("postal_code") or "").strip()
     pcb = (b.get("postal_code") or "").strip()
     if not pca or not pcb:
         return None
     if pca != pcb:
+        # Bilingual boundary streets (e.g. NL "Gulden-Vlieslaan" == FR "Avenue
+        # de la Toison d'Or") straddle two communes, so platforms record
+        # different postal codes for one physical address. A matching house
+        # number signals a boundary artifact rather than two branches → drop to
+        # None (insufficient) instead of a hard veto; differing numbers stay a
+        # genuine conflict.
+        na = _house_number(a.get("street_address"))
+        nb = _house_number(b.get("street_address"))
+        if na is not None and nb is not None and na == nb:
+            return None
         return False
     sa = _normalize_address(a.get("street_address"))
     sb = _normalize_address(b.get("street_address"))
@@ -224,7 +312,11 @@ def _match_address(a: dict, b: dict) -> bool | None:
     if sa == sb:
         return True
     if len(sa) >= 4 and len(sb) >= 4:
-        return False
+        na = _house_number(a.get("street_address"))
+        nb = _house_number(b.get("street_address"))
+        if na is not None and nb is not None and na != nb:
+            return False  # same postal, different house number → distinct address
+        return None  # bilingual/word-order variant of the same street; geo decides
     return None
 
 
@@ -261,6 +353,8 @@ class MatchFeatures:
     slug_match: bool                # normalized URL slug shared across platforms
     distinctive_conflict: bool      # shared generic prefix but distinct remainder
     address_match: bool | None      # postal+street match; None if data missing
+    deliveroo_geo: bool = False     # True when one side uses Deliveroo zone centroid
+    name_variant: str = "plain"     # "plain" | "abbrev" | "location_suffix"
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -384,72 +478,136 @@ class Decision(str, Enum):
     SEPARATE = "separate"
 
 
-def decide(f: MatchFeatures) -> Decision:
-    """Map features to a decision band.
+def geo_band(geo_dist: float | None, deliveroo_geo: bool) -> str | None:
+    """Map distance to a named band.
 
-    Order matters: geo vetos first (strongest physical evidence), then semantic
-    vetos, then name threshold, then menu veto, then strong-signal auto-merge,
-    then chain guard, else queue.
+    Deliveroo coords are zone centroids, not venue coords → wider bands.
+    Returns None when geo_dist is None.
     """
-    # Geo vetos (strongest physical evidence)
-    if f.geo_dist is not None and f.geo_dist > GEO_VETO_M:
-        return Decision.SEPARATE
-    if f.soft_geo_dist is not None and f.soft_geo_dist > SOFT_GEO_VETO_M:
-        return Decision.SEPARATE
+    if geo_dist is None:
+        return None
+    if deliveroo_geo:
+        if geo_dist <= 100:   return "very_close"
+        if geo_dist <= 300:   return "close"
+        if geo_dist <= 700:   return "near"
+        if geo_dist <= 1500:  return "far"
+        return "very_far"
+    else:
+        if geo_dist <= 25:    return "very_close"
+        if geo_dist <= 75:    return "close"
+        if geo_dist <= 200:   return "near"
+        if geo_dist <= 500:   return "far"
+        return "very_far"
 
-    # Semantic vetos
-    if f.location_conflict:
-        return Decision.SEPARATE
-    if f.cuisine_conflict:
-        return Decision.SEPARATE
-    # Shared generic prefix but distinct remainder ("Pizza Vito" / "Pizza Mio").
-    # Skip the veto when a hard same-venue proof exists (slug/phone) so a real
-    # typo'd branch isn't split.
-    if f.distinctive_conflict and not (f.slug_match or f.phone_match):
-        return Decision.SEPARATE
 
-    # Name threshold
-    if f.name_sim < HIGH_NAME_SIM:
-        return Decision.SEPARATE
+def evidence_score(f: MatchFeatures) -> tuple[float, dict[str, float]]:
+    """Additive evidence model: sum weighted signals, return (total, breakdown)."""
+    W = WEIGHTS
+    breakdown: dict[str, float] = {}
 
-    # Address veto: same postal code but different streets → different venues
-    if f.address_match is False:
-        return Decision.SEPARATE
+    def add(key: str, val: float) -> None:
+        breakdown[key] = val
 
-    # Menu veto (after name threshold so low-sim pairs don't reach here)
-    if f.menu_overlap is not None and f.menu_overlap < MENU_OVERLAP_VETO:
-        return Decision.SEPARATE
+    # Name similarity
+    if f.name_sim >= 0.97:
+        add("name_very_high", W["name_very_high"])
+    elif f.name_sim >= HIGH_NAME_SIM:
+        add("name_high", W["name_high"])
 
-    # Near-identical names with no conflicting signals → same venue.
-    # At ≥ 0.97 the only realistic source of divergence is punctuation/spacing
-    # ("Mr Cod" / "Mr. Cod", "AlloCouscous" / "Allo Couscous"). All vetos have
-    # already fired by this point so there's nothing contradicting the merge.
-    if f.name_sim >= NAME_SIM_WEBSITE_AUTO and not f.is_chain_name:
-        return Decision.AUTO_MERGE
+    if f.website_match:
+        add("website", W["website"])
+    if f.phone_match:
+        add("phone", W["phone"])
+    if f.slug_match:
+        add("slug_match", W["slug_match"])
 
-    # Strong confirmation = same physical place. Phone and close geo prove it.
-    # A shared website does NOT by itself — Belgian chains run every branch off
-    # one corporate domain, so "Late Night Pizza Ixelles" and "...Saint-Gilles"
-    # share a domain yet are distinct venues. Website only auto-confirms when the
-    # names are near-identical (no distinguishing location suffix); otherwise the
-    # pair goes to human review.
-    strong_confirm = (
-        f.phone_match
-        or (f.geo_dist is not None and f.geo_dist <= GEO_CONFIRM_M)
-        or (f.website_match and f.name_sim >= NAME_SIM_WEBSITE_AUTO)
-        or (f.menu_overlap is not None and f.menu_overlap >= MENU_OVERLAP_CONFIRM)
-        or (f.slug_match and not f.is_chain_name)  # slug only confirms non-chains
+    # Co-location gate: physical proximity (geo) only counts FOR a merge when
+    # there is identity evidence. Brussels streets pack distinct restaurants
+    # metres apart (food courts, shared buildings) and JaroWinkler hands
+    # unrelated short names a coincidental 0.5–0.7, so a low name floor would
+    # flood the queue with neighbours. The gate opens on:
+    #   - a real name match (>= COLOCATION_GATE_NAME_SIM; genuine same-venue
+    #     pairs score >= 0.89 even after suffix-stripping), OR
+    #   - a shared phone or slug, OR
+    #   - an exact street+number address match.
+    # Phone/address openers are what keep ghost kitchens (shared phone+address,
+    # different name) in the QUEUE for review rather than silently dropped.
+    identity = (
+        f.name_sim >= COLOCATION_GATE_NAME_SIM
+        or f.phone_match
+        or f.slug_match
         or f.address_match is True
     )
 
-    # Chain guard: don't auto-merge or queue chain branches without evidence
-    if f.is_chain_name and not strong_confirm:
+    # Geo signal via geo_band — positive bands gated; negative bands are a
+    # hard veto handled in decide(), so they need no contribution here.
+    band = geo_band(f.geo_dist, f.deliveroo_geo)
+    if identity:
+        if band == "very_close":
+            add("geo_very_close", W["geo_very_close"])
+        elif band == "close":
+            add("geo_close", W["geo_close"])
+        elif band == "near":
+            add("geo_near", W["geo_near"])
+
+    # Menu overlap
+    if f.menu_overlap is not None and f.menu_overlap >= MENU_OVERLAP_CONFIRM:
+        add("menu_overlap", W["menu_overlap"])
+
+    # Address — positive match gated by identity (same co-location reasoning);
+    # a conflict is unconditional negative evidence.
+    if f.address_match is True and identity:
+        add("address_same", W["address_same"])
+    elif f.address_match is False:
+        add("address_diff", W["address_diff"])
+
+    # Cuisine
+    if f.cuisine_match:
+        add("cuisine_match", W["cuisine_match"])
+    if f.cuisine_conflict:
+        add("cuisine_conflict", W["cuisine_conflict"])
+
+    # Conflict signals
+    if f.location_conflict:
+        add("location_conflict", W["location_conflict"])
+    if f.distinctive_conflict:
+        add("distinctive_conflict", W["distinctive_conflict"])
+
+    total = sum(breakdown.values())
+    return total, breakdown
+
+
+def decide(f: MatchFeatures) -> Decision:
+    """Map evidence total to a decision band.
+
+    One hard rule first: both-venue-grade precise (non-deliveroo) coords more
+    than 1 km apart with no phone match can never merge — chain branches share
+    name/menu/website and additive evidence must not pile past the bands.
+
+    AUTO_MERGE additionally requires BOTH:
+      1. a hard physical proof — phone_match, slug_match, address_match is
+         True, or geo band == "very_close"; AND
+      2. identity agreement — name_sim >= IDENTITY_AUTO_NAME_SIM OR slug_match.
+
+    The identity gate guards against Brussels cloud/ghost kitchens: several
+    distinct virtual brands ("Wok & Go" + "China Wok") run from ONE kitchen,
+    sharing a single phone and address. Physical proof alone would silently
+    merge them; requiring name/slug agreement sends co-located different-name
+    pairs to QUEUE for human review instead. Weak positives can pile past
+    AUTO_BAND, so without proof OR without identity the pair queues.
+    """
+    if (f.geo_dist is not None and not f.deliveroo_geo
+            and f.geo_dist > HARD_GEO_SEPARATE_M and not f.phone_match):
         return Decision.SEPARATE
-
-    if strong_confirm:
-        return Decision.AUTO_MERGE
-
-    return Decision.QUEUE
+    total, _ = evidence_score(f)
+    if total >= AUTO_BAND:
+        proof = (f.phone_match or f.slug_match or f.address_match is True
+                 or geo_band(f.geo_dist, f.deliveroo_geo) == "very_close")
+        identity = f.name_sim >= IDENTITY_AUTO_NAME_SIM or f.slug_match
+        return Decision.AUTO_MERGE if (proof and identity) else Decision.QUEUE
+    if total >= QUEUE_BAND:
+        return Decision.QUEUE
+    return Decision.SEPARATE
 
 
 def block_candidates(rows: list[dict]) -> list[tuple[dict, dict]]:
@@ -476,6 +634,31 @@ def block_candidates(rows: list[dict]) -> list[tuple[dict, dict]]:
         if dom:
             by_domain.setdefault(dom, []).append(r)
 
+    # Geo grid blocking: ~150m cells. Every restaurant lands in its cell; pairs
+    # are drawn within a cell and its 8 neighbours, then distance-filtered. All
+    # rows now carry venue-grade coords, so this catches duplicates whose names
+    # share no token (e.g. "Pasta Express Etterbeek" / "PASTA EXPRESS").
+    GEO_BLOCK_M = 150.0
+    cell_deg = 0.0015  # ~167m latitude per cell at Brussels' 50.8°N
+    by_cell: dict[tuple[int, int], list[dict]] = {}
+    for r in rows:
+        if r.get("lat") is None or r.get("lng") is None:
+            continue
+        by_cell.setdefault((int(r["lat"] / cell_deg), int(r["lng"] / cell_deg)), []).append(r)
+
+    geo_pairs: list[tuple[dict, dict]] = []
+    for (cx, cy), bucket in by_cell.items():
+        neighbourhood: list[dict] = []
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                neighbourhood.extend(by_cell.get((cx + dx, cy + dy), []))
+        for a in bucket:
+            for b in neighbourhood:
+                if str(a["id"]) >= str(b["id"]):
+                    continue
+                if haversine_m(a["lat"], a["lng"], b["lat"], b["lng"]) <= GEO_BLOCK_M:
+                    geo_pairs.append((a, b))
+
     seen: set[tuple] = set()
     pairs: list[tuple[dict, dict]] = []
     for bucket in (*by_token.values(), *by_key_prefix.values(), *by_domain.values()):
@@ -485,4 +668,10 @@ def block_candidates(rows: list[dict]) -> list[tuple[dict, dict]]:
                 continue
             seen.add(key)
             pairs.append((a, b))
+    for a, b in geo_pairs:
+        key = tuple(sorted((str(a["id"]), str(b["id"]))))
+        if key in seen:
+            continue
+        seen.add(key)
+        pairs.append((a, b))
     return pairs

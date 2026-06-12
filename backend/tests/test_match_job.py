@@ -12,8 +12,10 @@ def _r(name, **kw):
 
 def test_match_job_dry_run_writes_nothing():
     from scrapers import match
-    rows = [_r("Pizza Minute", id="1", website="https://pz.be"),
-            _r("PizzaMinute", id="2", website="http://pz.be")]
+    # Shared phone is hard same-venue proof, so this near-identical-name pair
+    # legitimately auto-merges under the proof-gate (website+name alone queue).
+    rows = [_r("Pizza Minute", id="1", website="https://pz.be", phone="02 555 11 22"),
+            _r("PizzaMinute", id="2", website="http://pz.be", phone="+32 2 555 11 22")]
     with patch("db.load_restaurants_for_match", return_value=rows), \
          patch("db.load_menu_items_for_match", return_value={}), \
          patch("db.load_slugs_for_match", return_value={}), \
@@ -30,8 +32,9 @@ def test_match_job_dry_run_writes_nothing():
 
 def test_match_job_executes_merges_when_not_dry_run():
     from scrapers import match
-    rows = [_r("Pizza Minute", id="1", website="https://pz.be"),
-            _r("PizzaMinute", id="2", website="http://pz.be")]
+    # Shared phone = hard proof → auto-merge (see dry-run test note).
+    rows = [_r("Pizza Minute", id="1", website="https://pz.be", phone="02 555 11 22"),
+            _r("PizzaMinute", id="2", website="http://pz.be", phone="+32 2 555 11 22")]
     with patch("db.load_restaurants_for_match", return_value=rows), \
          patch("db.load_menu_items_for_match", return_value={}), \
          patch("db.load_slugs_for_match", return_value={}), \
@@ -47,8 +50,9 @@ def test_match_job_executes_merges_when_not_dry_run():
 
 def test_match_job_enqueues_names_in_features():
     from scrapers import match
-    rows = [_r("Pizza Minute", id="1", website="https://pz.be"),
-            _r("PizzaMinute", id="2", website="http://pz.be")]
+    # Shared phone = hard proof → auto-merge (see dry-run test note).
+    rows = [_r("Pizza Minute", id="1", website="https://pz.be", phone="02 555 11 22"),
+            _r("PizzaMinute", id="2", website="http://pz.be", phone="+32 2 555 11 22")]
     with patch("db.load_restaurants_for_match", return_value=rows), \
          patch("db.load_menu_items_for_match", return_value={}), \
          patch("db.load_slugs_for_match", return_value={}), \

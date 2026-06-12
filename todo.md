@@ -21,6 +21,10 @@ Context: batch wall = slowest scraper. A (parallelize ube/del menu loop) = big w
 - [x] **[matching.py] Add postal code / neighborhood blocking** — DONE. `_location_tokens()` + `location_conflict` in `decide()`.
 - [ ] **[matching.py] Improve phone coverage** — phone sparsely populated; phone match rarely fires. Investigate enriching `restaurants.phone` from scraper data (UberEats/Deliveroo API responses often include contact info).
 
+### Menu matching improvements
+
+- [ ] **[all scrapers + models.py] Scrape allergens** — UberEats API already returns per-item allergens in the feed response (field on menu item objects). Add to all scrapers (ubereats/deliveroo/takeaway/direct_menu), persist to `menu_items.allergens` (text[] or jsonb). Use as a matching guard in the fuzzy merge pass in `queries.ts`: two items with disjoint allergen sets are unlikely the same product — veto merge even if JW ≥ 0.88. Strong cross-platform corroboration signal.
+
 ---
 
 ## Profiling Fixes (50 findings — 2026-06-05)

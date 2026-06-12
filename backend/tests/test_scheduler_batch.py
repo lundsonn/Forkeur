@@ -84,3 +84,33 @@ async def test_match_runs_after_everything():
 
     assert events[-1] == "match"
     assert "end:dom_menu" in events and "end:direct_menu" in events
+
+
+@pytest.mark.asyncio
+async def test_run_scraper_finalizes_db_row_on_cancel():
+    """A cancelled run must mark its DB row failed, not orphan it as 'running'.
+
+    Regression: stopping (or batch-cancelling) a hung scraper raises
+    CancelledError, a BaseException that bypasses `except Exception`; without an
+    explicit handler the run row never gets finish_run and stays 'running' forever.
+    """
+    from routers.scrapers import _running, _tasks
+    _running.discard("dom_menu")
+    _tasks.pop("dom_menu", None)
+
+    async def hang(*args, **kwargs):
+        raise asyncio.CancelledError()
+
+    finished: dict = {}
+
+    with patch.object(scheduler, "db") as mock_db, \
+         patch("scrapers.dom_menu.run", hang):
+        mock_db.create_run.return_value = "run-cancel"
+        mock_db.finish_run.side_effect = lambda rid, status, **kw: finished.update(
+            id=rid, status=status, kw=kw
+        )
+        with pytest.raises(asyncio.CancelledError):
+            await scheduler._run_scraper("dom_menu")
+
+    assert finished == {"id": "run-cancel", "status": "failed", "kw": {"error_msg": "cancelled (stop requested or hung)"}}
+    assert "dom_menu" not in _running  # finally block still cleared it

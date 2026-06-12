@@ -9,7 +9,7 @@ import alerting
 import db
 import ws as ws_mod
 from scrapers import ubereats, deliveroo, takeaway, direct, direct_menu, match
-from scrapers import dom_menu
+from scrapers import dom_menu, enrich_contacts
 from scrapers.base import CloudflareBlockedError
 from routers.auth_router import require_auth
 
@@ -24,6 +24,7 @@ _TIMEOUTS: dict[str, int] = {
     "direct_menu": 15 * 60,
     "dom_menu":    60 * 60,
     "match":       15 * 60,
+    "enrich":      60 * 60,
 }
 
 
@@ -40,6 +41,7 @@ SCRAPERS = {
     "direct_menu": _direct_menu_adapter,
     "dom_menu":    dom_menu.run,
     "match":       match.run,
+    "enrich":      enrich_contacts.run,
 }
 
 # Track currently running platforms (also read by scheduler to skip duplicates).

@@ -3,11 +3,15 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+# conftest.py sets JWT_SECRET/ADMIN_PASSWORD for the whole suite before any app
+# module is imported, so these setdefault calls are no-ops; read the canonical
+# value rather than asserting against a literal that conftest overrides.
 os.environ.setdefault("JWT_SECRET", "test-secret-auth-router")
-os.environ.setdefault("ADMIN_PASSWORD", "correct-password")
 
 from routers.auth_router import router
 import auth
+
+_ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
 
 
 def _make_app():
@@ -20,7 +24,7 @@ client = TestClient(_make_app())
 
 
 def test_login_correct_password_returns_token():
-    res = client.post("/api/auth/login", json={"password": "correct-password"})
+    res = client.post("/api/auth/login", json={"password": _ADMIN_PASSWORD})
     assert res.status_code == 200
     data = res.json()
     assert "token" in data

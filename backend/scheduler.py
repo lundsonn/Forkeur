@@ -50,6 +50,13 @@ async def _run_scraper(platform: str) -> None:
             try:
                 result = await direct_menu.run()
                 db.finish_run(run_id, "success", records_saved=result.get("total_scraped", 0))
+            except asyncio.CancelledError:
+                # Stop requested (or batch cancelled a hung run). CancelledError is a
+                # BaseException, so `except Exception` below misses it — finalize the
+                # run row here or it stays "running" forever, then re-raise so asyncio
+                # teardown proceeds and `finally` clears _running/_tasks.
+                db.finish_run(run_id, "failed", error_msg="cancelled (stop requested or hung)")
+                raise
             except Exception as e:
                 db.finish_run(run_id, "failed", error_msg=str(e))
                 alerting.send_failure_alert(platform, str(e), run_id)
@@ -73,6 +80,11 @@ async def _run_scraper(platform: str) -> None:
         try:
             result = await scraper_fn(ScraperConfig(), _noop, **kwargs)
             db.finish_run(run_id, "success", records_saved=result.records_saved)
+        except asyncio.CancelledError:
+            # See direct_menu branch: CancelledError bypasses `except Exception`, so
+            # finalize the run here (else it orphans as "running") and re-raise.
+            db.finish_run(run_id, "failed", error_msg="cancelled (stop requested or hung)")
+            raise
         except CloudflareBlockedError as e:
             db.finish_run(run_id, "blocked", error_msg=str(e))
             alerting.send_failure_alert(platform, str(e), run_id)

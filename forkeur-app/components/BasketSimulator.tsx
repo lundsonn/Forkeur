@@ -182,10 +182,16 @@ type Props = {
   menuItems: MenuItemWithPrices[]
   listings: PlatformListing[]
   phone: string | null
+  // Optional trust/channel signals from the detail payload. Currently wired through for
+  // future use; `phone` is not rendered inside this component today (the detail page owns
+  // the visible phone surface), so these are types-only pass-through for now.
+  // TODO: render phone + confidence caveat here if a call-to-order surfaces inside the basket.
+  phoneConfidence?: string | null
+  orderChannel?: string | null
   matchRate?: number
 }
 
-export default function BasketSimulator({ menuItems, listings, phone, matchRate = 1 }: Props) {
+export default function BasketSimulator({ menuItems, listings, phone, phoneConfidence, orderChannel, matchRate = 1 }: Props) {
   const [basket, setBasket] = useState<BasketItem[]>([])
   const [sheetOpen, setSheetOpen] = useState(false)
   const [selectedItem, setSelectedItem] = useState<MenuItemWithPrices | null>(null)

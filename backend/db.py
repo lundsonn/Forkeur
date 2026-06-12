@@ -786,6 +786,7 @@ def get_public_restaurant_detail(restaurant_id: str) -> dict | None:
     return pgpool.fetchone(
         """
         SELECT r.id, r.name, r.neighborhood, r.cuisine, r.phone,
+               r.phone_confidence, r.order_channel,
                r.order_url, r.image_url,
                COALESCE(
                  json_agg(

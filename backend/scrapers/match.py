@@ -79,6 +79,7 @@ def run_sync(*, dry_run: bool, log_fn) -> dict:
 
     counts = {"auto_merge": 0, "queue": 0, "separate": 0}
     proposals: list[dict] = []
+    near_misses: list[dict] = []
     touched_ids: set[str] = set()
 
     for a, b in pairs:
@@ -87,8 +88,15 @@ def run_sync(*, dry_run: bool, log_fn) -> dict:
             continue
         features = matching.score_pair(a, b, menus=menus_raw, chain_names=chain_names, slugs=slugs)
         decision = matching.decide(features)
+        total, contributions = matching.evidence_score(features)
         counts[decision.value] += 1
         if decision == matching.Decision.SEPARATE:
+            if 0.5 <= total < matching.QUEUE_BAND and len(near_misses) < 50:
+                near_misses.append({
+                    "survivor_name": a["name"], "loser_name": b["name"],
+                    "score": round(total, 2),
+                    "contributions": {k: round(v, 2) for k, v in contributions.items()},
+                })
             continue
 
         survivor, loser = _survivor_loser(a, b)
@@ -96,6 +104,8 @@ def run_sync(*, dry_run: bool, log_fn) -> dict:
             "survivor_id": survivor["id"], "survivor_name": survivor["name"],
             "loser_id": loser["id"], "loser_name": loser["name"],
             "decision": decision.value, "features": features.to_dict(),
+            "score": round(total, 2),
+            "contributions": {k: round(v, 2) for k, v in contributions.items()},
         })
 
         if dry_run:
@@ -113,7 +123,7 @@ def run_sync(*, dry_run: bool, log_fn) -> dict:
                 # find/update the row.
                 db.enqueue_decision(
                     survivor_id=survivor["id"], loser_id=loser["id"],
-                    score=float(features.name_sim), features=feat_payload,
+                    score=float(total), features=feat_payload,
                     status="auto_merged",
                 )
                 db.merge_restaurants(survivor["id"], loser["id"])
@@ -122,7 +132,7 @@ def run_sync(*, dry_run: bool, log_fn) -> dict:
             else:  # QUEUE
                 db.enqueue_decision(
                     survivor_id=survivor["id"], loser_id=loser["id"],
-                    score=float(features.name_sim), features=feat_payload,
+                    score=float(total), features=feat_payload,
                     status="queued",
                 )
         except Exception as e:
@@ -154,6 +164,7 @@ def run_sync(*, dry_run: bool, log_fn) -> dict:
             continue  # still not both venue-grade after re-check
 
         decision = matching.decide(features)
+        total2, _ = matching.evidence_score(features)
         feat_payload = {**features.to_dict(), "survivor_name": ra["name"], "loser_name": rb["name"]}
 
         if dry_run:
@@ -165,7 +176,7 @@ def run_sync(*, dry_run: bool, log_fn) -> dict:
             if decision == matching.Decision.AUTO_MERGE and sid not in touched_ids and lid not in touched_ids:
                 db.enqueue_decision(  # record before merge — see main loop comment
                     survivor_id=sid, loser_id=lid,
-                    score=float(features.name_sim), features=feat_payload, status="auto_merged",
+                    score=float(total2), features=feat_payload, status="auto_merged",
                 )
                 db.merge_restaurants(sid, lid)
                 touched_ids.add(sid)
@@ -176,7 +187,7 @@ def run_sync(*, dry_run: bool, log_fn) -> dict:
             else:
                 db.enqueue_decision(
                     survivor_id=sid, loser_id=lid,
-                    score=float(features.name_sim), features=feat_payload, status="queued",
+                    score=float(total2), features=feat_payload, status="queued",
                 )
                 rescored["refreshed"] += 1
         except Exception as e:
@@ -211,12 +222,16 @@ def run_sync(*, dry_run: bool, log_fn) -> dict:
     log_fn(f"Prune: removed {len(to_prune)} stale/orphan decisions from queue")
 
     if dry_run:
+        proposals.sort(key=lambda p: p["score"], reverse=True)
         out_dir = os.path.join(os.path.dirname(__file__), "..", "match_output")
         os.makedirs(out_dir, exist_ok=True)
         stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         path = os.path.join(out_dir, f"dry-run-{stamp}.json")
         with open(path, "w") as f:
-            json.dump({"counts": counts, "proposals": proposals}, f, indent=2, ensure_ascii=False)
+            json.dump(
+                {"counts": counts, "proposals": proposals, "near_misses": near_misses},
+                f, indent=2, ensure_ascii=False,
+            )
         log_fn(f"DRY RUN — wrote {len(proposals)} proposals to {path}")
 
     return {**counts, "proposals": len(proposals)}

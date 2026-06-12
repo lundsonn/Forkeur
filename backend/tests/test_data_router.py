@@ -40,58 +40,58 @@ _SAMPLE_MENU_ITEMS = [
 ]
 
 
-def test_list_restaurants_returns_200():
+def test_list_restaurants_returns_200(auth_headers):
     with patch("routers.data.db") as mock_db:
         mock_db.get_restaurants.return_value = _SAMPLE_RESTAURANTS
         client = TestClient(_make_app())
-        res = client.get("/api/data/restaurants")
+        res = client.get("/api/data/restaurants", headers=auth_headers)
     assert res.status_code == 200
 
 
-def test_list_restaurants_default_limit_100():
+def test_list_restaurants_default_limit_100(auth_headers):
     with patch("routers.data.db") as mock_db:
         mock_db.get_restaurants.return_value = []
         client = TestClient(_make_app())
-        client.get("/api/data/restaurants")
+        client.get("/api/data/restaurants", headers=auth_headers)
         mock_db.get_restaurants.assert_called_once_with(limit=100, offset=0, search=None)
 
 
-def test_list_restaurants_accepts_limit_and_offset():
+def test_list_restaurants_accepts_limit_and_offset(auth_headers):
     with patch("routers.data.db") as mock_db:
         mock_db.get_restaurants.return_value = []
         client = TestClient(_make_app())
-        client.get("/api/data/restaurants?limit=10&offset=20")
+        client.get("/api/data/restaurants?limit=10&offset=20", headers=auth_headers)
         mock_db.get_restaurants.assert_called_once_with(limit=10, offset=20, search=None)
 
 
-def test_list_restaurants_accepts_search():
+def test_list_restaurants_accepts_search(auth_headers):
     with patch("routers.data.db") as mock_db:
         mock_db.get_restaurants.return_value = []
         client = TestClient(_make_app())
-        client.get("/api/data/restaurants?search=pizza")
+        client.get("/api/data/restaurants?search=pizza", headers=auth_headers)
         mock_db.get_restaurants.assert_called_once_with(limit=100, offset=0, search="pizza")
 
 
-def test_list_menu_items_returns_200():
+def test_list_menu_items_returns_200(auth_headers):
     with patch("routers.data.db") as mock_db:
         mock_db.get_menu_items.return_value = _SAMPLE_MENU_ITEMS
         client = TestClient(_make_app())
-        res = client.get("/api/data/menu-items/listing-1")
+        res = client.get("/api/data/menu-items/listing-1", headers=auth_headers)
     assert res.status_code == 200
 
 
-def test_list_menu_items_calls_db_with_listing_id():
+def test_list_menu_items_calls_db_with_listing_id(auth_headers):
     with patch("routers.data.db") as mock_db:
         mock_db.get_menu_items.return_value = []
         client = TestClient(_make_app())
-        client.get("/api/data/menu-items/listing-abc")
+        client.get("/api/data/menu-items/listing-abc", headers=auth_headers)
         mock_db.get_menu_items.assert_called_once_with("listing-abc")
 
 
-def test_list_menu_items_empty_returns_empty_list():
+def test_list_menu_items_empty_returns_empty_list(auth_headers):
     with patch("routers.data.db") as mock_db:
         mock_db.get_menu_items.return_value = []
         client = TestClient(_make_app())
-        res = client.get("/api/data/menu-items/unknown")
+        res = client.get("/api/data/menu-items/unknown", headers=auth_headers)
     assert res.status_code == 200
     assert res.json() == []

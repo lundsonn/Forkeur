@@ -45,19 +45,32 @@ def test_parse_section_hours_wrap_around():
     assert "sun" in result
 
 
-def test_parse_ue_menu_from_getsectionfeedv1():
-    """Parse menu items from getSectionFeedV1 JSON response"""
-    json_resp = {
-        "catalogSectionsMap": {
-            "section_1": {
-                "catalogItems": [
-                    {"title": "Burger", "price": 1199, "priceType": "FIXED"},
-                    {"title": "Fries", "price": 599, "priceType": "FIXED"},
-                ]
+def _ue_store(sections: list[dict], store_uuid: str = "store_1") -> dict:
+    """Build a getStoreV1-shaped response: data.catalogSectionsMap = {uuid: [section,...]}."""
+    return {"data": {"catalogSectionsMap": {store_uuid: sections}}}
+
+
+def _ue_section(catalog_name: str, items: list[dict]) -> dict:
+    """Build one catalog section with a standardItemsPayload."""
+    return {
+        "payload": {
+            "standardItemsPayload": {
+                "title": {"text": catalog_name},
+                "catalogItems": items,
             }
         }
     }
-    items = ubereats._parse_ue_menu(json_resp, catalog_name="Main")
+
+
+def test_parse_ue_menu_from_getstorev1():
+    """Parse menu items from a getStoreV1 JSON response (prices in int cents)."""
+    store_data = _ue_store([
+        _ue_section("Main", [
+            {"title": "Burger", "price": 1199},
+            {"title": "Fries", "price": 599},
+        ]),
+    ])
+    items = ubereats._parse_menu_items(store_data)
     assert len(items) == 2
     assert items[0]["title"] == "Burger"
     assert items[0]["price"] == 11.99  # 1199 cents
@@ -65,33 +78,19 @@ def test_parse_ue_menu_from_getsectionfeedv1():
 
 def test_parse_ue_menu_empty_catalog():
     """Handle empty menu sections"""
-    json_resp = {"catalogSectionsMap": {}}
-    items = ubereats._parse_ue_menu(json_resp, catalog_name="Main")
-    assert items == []
+    assert ubereats._parse_menu_items({"data": {"catalogSectionsMap": {}}}) == []
+    assert ubereats._parse_menu_items({}) == []
 
 
 def test_parse_ue_menu_nested_structure():
     """Parse items from nested catalogSectionsMap with multiple sections"""
-    json_resp = {
-        "data": {
-            "catalogSectionsMap": {
-                "uuid_1": [
-                    {
-                        "payload": {
-                            "standardItemsPayload": {
-                                "title": {"text": "Appetizers"},
-                                "catalogItems": [
-                                    {"title": "Wings", "price": 899},
-                                    {"title": "Nachos", "price": 799},
-                                ]
-                            }
-                        }
-                    }
-                ]
-            }
-        }
-    }
-    items = ubereats._parse_ue_menu(json_resp, catalog_name="Starters")
+    store_data = _ue_store([
+        _ue_section("Appetizers", [
+            {"title": "Wings", "price": 899},
+            {"title": "Nachos", "price": 799},
+        ]),
+    ])
+    items = ubereats._parse_menu_items(store_data)
     assert len(items) == 2
     assert items[0]["title"] == "Wings"
     assert items[1]["price"] == 7.99
@@ -99,32 +98,24 @@ def test_parse_ue_menu_nested_structure():
 
 def test_parse_ue_menu_with_none_prices():
     """Handle items with missing prices"""
-    json_resp = {
-        "catalogSectionsMap": {
-            "section_1": {
-                "catalogItems": [
-                    {"title": "Item A", "price": 1000},
-                    {"title": "Item B"},  # no price
-                ]
-            }
-        }
-    }
-    items = ubereats._parse_ue_menu(json_resp, catalog_name="Main")
+    store_data = _ue_store([
+        _ue_section("Main", [
+            {"title": "Item A", "price": 1000},
+            {"title": "Item B"},  # no price
+        ]),
+    ])
+    items = ubereats._parse_menu_items(store_data)
     assert len(items) == 2
     assert items[0]["price"] == 10.0
     assert items[1]["price"] is None
 
 
 def test_parse_ue_menu_preserves_catalog_name():
-    """Catalog name is included in each item"""
-    json_resp = {
-        "catalogSectionsMap": {
-            "section_1": {
-                "catalogItems": [
-                    {"title": "Burger", "price": 1199},
-                ]
-            }
-        }
-    }
-    items = ubereats._parse_ue_menu(json_resp, catalog_name="Main Menu")
+    """Catalog name (from the section title) is included in each item"""
+    store_data = _ue_store([
+        _ue_section("Main Menu", [
+            {"title": "Burger", "price": 1199},
+        ]),
+    ])
+    items = ubereats._parse_menu_items(store_data)
     assert items[0]["catalog_name"] == "Main Menu"

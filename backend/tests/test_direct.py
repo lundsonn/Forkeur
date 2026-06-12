@@ -8,6 +8,8 @@ and are covered at the integration level only.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -230,10 +232,13 @@ async def test_check_website_no_signals_returns_empty():
 
 def _make_db_client(restaurants=None, already_done_ids=None):
     client = MagicMock()
-    # already_done: .select('restaurant_id').eq('platform', 'direct').execute()
+    # already_done: .select('restaurant_id, id, scraped_at').eq('platform', 'direct').execute()
+    # scraped_at is a fresh (recent) timestamp so these listings count as "done", not stale.
+    fresh = datetime.now(timezone.utc).isoformat()
     client.table.return_value.select.return_value \
         .eq.return_value.execute.return_value.data = [
-        {"restaurant_id": rid} for rid in (already_done_ids or [])
+        {"restaurant_id": rid, "id": f"listing_{rid}", "scraped_at": fresh}
+        for rid in (already_done_ids or [])
     ]
     # all restaurants: .select(...).not_.is_(...).neq(...).execute()
     client.table.return_value.select.return_value \

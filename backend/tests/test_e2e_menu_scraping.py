@@ -6,7 +6,19 @@ from routers import scrapers
 from models import ScraperConfig, ScraperResult, RunTriggerIn
 
 
-def test_menu_scraping_e2e_flow():
+@pytest.fixture(autouse=True)
+def _reset_running_state():
+    """trigger_run tracks in-flight platforms in the module-level scrapers._running
+    set, cleared by _run()'s finally block. Several tests here patch
+    routers.scrapers.asyncio so that finally never runs, leaking platform names
+    across tests and causing spurious 409 "already running". Reset before and
+    after each test so the global state can't bleed between cases."""
+    scrapers._running.clear()
+    yield
+    scrapers._running.clear()
+
+
+def test_menu_scraping_e2e_flow(auth_headers):
     """Test end-to-end: router → scraper config → menu scraping → DB insert"""
     # Create minimal app without full lifespan
     app = FastAPI()
@@ -36,7 +48,8 @@ def test_menu_scraping_e2e_flow():
         # Trigger run with scrape_menus=True, max_menus=1
         response = client.post(
             "/api/scrapers/ubereats/run",
-            json={"scrape_menus": True, "max_menus": 1}
+            json={"scrape_menus": True, "max_menus": 1},
+            headers=auth_headers,
         )
 
         # Response should be 200 (202 is async task started)
@@ -46,7 +59,7 @@ def test_menu_scraping_e2e_flow():
         assert data["run_id"] == "run-123"
 
 
-def test_max_menus_limit_respected():
+def test_max_menus_limit_respected(auth_headers):
     """Test that config.max_menus is passed correctly from request body"""
     app = FastAPI()
     app.include_router(scrapers.router, prefix="/api")
@@ -71,7 +84,8 @@ def test_max_menus_limit_respected():
         # Trigger with max_menus=5
         response = client.post(
             "/api/scrapers/deliveroo/run",
-            json={"scrape_menus": True, "max_menus": 5}
+            json={"scrape_menus": True, "max_menus": 5},
+            headers=auth_headers,
         )
 
         assert response.status_code == 200
@@ -105,7 +119,7 @@ def test_scraper_result_with_menu_items():
     assert result2.menu_items_saved == 25
 
 
-def test_trigger_run_without_body_defaults():
+def test_trigger_run_without_body_defaults(auth_headers):
     """Test POST /api/scrapers/{platform}/run without body uses RunTriggerIn defaults"""
     app = FastAPI()
     app.include_router(scrapers.router, prefix="/api")
@@ -125,7 +139,7 @@ def test_trigger_run_without_body_defaults():
         mock_scrapers.__getitem__.return_value = capture_config
 
         # Trigger without body — should use RunTriggerIn defaults
-        response = client.post("/api/scrapers/takeaway/run")
+        response = client.post("/api/scrapers/takeaway/run", headers=auth_headers)
 
         assert response.status_code == 200
         data = response.json()
@@ -134,7 +148,7 @@ def test_trigger_run_without_body_defaults():
         # Verify the API accepts requests without body and applies defaults
 
 
-def test_all_scrapers_accept_config():
+def test_all_scrapers_accept_config(auth_headers):
     """Test that all three scrapers (ubereats, deliveroo, takeaway) are registered"""
     app = FastAPI()
     app.include_router(scrapers.router, prefix="/api")
@@ -159,7 +173,8 @@ def test_all_scrapers_accept_config():
 
             response = client.post(
                 f"/api/scrapers/{platform}/run",
-                json={"scrape_menus": True, "max_menus": 2}
+                json={"scrape_menus": True, "max_menus": 2},
+                headers=auth_headers,
             )
 
             assert response.status_code == 200
@@ -181,13 +196,17 @@ def test_scraper_result_restaurants_list():
     assert result.restaurants[0]["name"] == "Restaurant 1"
 
 
-def test_trigger_run_rejects_unknown_platform():
-    """Test POST /api/scrapers/{platform}/run rejects unknown platforms"""
+def test_trigger_run_rejects_unknown_platform(auth_headers):
+    """Test POST /api/scrapers/{platform}/run rejects unknown platforms.
+
+    Auth runs as a router-level dependency before the handler, so a valid token
+    is required to reach the unknown-platform branch and get 404 rather than 401.
+    """
     app = FastAPI()
     app.include_router(scrapers.router, prefix="/api")
     client = TestClient(app)
 
-    response = client.post("/api/scrapers/unknown_platform/run")
+    response = client.post("/api/scrapers/unknown_platform/run", headers=auth_headers)
     assert response.status_code == 404
 
 
