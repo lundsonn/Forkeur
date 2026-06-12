@@ -228,9 +228,11 @@ def run_sync(*, dry_run: bool, log_fn) -> dict:
         stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         path = os.path.join(out_dir, f"dry-run-{stamp}.json")
         with open(path, "w") as f:
+            # default=str: psycopg3 returns UUID/datetime objects (Supabase
+            # returned strings); coerce any non-JSON-native value to its string form.
             json.dump(
                 {"counts": counts, "proposals": proposals, "near_misses": near_misses},
-                f, indent=2, ensure_ascii=False,
+                f, indent=2, ensure_ascii=False, default=str,
             )
         log_fn(f"DRY RUN — wrote {len(proposals)} proposals to {path}")
 

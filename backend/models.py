@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
+from uuid import UUID
 from pydantic import BaseModel
 from constants import DEFAULT_ADDRESS
 
@@ -40,7 +41,7 @@ class RunTriggerIn(BaseModel):
 # ── API response models ────────────────────────────────────────────────────────
 
 class ScraperRunOut(BaseModel):
-    id: str
+    id: UUID
     platform: str
     status: str
     started_at: datetime
@@ -66,7 +67,7 @@ class ScheduleConfigOut(ScheduleConfigIn):
 
 
 class RestaurantOut(BaseModel):
-    id: str
+    id: UUID
     name: str
     slug: str
     cuisine: str | None = None
@@ -75,8 +76,8 @@ class RestaurantOut(BaseModel):
 
 
 class MenuItemOut(BaseModel):
-    id: str
-    listing_id: str
+    id: UUID
+    listing_id: UUID
     title: str
     price: float | None = None
     catalog_name: str | None = None

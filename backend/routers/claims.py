@@ -7,6 +7,7 @@ import logging
 import os
 import time
 from collections import deque
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -78,14 +79,14 @@ class ClaimIn(BaseModel):
 
 
 class ClaimOut(BaseModel):
-    id: str
-    restaurant_id: str | None = None
+    id: UUID
+    restaurant_id: UUID | None = None
     owner_email: str
     direct_order_url: str | None = None
     inquiry_type: str = "add_url"
     restaurant_name_free: str | None = None
     verified: bool
-    claimed_at: str | None = None
+    claimed_at: datetime | None = None
     restaurants: dict | None = None
 
 
