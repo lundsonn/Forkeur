@@ -652,7 +652,11 @@ def block_candidates(rows: list[dict]) -> list[tuple[dict, dict]]:
     for r in rows:
         if r.get("lat") is None or r.get("lng") is None:
             continue
-        by_cell.setdefault((int(r["lat"] / cell_deg), int(r["lng"] / cell_deg)), []).append(r)
+        # psycopg3 returns NUMERIC lat/lng as decimal.Decimal; coerce to float
+        # before arithmetic (Decimal / float raises TypeError).
+        by_cell.setdefault(
+            (int(float(r["lat"]) / cell_deg), int(float(r["lng"]) / cell_deg)), []
+        ).append(r)
 
     geo_pairs: list[tuple[dict, dict]] = []
     for (cx, cy), bucket in by_cell.items():
@@ -664,7 +668,8 @@ def block_candidates(rows: list[dict]) -> list[tuple[dict, dict]]:
             for b in neighbourhood:
                 if str(a["id"]) >= str(b["id"]):
                     continue
-                if haversine_m(a["lat"], a["lng"], b["lat"], b["lng"]) <= GEO_BLOCK_M:
+                if haversine_m(float(a["lat"]), float(a["lng"]),
+                               float(b["lat"]), float(b["lng"])) <= GEO_BLOCK_M:
                     geo_pairs.append((a, b))
 
     seen: set[tuple] = set()

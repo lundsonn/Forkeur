@@ -1026,3 +1026,13 @@ def test_colocation_gate_opens_on_shared_token():
     f = _feat(name_sim=0.70, geo_dist=9.0, shares_token=True)
     _, contrib = matching.evidence_score(f)
     assert "geo_very_close" in contrib
+
+
+def test_block_candidates_handles_decimal_coords():
+    # psycopg3 returns NUMERIC lat/lng as Decimal; geo-blocking must not choke.
+    from decimal import Decimal
+    a = _r("Alpha", id="d1", lat=Decimal("50.8500"), lng=Decimal("4.3500"), geo_source="uber_eats")
+    b = _r("Beta", id="d2", lat=Decimal("50.8501"), lng=Decimal("4.3501"), geo_source="takeaway")
+    pairs = matching.block_candidates([a, b])  # must not raise TypeError
+    ids = {tuple(sorted((str(x["id"]), str(y["id"])))) for x, y in pairs}
+    assert ("d1", "d2") in ids
