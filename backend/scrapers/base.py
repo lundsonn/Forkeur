@@ -277,7 +277,11 @@ def parse_menu_price(val: str | float | int | None, *, is_cents: bool = False) -
             return round(val / 100, 2)
         return float(val)
     low = str(val).lower()
-    if any(w in low for w in ("gratuit", "free", "gratis", "0,00", "0.00")):
+    # Word-bound the free words so "free" doesn't match inside another word
+    # (e.g. "freekick") and so a numeric ".00" price (€10,00) is NOT mistaken
+    # for zero. A true "€0,00" falls through to the numeric regex below, which
+    # correctly returns 0.0.
+    if _re.search(r"\b(gratuit|free|gratis)\b", low):
         return 0.0
     m = _re.search(r"(\d+)[,.](\d{2})", str(val))
     if m:

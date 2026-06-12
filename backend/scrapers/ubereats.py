@@ -174,6 +174,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                     eta_min = _parse_eta_min(r.get("eta"))
                     eta_max = _parse_eta_max(r.get("eta"))
                     delivery_fee = r.get("delivery_fee")
+                    min_order = _parse_min_order(r.get("_store") or {})
                     lid = db.upsert_listing({
                         "restaurant_id": rid,
                         "platform": "uber_eats",
@@ -183,6 +184,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                         **({"eta_min": eta_min} if eta_min is not None else {}),
                         **({"eta_max": eta_max} if eta_max is not None else {}),
                         **({"delivery_fee": delivery_fee} if delivery_fee is not None else {}),
+                        **({"min_order": min_order} if min_order is not None else {}),
                         **({"opening_hours": hours} if hours else {}),
                     })
                     promos = _parse_promotions(r.get("_store") or {})
@@ -341,6 +343,9 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                                 patch["street_address"] = addr["street_address"]
                             if addr["postal_code"]:
                                 patch["postal_code"] = addr["postal_code"]
+                            min_order_val = _parse_min_order(store_obj)
+                            if min_order_val is not None:
+                                patch["min_order"] = min_order_val
                             if patch:
                                 tasks.append(asyncio.to_thread(db.patch_listing, lid, patch))
                             if phone:
@@ -583,32 +588,36 @@ def _parse_section_hours(store: dict) -> dict | None:
 
     Format: [{"dayRange": "Montag - Mittwoch", "sectionHours": [{"startTime": 510, "endTime": 1170}]}]
     startTime/endTime are minutes since midnight. dayRange is localized.
-    Returns {"mon": ["08:30", "19:30"], ...} or None.
+    Collects ALL slots per day (e.g. lunch + dinner).
+    Returns {"mon": [["08:30", "19:30"]], ...} (list of [start, end] pairs) or None.
     """
     hours_list = store.get("hours")
     if not hours_list or not isinstance(hours_list, list):
         return None
-    result: dict[str, list[str]] = {}
+    result: dict[str, list[list[str]]] = {}
     for entry in hours_list:
         if not isinstance(entry, dict):
             continue
         day_range = entry.get("dayRange", "")
         slots = entry.get("sectionHours") or []
-        if not slots:
+        # Collect every slot in this entry (a day can have multiple time ranges)
+        pairs: list[list[str]] = []
+        for slot in slots:
+            if not isinstance(slot, dict):
+                continue
+            start_min = slot.get("startTime")
+            end_min = slot.get("endTime")
+            if start_min is None or end_min is None:
+                continue
+            pairs.append([_minutes_to_hhmm(start_min), _minutes_to_hhmm(end_min)])
+        if not pairs:
             continue
-        slot = slots[0]
-        start_min = slot.get("startTime")
-        end_min = slot.get("endTime")
-        if start_min is None or end_min is None:
-            continue
-        start = _minutes_to_hhmm(start_min)
-        end = _minutes_to_hhmm(end_min)
         # dayRange is either "Montag" or "Montag - Mittwoch"
         parts = [p.strip() for p in day_range.split(" - ")]
         if len(parts) == 1:
             day = _LOCALIZED_DAY_MAP.get(parts[0].upper())
             if day:
-                result[day] = [start, end]
+                result.setdefault(day, []).extend(pairs)
         elif len(parts) == 2:
             start_day = _LOCALIZED_DAY_MAP.get(parts[0].upper())
             end_day = _LOCALIZED_DAY_MAP.get(parts[1].upper())
@@ -617,14 +626,15 @@ def _parse_section_hours(store: dict) -> dict | None:
                 ei = _DAY_ORDER.index(end_day)
                 idxs = range(si, ei + 1) if ei >= si else list(range(si, 7)) + list(range(0, ei + 1))
                 for i in idxs:
-                    result[_DAY_ORDER[i]] = [start, end]
+                    result.setdefault(_DAY_ORDER[i], []).extend(pairs)
     return result or None
 
 def _parse_regular_hours(store: dict) -> dict | None:
     """Extract weekly opening hours from a UberEats store/storeInfo object.
 
     Tries multiple known field names since the API has varied them over time.
-    Returns {"mon": ["11:00", "22:30"], ...} or None if unavailable.
+    Collects ALL slots per day (e.g. lunch + dinner).
+    Returns {"mon": [["11:00", "22:30"]], ...} (list of [start, end] pairs) or None.
     """
     slots = (
         store.get("regularHours")
@@ -634,7 +644,7 @@ def _parse_regular_hours(store: dict) -> dict | None:
     )
     if not slots or not isinstance(slots, list):
         return None
-    result: dict[str, list[str]] = {}
+    result: dict[str, list[list[str]]] = {}
     for slot in slots:
         if not isinstance(slot, dict):
             continue
@@ -646,8 +656,40 @@ def _parse_regular_hours(store: dict) -> dict | None:
         end = slot.get("endTime") or slot.get("close") or slot.get("to") or ""
         if not start or not end:
             continue
-        result[day] = [str(start)[:5], str(end)[:5]]
+        result.setdefault(day, []).append([str(start)[:5], str(end)[:5]])
     return result or None
+
+
+def _parse_min_order(store: dict) -> float | None:
+    """Best-effort minimum-order extraction from a getStoreV1 store object.
+
+    The exact key has varied / is unconfirmed against a live store dump, so we
+    probe a list of plausible paths and take the first numeric hit. Values are
+    expected in integer cents (Uber's money format) → divide by 100.
+
+    NOTE (needs live confirmation): the candidate paths below are educated
+    guesses. Confirm against a real getStoreV1 store dump and prune to the
+    real key once known.
+    """
+    candidates = [
+        ("minimumOrder",),
+        ("minOrderAmount",),
+        ("fareInfo", "minimumOrder"),
+        ("fareInfo", "minOrder"),
+        ("feeInfo", "minimumOrder"),
+        ("deliveryFee", "minimumSubtotal"),
+        ("meta", "minSpend"),
+    ]
+    for path in candidates:
+        cur: object = store
+        for key in path:
+            if not isinstance(cur, dict):
+                cur = None
+                break
+            cur = cur.get(key)
+        if isinstance(cur, (int, float)) and cur > 0:
+            return round(float(cur) / 100, 2)
+    return None
 
 
 def _parse_phone(store: dict) -> str | None:
