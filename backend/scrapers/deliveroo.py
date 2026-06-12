@@ -400,26 +400,41 @@ async def _scrape_zone_listings(browser, zone_address: str, log_fn) -> list[dict
 
         await page.wait_for_selector('a[href*="/menu/"]', timeout=10000)
 
-        # Height + count stable scroll (0.5s per tick, stale=3)
-        prev_h, prev_count, stale = 0, 0, 0
-        for _ in range(80):
-            result = await page.evaluate(
-                "(function(){window.scrollTo(0,document.body.scrollHeight);"
-                "return {h:document.body.scrollHeight,"
-                "c:document.querySelectorAll('a[href*=\"/menu/\"]').length};})()"
-            )
-            await asyncio.sleep(0.5)
-            h, count = result["h"], result["c"]
-            if h == prev_h and count == prev_count:
+        # Deliveroo renders the restaurant list as a VIRTUALISED feed: only the
+        # ~14 cards in the viewport are mounted at any moment; cards unmount as
+        # they scroll out of view. Scrolling to the bottom and extracting once
+        # therefore only ever yields the last visible window (~14), regardless
+        # of how many restaurants actually deliver to the address (often 800+).
+        #
+        # Instead we scroll in small increments and re-run the card extractor on
+        # every step, accumulating by slug. Each card is captured the moment it
+        # mounts, before virtualisation tears it back down.
+        acc: dict[str, dict] = {}
+        stale = 0
+        for _ in range(400):
+            step = await page.eval_on_selector_all('a[href*="/menu/"]', _LISTING_JS)
+            before = len(acc)
+            for c in step:
+                slug = c.get("slug")
+                if slug and slug not in acc:
+                    acc[slug] = c
+            await page.evaluate("window.scrollBy(0, Math.round(window.innerHeight * 0.8))")
+            await asyncio.sleep(0.25)
+            if len(acc) == before:
                 stale += 1
-                if stale >= 3:
+                if stale >= 15:
                     break
             else:
                 stale = 0
-            prev_h, prev_count = h, count
-        await asyncio.sleep(0.5)
+        # Final sweep after the last scroll settles.
+        for c in await page.eval_on_selector_all('a[href*="/menu/"]', _LISTING_JS):
+            slug = c.get("slug")
+            if slug and slug not in acc:
+                acc[slug] = c
 
-        return await page.eval_on_selector_all('a[href*="/menu/"]', _LISTING_JS)
+        cards = list(acc.values())
+        log_fn(f"  {zone_address.split(',')[-1].strip()}: {len(cards)} cards")
+        return cards
     except Exception as exc:
         log_fn(f"  Error: {exc}")
         return []
