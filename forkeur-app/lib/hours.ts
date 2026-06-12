@@ -13,48 +13,76 @@ export type OpenStatus =
   | { status: 'unknown' }
 
 /**
+ * Normalize a day's opening_hours entry into a list of [open, close] slots.
+ * Accepts both shapes for backward compatibility:
+ *   - legacy single-slot: ["11:00", "22:30"]
+ *   - new multi-slot:     [["11:00","14:30"], ["18:00","22:30"]]
+ * Returns [] for null/undefined/empty/invalid input.
+ */
+export function normalizeSlots(raw: unknown): [string, string][] {
+  if (!Array.isArray(raw) || raw.length === 0) return []
+
+  // Legacy single-slot: first element is a string → ["11:00","22:30"]
+  if (typeof raw[0] === 'string') {
+    return raw.length === 2 && typeof raw[1] === 'string' ? [[raw[0], raw[1]]] : []
+  }
+
+  // New multi-slot: array of [open, close] pairs.
+  return (raw as unknown[]).filter(
+    (s): s is [string, string] =>
+      Array.isArray(s) && s.length === 2 && typeof s[0] === 'string' && typeof s[1] === 'string'
+  )
+}
+
+/**
  * Compute open/closed status for a given local Date (default: now).
- * opening_hours format: { mon: ["11:00", "22:30"], ... }
- * Handles midnight-crossing slots (close < open in minutes).
+ * opening_hours format (per day): legacy ["11:00","22:30"] or
+ * multi-slot [["11:00","14:30"],["18:00","22:30"]] — both supported.
+ * Handles midnight-crossing slots (close < open in minutes) per slot.
  */
 export function getOpenStatus(hours: OpeningHours | null, now = new Date()): OpenStatus {
   if (!hours) return { status: 'unknown' }
 
   const dayKey = DAYS[now.getDay()]
-  const slot = hours[dayKey]
+  const slots = normalizeSlots(hours[dayKey])
   const currentMin = now.getHours() * 60 + now.getMinutes()
 
-  if (slot) {
+  // OPEN if current time falls within ANY slot today.
+  for (const slot of slots) {
     const [open, close] = slot.map(toMinutes)
     const crossesMidnight = close < open
-
     if (crossesMidnight) {
       if (currentMin >= open || currentMin < close) {
-        const closesAt = slot[1]
-        return { status: 'open', closesAt }
-      }
-    } else {
-      if (currentMin >= open && currentMin < close) {
         return { status: 'open', closesAt: slot[1] }
       }
+    } else if (currentMin >= open && currentMin < close) {
+      return { status: 'open', closesAt: slot[1] }
     }
   }
 
-  // Today's slot exists but hasn't started yet → opens later today
-  if (slot) {
+  // Not open now — does a slot open later today? Pick the EARLIEST future open.
+  let earliestOpen: { min: number; label: string } | null = null
+  for (const slot of slots) {
     const [open, close] = slot.map(toMinutes)
     const crossesMidnight = close < open
-    if ((!crossesMidnight && currentMin < open) || (crossesMidnight && currentMin >= close && currentMin < open)) {
-      return { status: 'closed', opensAt: slot[0] }
+    const opensLaterToday =
+      (!crossesMidnight && currentMin < open) ||
+      (crossesMidnight && currentMin >= close && currentMin < open)
+    if (opensLaterToday && (earliestOpen === null || open < earliestOpen.min)) {
+      earliestOpen = { min: open, label: slot[0] }
     }
   }
+  if (earliestOpen) {
+    return { status: 'closed', opensAt: earliestOpen.label }
+  }
 
-  // Closed today — find next opening
+  // Closed today — find next opening on a future day.
   for (let i = 1; i <= 7; i++) {
     const nextKey = DAYS[(now.getDay() + i) % 7]
-    const nextSlot = hours[nextKey]
-    if (nextSlot) {
-      return { status: 'closed', opensAt: i === 1 ? `tomorrow ${nextSlot[0]}` : nextSlot[0] }
+    const nextSlots = normalizeSlots(hours[nextKey])
+    if (nextSlots.length > 0) {
+      const opensAt = nextSlots[0][0]
+      return { status: 'closed', opensAt: i === 1 ? `tomorrow ${opensAt}` : opensAt }
     }
   }
 
