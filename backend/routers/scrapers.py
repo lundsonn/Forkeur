@@ -9,7 +9,7 @@ import alerting
 import db
 import ws as ws_mod
 from scrapers import ubereats, deliveroo, takeaway, direct, direct_menu, match
-from scrapers import dom_menu, enrich_contacts
+from scrapers import dom_menu, enrich_contacts, website_finder
 from scrapers.base import CloudflareBlockedError
 from routers.auth_router import require_auth
 
@@ -23,8 +23,9 @@ _TIMEOUTS: dict[str, int] = {
     "direct":      60 * 60,
     "direct_menu": 15 * 60,
     "dom_menu":    60 * 60,
-    "match":       15 * 60,
-    "enrich":      60 * 60,
+    "match":           15 * 60,
+    "enrich":          60 * 60,
+    "website_finder":  4 * 60 * 60,
 }
 
 
@@ -33,15 +34,21 @@ async def _direct_menu_adapter(config: ScraperConfig, log_fn) -> ScraperResult:
     return ScraperResult(records_saved=result.get("total_scraped", 0))
 
 
+async def _website_finder_adapter(config: ScraperConfig, log_fn) -> ScraperResult:
+    result = await website_finder.run(log=log_fn, limit=config.max_items)
+    return ScraperResult(records_saved=result.get("websites_found", 0))
+
+
 SCRAPERS = {
-    "ubereats":    ubereats.run,
-    "deliveroo":   deliveroo.run,
-    "takeaway":    takeaway.run,
-    "direct":      direct.run,
-    "direct_menu": _direct_menu_adapter,
-    "dom_menu":    dom_menu.run,
-    "match":       match.run,
-    "enrich":      enrich_contacts.run,
+    "ubereats":        ubereats.run,
+    "deliveroo":       deliveroo.run,
+    "takeaway":        takeaway.run,
+    "direct":          direct.run,
+    "direct_menu":     _direct_menu_adapter,
+    "dom_menu":        dom_menu.run,
+    "match":           match.run,
+    "enrich":          enrich_contacts.run,
+    "website_finder":  _website_finder_adapter,
 }
 
 # Track currently running platforms (also read by scheduler to skip duplicates).
