@@ -3,6 +3,7 @@ from constants import DEFAULT_ADDRESS
 import asyncio
 import inspect
 import logging
+import os
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.combining import OrTrigger
@@ -150,42 +151,65 @@ def list_schedules() -> list[ScheduleConfigOut]:
     return result
 
 
+# dom_menu launch gate: hold while MemAvailable is below this (GB). The 8GB box
+# near-OOMed at 85MB free when all browser scrapers stacked; 2GB headroom keeps
+# the OOM killer away while still letting dom_menu start early.
+_MEM_GATE_GB = float(os.getenv("BATCH_MEM_GATE_GB", "2.0"))
+_MEM_GATE_POLL_S = 15
+_MEM_GATE_TIMEOUT_S = 3600
+
+
+def _mem_available_gb() -> float:
+    """MemAvailable from /proc/meminfo in GB; inf where unreadable (macOS dev)."""
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) / (1024 * 1024)
+    except OSError:
+        pass
+    return float("inf")
+
+
 async def _run_batch_all() -> None:
-    """Two-phase batch to bound peak RAM on 4vCPU/8GB.
+    """Memory-gated batch to bound peak RAM on 4vCPU/8GB without idle time.
 
-    A flat Semaphore(4) cap was not enough: it limits scraper COUNT but not page
-    WEIGHT. When the 4 slots happened to hold the 4 heaviest at once —
+    A flat Semaphore(4) caps scraper COUNT but not page WEIGHT: with
     ubereats(3 menu pages) + deliveroo(3) + dom_menu(5) + takeaway(own browser)
-    ≈ 12 browser pages — RAM hit 7.6GB / 85MB free (near-OOM).
+    ≈ 12 browser pages, RAM hit 7.6GB / 85MB free (near-OOM). The previous fix
+    was a hard two-phase barrier (platforms, then menus), which is safe but
+    wastes wall clock: dom_menu idled until the SLOWEST platform scraper
+    finished, and direct_menu (plain httpx, zero browser pages) idled with it.
 
-    Fix: run the platform scrapers first, THEN the menu scrapers. dom_menu's 5
-    concurrent pages never overlap the ube/del parallel menu workers.
-
-      Phase 1: ubereats, deliveroo, takeaway, direct   (concurrent)
-      Phase 2: dom_menu, direct_menu                    (concurrent, field clear)
-      then: fees, then: cross-platform match
+      - ubereats, deliveroo, takeaway, direct, direct_menu start together
+      - dom_menu launches once (a) at least one heavy platform scraper has
+        finished — its 5 pages never stack on the full platform load — and
+        (b) MemAvailable ≥ BATCH_MEM_GATE_GB
+      - then: cross-platform match
     """
     from routers.scrapers import _running
 
-    async def _run_direct_menu_threaded():
-        from scrapers import direct_menu as _dm
-        run_id = db.create_run("direct_menu")
-        try:
-            result = await _dm.run()
-            db.finish_run(run_id, "success", records_saved=result.get("total_scraped", 0))
-        except Exception as e:
-            db.finish_run(run_id, "failed", error_msg=str(e))
-            alerting.send_failure_alert("direct_menu", str(e), run_id)
+    heavy = [p for p in ("ubereats", "deliveroo", "takeaway", "direct") if p not in _running]
+    heavy_tasks = [asyncio.create_task(_run_scraper(p)) for p in heavy]
 
-    # ── Phase 1: platform scrapers (no dom_menu) ──────────────────────────────
-    phase1 = [p for p in ("ubereats", "deliveroo", "takeaway", "direct") if p not in _running]
-    await asyncio.gather(*[_run_scraper(p) for p in phase1], return_exceptions=True)
+    async def _gated_dom_menu() -> None:
+        if heavy_tasks:
+            await asyncio.wait(heavy_tasks, return_when=asyncio.FIRST_COMPLETED)
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + _MEM_GATE_TIMEOUT_S
+        while _mem_available_gb() < _MEM_GATE_GB:
+            if loop.time() >= deadline:
+                _noop(f"Batch: memory gate still closed after {_MEM_GATE_TIMEOUT_S}s, launching dom_menu anyway")
+                break
+            await asyncio.sleep(_MEM_GATE_POLL_S)
+        await _run_scraper("dom_menu")
 
-    # ── Phase 2: menu scrapers, run with the heavy platform pages gone ────────
-    phase2 = [_run_direct_menu_threaded()]
-    if "dom_menu" not in _running:
-        phase2.append(_run_scraper("dom_menu"))
-    await asyncio.gather(*phase2, return_exceptions=True)
+    await asyncio.gather(
+        *heavy_tasks,
+        _run_scraper("direct_menu"),
+        _gated_dom_menu(),
+        return_exceptions=True,
+    )
 
     # Reconcile cross-platform duplicates after all data is fresh.
     await _run_match()
