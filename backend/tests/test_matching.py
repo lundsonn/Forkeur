@@ -1008,3 +1008,21 @@ def test_colocation_gate_opens_with_phone():
     _, contrib = matching.evidence_score(f)
     assert "geo_close" in contrib
     assert matching.decide(f) == matching.Decision.QUEUE
+
+
+def test_shares_distinctive_token_helper():
+    # distinctive brand token shared despite generic prefix + commune suffix
+    assert matching.shares_distinctive_token(
+        "Ai 6 Angoli Saint-Gilles", "Pizzeria Trattoria Ai 6 angoli")
+    # pure neighbours: no shared distinctive token
+    assert not matching.shares_distinctive_token("Taste of Himalayan", "Pasta Commedia")
+    # shared token is generic only ("wok") → not distinctive identity
+    assert not matching.shares_distinctive_token("Wok & Go", "China Wok")
+
+
+def test_colocation_gate_opens_on_shared_token():
+    # "Ai 6 Angoli" pair: full-name JW < 0.80, no phone, but shared "angoli"
+    # opens the gate so 9m geo counts → not silently separated.
+    f = _feat(name_sim=0.70, geo_dist=9.0, shares_token=True)
+    _, contrib = matching.evidence_score(f)
+    assert "geo_very_close" in contrib

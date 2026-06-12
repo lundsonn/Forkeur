@@ -157,8 +157,9 @@ def _distinctive_tokens(name: str) -> set[str]:
     pure neighbours ('Taste of Himalayan' / 'Pasta Commedia') share none.
     """
     out: set[str] = set()
-    for tok in _strip_location_tokens(normalize_name(name)).split():
-        if len(tok) >= 4 and tok not in _GENERIC_TOKENS and tok not in _ARTICLES:
+    for tok in normalize_name(name).split():
+        if (len(tok) >= 4 and tok not in _GENERIC_TOKENS
+                and tok not in _ARTICLES and tok not in _BRUSSELS_LOCATIONS):
             out.add(tok)
     return out
 
@@ -355,6 +356,7 @@ class MatchFeatures:
     address_match: bool | None      # postal+street match; None if data missing
     deliveroo_geo: bool = False     # True when one side uses Deliveroo zone centroid
     name_variant: str = "plain"     # "plain" | "abbrev" | "location_suffix"
+    shares_token: bool = False      # names share a brand-distinctive token
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -381,6 +383,8 @@ def score_pair(
     geo_dist: float | None = None
     if is_venue_grade(a) and is_venue_grade(b):
         geo_dist = haversine_m(a["lat"], a["lng"], b["lat"], b["lng"])
+    # Deliveroo coords are zone centroids, not venue points → widen geo bands.
+    deliveroo_geo = a.get("geo_source") == "deliveroo_venue" or b.get("geo_source") == "deliveroo_venue"
 
     # Soft geo (one venue-grade + other has any coords)
     soft_geo_dist: float | None = None
@@ -454,6 +458,7 @@ def score_pair(
     )
 
     address_match = _match_address(a, b)
+    shares_token = shares_distinctive_token(a["name"], b["name"])
 
     return MatchFeatures(
         name_sim=name_sim,
@@ -469,6 +474,8 @@ def score_pair(
         slug_match=slug_match,
         distinctive_conflict=distinctive_conflict,
         address_match=address_match,
+        deliveroo_geo=deliveroo_geo,
+        shares_token=shares_token,
     )
 
 
@@ -534,6 +541,7 @@ def evidence_score(f: MatchFeatures) -> tuple[float, dict[str, float]]:
     # different name) in the QUEUE for review rather than silently dropped.
     identity = (
         f.name_sim >= COLOCATION_GATE_NAME_SIM
+        or f.shares_token
         or f.phone_match
         or f.slug_match
         or f.address_match is True

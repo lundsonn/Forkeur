@@ -1,7 +1,46 @@
 # Weighted-Evidence Restaurant Matcher — Design
 
 Date: 2026-06-12
-Status: approved by user (replaces veto-cascade `decide()` in `backend/matching.py`)
+Status: IMPLEMENTED. Replaces veto-cascade `decide()` in `backend/matching.py`.
+Validated against full prod snapshot (1114 restaurants, 17 294 candidate pairs):
+**10 auto-merge, 78 queue, 17 206 separate**; 510 backend tests pass; golden
+contract 36/36.
+
+## As-built deltas from the original design below
+
+The implementation differs from the first-draft design in three ways; all are
+intentional and test-covered:
+
+1. **Ghost-kitchen identity gate (NEW, decisive).** Prod data revealed Brussels
+   cloud kitchens: distinct virtual brands ("Wok & Go" + "China Wok") sharing
+   ONE phone + address. The original "phone/geo/address ⇒ same venue" rule
+   produced ~26 false auto-merges. Fix: AUTO_MERGE now requires identity
+   (`name_sim ≥ 0.80 OR slug_match`) AS WELL AS physical proof. Co-located
+   different-name pairs → QUEUE. See `IDENTITY_AUTO_NAME_SIM` in `matching.py`
+   and the `project_ghost_kitchens` memory.
+2. **Co-location gate on positive geo/address evidence.** Geo and address only
+   count toward a merge when identity evidence exists: `name_sim ≥ 0.80`, a
+   shared brand-distinctive token (`shares_distinctive_token`, robust where
+   full-name JaroWinkler is dragged down by prefixes/suffixes — "Ai 6 Angoli"),
+   phone, slug, or exact address. This cut the review queue from 941 → 78 by
+   dropping pure food-court neighbours. `COLOCATION_GATE_NAME_SIM`.
+3. **Scoring shape.** Tiered name weights (`name_very_high` 2.0 ≥0.97,
+   `name_high` 1.0 ≥0.92) and a small positive `cuisine_match` (+0.5) instead
+   of a single scaled name term. `address_diff` = −3.0. The best-of-3
+   `name_similarity` from the original §1 is NOT in the shipped file (lost to a
+   concurrent edit during implementation); its suffix/prefix cases are instead
+   handled by `shares_distinctive_token` in the co-location gate, which the
+   golden contract confirms is sufficient. Restoring best-of-3 later would move
+   a few suffix pairs (La Smorfia, Ai 6 Angoli) from QUEUE → AUTO — a safe
+   future enhancement, not required.
+
+Data-quality note surfaced by the dry-run: a few rows carry promo-banner text
+as the restaurant name ("Profitez de -50 %"), a scraper bug, not a matcher
+bug — they appear in the queue and should be cleaned at ingestion.
+
+---
+
+## Original design (for reference)
 
 ## Problem
 

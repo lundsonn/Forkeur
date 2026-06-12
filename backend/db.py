@@ -72,17 +72,30 @@ def close_client() -> None:
 
 
 def _is_junk(name: str) -> bool:
-    """Return True if the name looks like a scraped UI element, not a real restaurant."""
-    s = name.strip().lower()
-    # Cap input length before running the alternation regex — the `[\s-]?\d`
-    # branches can backtrack quadratically on adversarial input. Real
-    # restaurant names never exceed a few hundred characters.
+    """Return True if the name looks like a scraped UI element, not a real restaurant.
+
+    Deliveroo's feed interleaves promo tiles and ETA labels with restaurant
+    cards; the scraper occasionally captures one as a name ("Environ 25 min",
+    "Profitez de -10 %", "1 plat acheté = 1 plat offert"). Two robustness
+    fixes over the original: strip Unicode format/bidi marks first (Deliveroo
+    wraps percentages in U+202A/U+202C, which split "-10 %" so an anchored
+    minus-digits-percent pattern never matched), and use re.search so a promo
+    phrase anywhere in the string is caught, not only at the start.
+    """
+    # Drop Unicode "format" chars (Cf: bidi embeds, ZWJ, soft hyphen) that
+    # Deliveroo injects around numbers and would otherwise break the patterns.
+    cleaned = "".join(ch for ch in name if unicodedata.category(ch) != "Cf")
+    s = cleaned.strip().lower()
+    # Cap input length before the alternation regex — the `[\s-]?\d` branches
+    # can backtrack quadratically. Real restaurant names stay under a few
+    # hundred chars. (Empty-name validation lives at the caller, not here.)
     if len(s) > 300:
         return False
-    return bool(re.match(
-        r'^(around\s+\d|pre[\s-]?order\s+\d|pré[\s-]?commande\s+\d'
-        r'|article\s+offert|\d+e?\s*à\s*moiti|\d+\s*%\s+off|-\s*\d+\s*%'
-        r'|•\s*à\s+partir|\d+e\s+à\s+moitié)',
+    return bool(re.search(
+        r'(around\s+\d|environ\s+\d+\s*min|pre[\s-]?order\s+\d'
+        r'|pré[\s-]?commande\s+\d|article\s+offert|\bplats?\s+offert'
+        r'|\d+\s*plats?\s+achet|profitez\s+de|\d+e?\s*à\s*moiti'
+        r'|\d+\s*%\s+off|-\s*\d+\s*%|•\s*à\s+partir|\d+e\s+à\s+moitié)',
         s,
     ))
 
