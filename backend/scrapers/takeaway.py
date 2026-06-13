@@ -578,9 +578,11 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
         if config.listing_only:
             return ScraperResult(records_saved=records_saved)
 
-        # Phase 2: menu per restaurant — 3 parallel workers, each with its own page.
-        # Takeaway uses CF (headed mode) but 3 concurrent pages is safe in practice.
-        WORKERS = 3
+        # Phase 2: menu per restaurant — N parallel workers, each with its own page.
+        # Takeaway uses CF (headed mode); pages live in the shared browser so each extra
+        # worker adds a context (~modest RAM), not a full browser. 6 fits in 8 GB.
+        # Override with TAKEAWAY_MENU_WORKERS.
+        WORKERS = int(os.environ.get("TAKEAWAY_MENU_WORKERS", "6"))
         n = len(saved)
         slices = [saved[w::WORKERS] for w in range(WORKERS)]
         log_fn(f"Phase 2: {n} menus across {WORKERS} parallel workers")
