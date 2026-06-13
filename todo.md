@@ -4,6 +4,14 @@
 
 <!-- Add tasks here. Format: `- [ ] Task description` -->
 
+### Direct ordering pipeline (post website_finder, 2026-06-13)
+- [x] **website_finder** — DONE. All 2010 restaurants searched; 1159 with website.
+- [x] **Nominatim field fix** — DONE. Was `city_district`/`suburb`/`municipality`; Brussels returns `town`. Fixed to include `town`/`city`.
+- [x] **Re-run direct scraper Phase 3** — DONE. All 2010 restaurants geocoded; 0 null neighborhoods.
+- [x] **website_finder concurrency** — DONE. `_CONCURRENCY = 2` in `website_finder.py` (safe under ~1.5GB).
+- [x] **Run direct_menu scraper** — N/A. 0 `url_type=ordering` listings exist; all 1079 are `website|menu` type.
+- [x] **Run dom_menu scraper** — DONE. 8097 menu items scraped today (2026-06-13); all 1079 direct listings fresh.
+
 ### Scraper run optimization — option B (cheap wins, after A done)
 - [x] **Staleness skip** — DONE. `db.get_stale_listing_ids()` batch-queries `last_scraped_at`; ube/del filter `saved_listings`/`saved` before Phase 2 via `asyncio.to_thread`.
 - [x] **Lower dom_menu sem 8→5** — DONE. Was the batch RAM driver (8 pages overlapping ube/del menu workers → peak 6.7GB/1.1GB free). Now sem=5 frees ~1.5GB at overlap.

@@ -31,6 +31,7 @@ function deal(overrides: Partial<DealItem>): DealItem {
     min_order: null,
     opening_hours: null,
     is_available: true,
+    scraped_at: new Date(0).toISOString(),
     ...overrides,
   }
 }

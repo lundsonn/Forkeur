@@ -26,11 +26,11 @@ const threeListings: RestaurantSummary = {
   direct_url_type: null,
   is_chain: false,
   listings: [
-    { platform: 'uber_eats', delivery_fee_cents: 49, eta_min: null, is_available: true, opening_hours: null },
-    { platform: 'deliveroo', delivery_fee_cents: 149, eta_min: null, is_available: true, opening_hours: null },
-    { platform: 'takeaway', delivery_fee_cents: 199, eta_min: null, is_available: true, opening_hours: null },
+    { platform: 'uber_eats', delivery_fee_cents: 49, min_order_cents: null, eta_min: null, is_available: true, opening_hours: null },
+    { platform: 'deliveroo', delivery_fee_cents: 149, min_order_cents: null, eta_min: null, is_available: true, opening_hours: null },
+    { platform: 'takeaway', delivery_fee_cents: 199, min_order_cents: null, eta_min: null, is_available: true, opening_hours: null },
   ],
-  cheapest: { platform: 'uber_eats', fee_label: '€0.49', savings_cents: 150, delivery_fee_cents: 49 },
+  cheapest: { platform: 'uber_eats', fee_label: '€0.49', savings_cents: 150, delivery_fee_cents: 49, min_order_cents: null },
 }
 
 const nullFees: RestaurantSummary = {
@@ -46,10 +46,10 @@ const nullFees: RestaurantSummary = {
   direct_url_type: null,
   is_chain: false,
   listings: [
-    { platform: 'uber_eats', delivery_fee_cents: null, eta_min: null, is_available: true, opening_hours: null },
-    { platform: 'deliveroo', delivery_fee_cents: 299, eta_min: null, is_available: true, opening_hours: null },
+    { platform: 'uber_eats', delivery_fee_cents: null, min_order_cents: null, eta_min: null, is_available: true, opening_hours: null },
+    { platform: 'deliveroo', delivery_fee_cents: 299, min_order_cents: null, eta_min: null, is_available: true, opening_hours: null },
   ],
-  cheapest: { platform: 'deliveroo', fee_label: '€2.99', savings_cents: 0, delivery_fee_cents: 299 },
+  cheapest: { platform: 'deliveroo', fee_label: '€2.99', savings_cents: 0, delivery_fee_cents: 299, min_order_cents: null },
 }
 
 const freeListing: RestaurantSummary = {
@@ -65,11 +65,11 @@ const freeListing: RestaurantSummary = {
   direct_url_type: null,
   is_chain: false,
   listings: [
-    { platform: 'uber_eats', delivery_fee_cents: 0, eta_min: null, is_available: true, opening_hours: null },
-    { platform: 'deliveroo', delivery_fee_cents: 99, eta_min: null, is_available: true, opening_hours: null },
-    { platform: 'takeaway', delivery_fee_cents: 149, eta_min: null, is_available: true, opening_hours: null },
+    { platform: 'uber_eats', delivery_fee_cents: 0, min_order_cents: null, eta_min: null, is_available: true, opening_hours: null },
+    { platform: 'deliveroo', delivery_fee_cents: 99, min_order_cents: null, eta_min: null, is_available: true, opening_hours: null },
+    { platform: 'takeaway', delivery_fee_cents: 149, min_order_cents: null, eta_min: null, is_available: true, opening_hours: null },
   ],
-  cheapest: { platform: 'uber_eats', fee_label: 'Free', savings_cents: 149, delivery_fee_cents: 0 },
+  cheapest: { platform: 'uber_eats', fee_label: 'Free', savings_cents: 149, delivery_fee_cents: 0, min_order_cents: null },
 }
 
 const withDirectOrdering: RestaurantSummary = {
@@ -85,10 +85,10 @@ const withDirectOrdering: RestaurantSummary = {
   direct_url_type: 'ordering',
   is_chain: false,
   listings: [
-    { platform: 'uber_eats', delivery_fee_cents: 299, eta_min: null, is_available: true, opening_hours: null },
-    { platform: 'deliveroo', delivery_fee_cents: 199, eta_min: null, is_available: true, opening_hours: null },
+    { platform: 'uber_eats', delivery_fee_cents: 299, min_order_cents: null, eta_min: null, is_available: true, opening_hours: null },
+    { platform: 'deliveroo', delivery_fee_cents: 199, min_order_cents: null, eta_min: null, is_available: true, opening_hours: null },
   ],
-  cheapest: { platform: 'deliveroo', fee_label: '€1.99', savings_cents: 100, delivery_fee_cents: 199 },
+  cheapest: { platform: 'deliveroo', fee_label: '€1.99', savings_cents: 100, delivery_fee_cents: 199, min_order_cents: null },
 }
 
 const withDirectMenu: RestaurantSummary = {
@@ -104,9 +104,9 @@ const withDirectMenu: RestaurantSummary = {
   direct_url_type: 'menu',
   is_chain: false,
   listings: [
-    { platform: 'uber_eats', delivery_fee_cents: 299, eta_min: null, is_available: true, opening_hours: null },
+    { platform: 'uber_eats', delivery_fee_cents: 299, min_order_cents: null, eta_min: null, is_available: true, opening_hours: null },
   ],
-  cheapest: { platform: 'uber_eats', fee_label: '€2.99', savings_cents: 0, delivery_fee_cents: 299 },
+  cheapest: { platform: 'uber_eats', fee_label: '€2.99', savings_cents: 0, delivery_fee_cents: 299, min_order_cents: null },
 }
 
 const withNullUrlType: RestaurantSummary = {
@@ -122,9 +122,9 @@ const withNullUrlType: RestaurantSummary = {
   direct_url_type: null,
   is_chain: false,
   listings: [
-    { platform: 'uber_eats', delivery_fee_cents: 199, eta_min: null, is_available: true, opening_hours: null },
+    { platform: 'uber_eats', delivery_fee_cents: 199, min_order_cents: null, eta_min: null, is_available: true, opening_hours: null },
   ],
-  cheapest: { platform: 'uber_eats', fee_label: '€1.99', savings_cents: 0, delivery_fee_cents: 199 },
+  cheapest: { platform: 'uber_eats', fee_label: '€1.99', savings_cents: 0, delivery_fee_cents: 199, min_order_cents: null },
 }
 
 describe('RestaurantCard', () => {

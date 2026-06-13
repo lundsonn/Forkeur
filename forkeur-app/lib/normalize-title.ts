@@ -5,6 +5,7 @@
 const STOPWORDS = new Set([
   'menu', 'met', 'avec', 'with', 'de', 'het', 'le', 'la', 'les', 'du', 'des',
   'een', 'our', 'nos', 'maison', 'homemade', 'special', 'speciale',
+  'au', 'aux', 'et', 'en', 'and', 'of', 'al', 'con', 'bij', 'op', 'van',
 ])
 
 // Trailing size/unit pattern — liquid volumes only (cl, ml, dl, l).
@@ -14,6 +15,11 @@ const STOPWORDS = new Set([
 // and without volume, but different-litre bottles are always distinct products.
 const TRAILING_SIZE = /\s+\d+([.,]\d+)?\s*(cl|ml|dl)\s*$/i
 
+// Trailing piece-count suffix — only one platform (UberEats) appends these.
+// Unlike oz/g/kg, piece counts don't distinguish distinct products (the item at
+// fewer pieces is the same dish, not a smaller portion); safe to strip globally.
+const TRAILING_PIECES = /\s+\d+\s*(pcs?|pieces?|stuks?|st\.?)\s*$/i
+
 // Leading quantity/multiplier pattern.
 const LEADING_QTY = /^\d+\s*(x|stuks?|pcs|pieces?|st)\s+/i
 
@@ -21,32 +27,51 @@ const LEADING_QTY = /^\d+\s*(x|stuks?|pcs|pieces?|st)\s+/i
 // Requires at least one non-digit separator after the digits (prevents "7up" → "up").
 const LEADING_MENU_NUM = /^\d+[\s\-\.\)\:]+\s*/
 
-export function normalizeTitle(title: string): string {
+// Shared cleaning pipeline: emoji, accents, lowercase, parens, size, pieces,
+// leading qty/menu-num, punct→space. No token sort or stopword filtering.
+function baseNormalize(title: string): string {
   let s = title
     .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '')
     .normalize('NFD').replace(/\p{Mn}/gu, '')
     .replace(/['']/g, '')
     .toLowerCase()
-
-  // Strip parentheticals while parens are still present (before punct→space).
-  // Safety: if result is empty, keep the pre-strip form.
   const noParens = s.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim()
   if (noParens) s = noParens
-
-  // Strip trailing size/unit tokens.
   const noSize = s.replace(TRAILING_SIZE, '').trim()
   if (noSize) s = noSize
-
-  // Strip leading quantity/multiplier tokens.
+  const noPieces = s.replace(TRAILING_PIECES, '').trim()
+  if (noPieces) s = noPieces
   const noLeadQty = s.replace(LEADING_QTY, '').trim()
   if (noLeadQty) s = noLeadQty
-
-  // Strip leading menu-number prefix (e.g. "52. Malay Soup" → "malay soup").
   const noMenuNum = s.replace(LEADING_MENU_NUM, '').trim()
   if (noMenuNum) s = noMenuNum
+  return s.replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim()
+}
 
-  // Replace remaining punctuation with space.
-  s = s.replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim()
+/**
+ * Canonical exact-match key for cross-platform item pairing.
+ *
+ * Pass `category` (= item's own catalog_name) to enable category-prefix stripping:
+ * UberEats prepends the category to item titles ("Pizza Margherita" where category
+ * is "Pizza") while Deliveroo omits it ("Margherita"). Stripping the prefix ONLY when
+ * it exactly equals the item's own category is safe — it never fires across platforms
+ * that don't use the prefix, and never fires when the prefix is part of the actual name.
+ */
+export function normalizeTitle(title: string, category?: string): string {
+  let s = baseNormalize(title)
+
+  if (category) {
+    const catNorm = baseNormalize(category)
+    const catTokens = catNorm.split(/\s+/).filter(Boolean)
+    const titleTokens = s.split(/\s+/)
+    if (
+      catTokens.length > 0 &&
+      catTokens.length < titleTokens.length &&
+      catTokens.every((t, i) => t === titleTokens[i])
+    ) {
+      s = titleTokens.slice(catTokens.length).join(' ')
+    }
+  }
 
   // Token sort — deterministic, symmetric across all platforms.
   const tokens = s.split(/\s+/).sort()
@@ -62,18 +87,5 @@ export function normalizeTitle(title: string): string {
  * order-sensitive, so token sort distorts the distance calculation.
  */
 export function normalizeForFuzzy(title: string): string {
-  let s = title
-    .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '')
-    .normalize('NFD').replace(/\p{Mn}/gu, '')
-    .replace(/['']/g, '')
-    .toLowerCase()
-  const noParens = s.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim()
-  if (noParens) s = noParens
-  const noSize = s.replace(TRAILING_SIZE, '').trim()
-  if (noSize) s = noSize
-  const noLeadQty = s.replace(LEADING_QTY, '').trim()
-  if (noLeadQty) s = noLeadQty
-  const noMenuNum = s.replace(LEADING_MENU_NUM, '').trim()
-  if (noMenuNum) s = noMenuNum
-  return s.replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim()
+  return baseNormalize(title)
 }

@@ -20,12 +20,13 @@ export type RestaurantSummary = {
   rating: number | null
   direct_url_type: string | null
   is_chain: boolean
-  listings: { platform: Platform; delivery_fee_cents: number | null; eta_min: number | null; is_available: boolean; opening_hours: OpeningHours | null }[]
+  listings: { platform: Platform; delivery_fee_cents: number | null; min_order_cents: number | null; eta_min: number | null; is_available: boolean; opening_hours: OpeningHours | null }[]
   cheapest: {
     platform: Platform
     fee_label: string
     savings_cents: number
     delivery_fee_cents: number | null
+    min_order_cents: number | null
   } | null
 }
 
@@ -87,6 +88,7 @@ export type RestaurantDetail = {
 type RawListingShort = {
   platform: string
   delivery_fee: number | null
+  min_order: number | null
   eta_min: number | null
   url_type: string | null
   is_available: boolean | null
@@ -120,6 +122,7 @@ type RawPromoRow = {
     review_count: number | null
     is_available: boolean
     opening_hours: OpeningHours | null
+    last_scraped_at: string | null
     restaurants: { id: string; name: string; cuisine: string | null; neighborhood: string | null } | null
   } | null
 }
@@ -193,6 +196,7 @@ export async function getRestaurants(): Promise<{
       const listings = rawListings.map((l) => ({
         platform: l.platform as Platform,
         delivery_fee_cents: feeCents(l.delivery_fee),
+        min_order_cents: feeCents(l.min_order),
         eta_min: l.eta_min ?? null,
         is_available: l.is_available !== false,
         opening_hours: l.opening_hours ?? null,
@@ -228,7 +232,9 @@ export async function getRestaurants(): Promise<{
       }
 
       const sorted = [...available].sort(
-        (a, b) => a.delivery_fee_cents! - b.delivery_fee_cents!
+        (a, b) =>
+          ((a.delivery_fee_cents ?? 0) + (a.min_order_cents ?? 0)) -
+          ((b.delivery_fee_cents ?? 0) + (b.min_order_cents ?? 0))
       )
       const cheapest = sorted[0]
       const mostExpensive = sorted[sorted.length - 1]
@@ -250,9 +256,10 @@ export async function getRestaurants(): Promise<{
           platform: cheapest.platform,
           fee_label: feeLabel(cheapest.delivery_fee_cents !== null ? cheapest.delivery_fee_cents / 100 : null) ?? '?',
           savings_cents:
-            (mostExpensive.delivery_fee_cents ?? 0) -
-            (cheapest.delivery_fee_cents ?? 0),
+            ((mostExpensive.delivery_fee_cents ?? 0) + (mostExpensive.min_order_cents ?? 0)) -
+            ((cheapest.delivery_fee_cents ?? 0) + (cheapest.min_order_cents ?? 0)),
           delivery_fee_cents: cheapest.delivery_fee_cents,
+          min_order_cents: cheapest.min_order_cents,
         },
       }
     })
@@ -301,6 +308,7 @@ export async function getDeals(): Promise<DealItem[]> {
       min_order: p.min_order != null ? Number(p.min_order) : null,
       opening_hours: (listing.opening_hours as OpeningHours | null) ?? null,
       is_available: listing.is_available ?? true,
+      scraped_at: listing.last_scraped_at ?? new Date(0).toISOString(),
     }]
   })
 }
@@ -354,7 +362,17 @@ export const getRestaurantWithListings = cache(async (
   for (const listing of rawListings) {
     const platform = listing.platform as Platform
     for (const item of listing.menu_items ?? []) {
-      const key = normalizeTitle(item.title)
+      const baseKey = normalizeTitle(item.title, item.catalog_name ?? undefined)
+      // Same-platform collision: two items on the same platform normalizing to the same key
+      // are distinct products. Use ::2, ::3 slots rather than silently overwriting the price.
+      let key = baseKey
+      if (itemMap.has(key) && itemMap.get(key)!.prices[platform] !== null) {
+        let suffix = 2
+        while (itemMap.has(`${baseKey}::${suffix}`) && itemMap.get(`${baseKey}::${suffix}`)!.prices[platform] !== null) {
+          suffix++
+        }
+        key = `${baseKey}::${suffix}`
+      }
       if (!itemMap.has(key)) {
         itemMap.set(key, {
           name: item.title.replace(EMOJI_RE, '').trim(),
@@ -394,10 +412,11 @@ export const getRestaurantWithListings = cache(async (
       // Length ratio guard: prevents "Burger" merging with "Burger Deluxe"
       const lenRatio = Math.min(normA.length, normB.length) / Math.max(normA.length, normB.length)
       if (lenRatio < 0.75) continue
-      if (jaroWinkler(normA, normB) < 0.88) continue
-      // Price corroboration: cross-platform prices must be within 20%
+      // Price as positive signal (exact match → lower JW threshold) and veto (>20% apart → reject)
       const priceA = ALL_PLATFORMS.map(p => itemA.prices[p]).find(p => p != null)
       const priceB = ALL_PLATFORMS.map(p => itemB.prices[p]).find(p => p != null)
+      const priceExactMatch = priceA != null && priceB != null && priceA === priceB
+      if (jaroWinkler(normA, normB) < (priceExactMatch ? 0.78 : 0.88)) continue
       if (priceA != null && priceB != null) {
         const maxP = Math.max(priceA, priceB)
         if (maxP > 0 && Math.abs(priceA - priceB) / maxP > 0.20) continue
@@ -425,7 +444,11 @@ export const getRestaurantWithListings = cache(async (
   const matchableItems = mergedItems.filter(
     (item) => Object.values(item.prices).filter((p) => p !== null).length >= 2
   ).length
-  const matchRate = mergedItems.length > 0 ? matchableItems / mergedItems.length : 0
+  // Denominator excludes direct-only items — they can never match a delivery platform price.
+  const comparableItems = mergedItems.filter(
+    (item) => (['uber_eats', 'deliveroo', 'takeaway'] as Platform[]).some(p => item.prices[p] !== null)
+  ).length
+  const matchRate = comparableItems > 0 ? matchableItems / comparableItems : 0
 
   return {
     id: raw.id,

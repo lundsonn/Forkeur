@@ -23,6 +23,7 @@ export type DealItem = {
   min_order: number | null
   opening_hours: Record<string, [string, string] | [string, string][]> | null
   is_available: boolean
+  scraped_at: string
 }
 
 /** Active filter pills. `pct` covers both pct_discount and abs_discount. */

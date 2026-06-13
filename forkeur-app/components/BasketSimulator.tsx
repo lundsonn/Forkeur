@@ -138,9 +138,14 @@ function DishModal({
                     >
                       <div className="flex items-center gap-2">
                         <span className={`w-2 h-2 rounded-full ${PLATFORM_COLORS[p].dot}`} />
-                        <span className={`text-sm font-medium ${PLATFORM_COLORS[p].label}`}>
-                          {PLATFORM_LABELS[p]}
-                        </span>
+                        <div>
+                          <span className={`text-sm font-medium ${PLATFORM_COLORS[p].label}`}>
+                            {PLATFORM_LABELS[p]}
+                          </span>
+                          {item.platformTitles?.[p] && item.platformTitles[p] !== item.name && (
+                            <p className="text-[10px] text-stone-400 leading-tight">{item.platformTitles[p]}</p>
+                          )}
+                        </div>
                       </div>
                       <span className={`text-sm font-bold ${isDirectCheapest ? 'text-orange-500' : isCheapest ? 'text-green-600' : 'text-stone-700'}`}>
                         {centsToEuro(price)}

@@ -34,8 +34,8 @@ describe('normalizeTitle — base transforms', () => {
     expect(normalizeTitle('')).toBe('')
   })
 
-  it('strips é, à, ñ — "au" is not a stopword', () => {
-    expect(normalizeTitle('Café au Réglisse Américain')).toBe('americain au cafe reglisse')
+  it('strips é, à, ñ — "au" stopword stripped when ≥2 tokens survive', () => {
+    expect(normalizeTitle('Café au Réglisse Américain')).toBe('americain cafe reglisse')
   })
 
   it('cross-platform match: same logical item normalizes to same key', () => {
@@ -148,6 +148,23 @@ describe('normalizeTitle — must-not-match pairs', () => {
 
   it('small vs large fries differ (size is meaningful here)', () => {
     expect(normalizeTitle('Small Fries')).not.toBe(normalizeTitle('Large Fries'))
+  })
+})
+
+// ── Category-prefix stripping ────────────────────────────────────────────────
+
+describe('normalizeTitle — category-prefix stripping', () => {
+  it('strips exact category prefix', () => {
+    expect(normalizeTitle('Pizza Margherita', 'Pizza')).toBe(normalizeTitle('Margherita'))
+  })
+  it('does not strip when prefix equals full title', () => {
+    expect(normalizeTitle('Margherita', 'Margherita')).toBe(normalizeTitle('Margherita'))
+  })
+  it('strips multi-token category prefix', () => {
+    expect(normalizeTitle('Pasta Carbonara Special', 'Pasta Carbonara')).toBe(normalizeTitle('Special'))
+  })
+  it('does not strip partial match from middle', () => {
+    expect(normalizeTitle('Pizza Margherita', 'Margherita')).toBe(normalizeTitle('Pizza Margherita'))
   })
 })
 

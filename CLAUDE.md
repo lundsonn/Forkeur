@@ -77,7 +77,7 @@ cd forkeur-app && npm run dev   # :3000
 - **Services:** `systemctl restart forkeur-backend` / `forkeur-frontend` / `postgresql` / `pgbouncer`
 - **Database:** PostgreSQL 16 on `127.0.0.1:5433`; PgBouncer (transaction mode) on `127.0.0.1:5432` → db `forkeur`, role `forkeur_app`. Daily `pg_dump` backup to `/backups` via `/etc/cron.d/forkeur-backup` (keep 7d). Schema at `/opt/forkeur/ops/selfhosted_schema.sql`.
 - **Backend API:** `http://localhost:8000` (internal only)
-- **Auth:** POST `/api/auth/login` with `{"password":"<ADMIN_PASSWORD>"}` → Bearer token (JWT, 30-day expiry; requires `JWT_SECRET` env var)
+- **Auth:** POST `/api/auth/login` with `{"password":"<ADMIN_PASSWORD>"}` → Bearer token (JWT, 12h expiry default; override with `JWT_EXPIRE_HOURS` env var; requires `JWT_SECRET`)
 - **Deploy:** `cd /opt/forkeur && git pull && make migrate && systemctl restart forkeur-backend`
   - **DB migrations** run via `make migrate` (→ `backend/ops/migrate.py up`). The runner is a **separate** script (NOT the backend app) because `forkeur_app` has no CREATE privilege — DDL must run as the `postgres` superuser, connecting **directly to Postgres :5433** (NOT through PgBouncer; DDL must not go through transaction pooling). Set env `MIGRATE_DATABASE_URL` to that superuser DSN, e.g. `postgresql://postgres:PW@127.0.0.1:5433/forkeur` (fallback env name: `DATABASE_URL_SUPERUSER`). Applied migrations are tracked in the `schema_migrations` table (version = filename). `make migrate-check` lists pending without applying (exit 1 if any).
     - **First time only:** `make migrate-baseline` records the already-applied 001–027 migrations into `schema_migrations` WITHOUT re-running their SQL (the live DB has them applied but no tracking table yet).

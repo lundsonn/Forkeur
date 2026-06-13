@@ -2,6 +2,12 @@ import '@testing-library/jest-dom'
 import React from 'react'
 import { vi } from 'vitest'
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn(), prefetch: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => '/',
+}))
+
 // Mock next/dynamic to eagerly preload the module and render synchronously.
 // React.lazy always suspends at least once (async), which breaks sync test assertions.
 // This approach calls fn() at dynamic()-call-time (module load), caches the result,

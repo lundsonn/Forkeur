@@ -33,8 +33,8 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge, 
   const sortedTiles = [...tiles].sort((a, b) => {
     if (a.platform === 'direct') return -1
     if (b.platform === 'direct') return 1
-    const fa = a.delivery_fee_cents ?? Infinity
-    const fb = b.delivery_fee_cents ?? Infinity
+    const fa = (a.delivery_fee_cents ?? 0) + (a.min_order_cents ?? 0)
+    const fb = (b.delivery_fee_cents ?? 0) + (b.min_order_cents ?? 0)
     return fa - fb
   })
 
@@ -88,9 +88,13 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge, 
         <div className="relative z-10 pointer-events-none space-y-1.5 mb-3">
           {sortedTiles.map((l) => {
             const isCheapest = l.platform === cheapest?.platform
+            const cheapestTotal = cheapest
+              ? (cheapest.delivery_fee_cents ?? 0) + (cheapest.min_order_cents ?? 0)
+              : null
+            const tileTotal = (l.delivery_fee_cents ?? 0) + (l.min_order_cents ?? 0)
             const delta =
-              !isCheapest && cheapestFeeCents !== null && l.delivery_fee_cents !== null
-                ? l.delivery_fee_cents - cheapestFeeCents
+              !isCheapest && cheapestTotal !== null
+                ? tileTotal - cheapestTotal
                 : null
             return (
               <div
@@ -103,8 +107,15 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge, 
                 <span className={`text-xs flex-1 font-medium ${isCheapest ? 'text-green-700' : 'text-stone-600'}`}>
                   {PLATFORM_LABELS[l.platform as Platform]}
                 </span>
-                <span className={`text-xs font-bold tabular-nums ${isCheapest ? 'text-green-700' : 'text-stone-700'}`}>
-                  {centsToEuro(l.delivery_fee_cents)}
+                <span className="flex flex-col items-end">
+                  <span className={`text-xs font-bold tabular-nums ${isCheapest ? 'text-green-700' : 'text-stone-700'}`}>
+                    {centsToEuro(l.delivery_fee_cents)}
+                  </span>
+                  {l.min_order_cents != null && l.min_order_cents > 0 && (
+                    <span className={`text-[10px] tabular-nums leading-tight ${isCheapest ? 'text-green-600' : 'text-stone-400'}`}>
+                      {tCard('min_order', { amount: centsToEuro(l.min_order_cents) })}
+                    </span>
+                  )}
                 </span>
                 {isCheapest ? (
                   <span className="text-[10px] font-bold bg-orange-500 text-white rounded-full px-1.5 py-0.5 leading-none">

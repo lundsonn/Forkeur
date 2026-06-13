@@ -861,6 +861,7 @@ def get_public_restaurants() -> list[dict]:
                  json_agg(
                    json_build_object(
                      'platform', pl.platform, 'delivery_fee', pl.delivery_fee,
+                     'min_order', pl.min_order,
                      'eta_min', pl.eta_min, 'url_type', pl.url_type,
                      'is_available', pl.is_available, 'opening_hours', pl.opening_hours,
                      'last_scraped_at', pl.last_scraped_at
@@ -922,6 +923,7 @@ def get_public_deals() -> list[dict]:
                  'platform', pl.platform, 'url', pl.url, 'rating', pl.rating,
                  'review_count', pl.review_count, 'is_available', pl.is_available,
                  'opening_hours', pl.opening_hours,
+                 'last_scraped_at', pl.last_scraped_at,
                  'restaurants', json_build_object(
                    'id', r.id, 'name', r.name, 'cuisine', r.cuisine,
                    'neighborhood', r.neighborhood)
