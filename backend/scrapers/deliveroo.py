@@ -455,7 +455,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
     async with browser_session(lang="fr-BE") as browser:
         # Phase 0: collect listings across all zones, dedup by slug.
         # Zones are independent (own page, same browser/CF session) → run concurrently.
-        ZONE_WORKERS = int(os.environ.get("DELIVEROO_ZONE_WORKERS", "8"))
+        ZONE_WORKERS = int(os.environ.get("DELIVEROO_ZONE_WORKERS", "10"))
         zones = LISTING_ZONES
         zone_sem = asyncio.Semaphore(ZONE_WORKERS)
 
@@ -923,9 +923,8 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                     pass
 
         # Menu-phase worker concurrency. Override with DELIVEROO_MENU_WORKERS.
-        # Default 3 keeps the full 6-scraper batch clear of the 8GB ceiling;
-        # raise it when running Deliveroo alone (or near-alone) and RAM allows.
-        WORKERS = int(os.environ.get("DELIVEROO_MENU_WORKERS", "3"))
+        # Default 5; drop to 3 when running full 6-scraper batch to stay under 8GB ceiling.
+        WORKERS = int(os.environ.get("DELIVEROO_MENU_WORKERS", "5"))
         slices = [saved[w::WORKERS] for w in range(WORKERS)]
         log_fn(f"Phase 2: {n} menus across {WORKERS} parallel workers")
         await asyncio.gather(
