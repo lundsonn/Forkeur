@@ -86,7 +86,8 @@
     "partial_coverage": "· {priced} van {total} artikelen",
     "compare_cta": "Platforms vergelijken →",
     "subtitle_fees": "Goedkoopste bezorging in uw buurt.",
-    "why_fees": "Waarom {platform}? Laagste bezorgkosten."
+    "why_fees": "Waarom {platform}? Laagste bezorgkosten.",
+    "delivery_fee": "Bezorgkosten"
   },
   "direct": {
     "badge": "Direct bestellen · zonder platformkosten",
@@ -115,7 +116,7 @@
     "cheapest_now": "Goedkoopst nu",
     "order_on_direct": "Bestellen bij Direct",
     "compare_all": "Vergelijk alle {count} platforms",
-    "cheapest_badge": "GOEDKOOPST",
+    "cheapest_badge": "LAAGSTE FEE",
     "delivery_service_fees": "bezorging + servicekosten",
     "direct_fees": "{fee} kosten",
     "save": "Bespaar {amount}",

@@ -86,7 +86,8 @@
     "partial_coverage": "· {priced} of {total} items",
     "compare_cta": "Compare platforms →",
     "subtitle_fees": "Cheapest delivery to your area.",
-    "why_fees": "Why {platform}? Lowest delivery fee."
+    "why_fees": "Why {platform}? Lowest delivery fee.",
+    "delivery_fee": "Delivery fee"
   },
   "direct": {
     "badge": "Order directly · no fees",
@@ -115,7 +116,7 @@
     "cheapest_now": "Cheapest right now",
     "order_on_direct": "Order on Direct",
     "compare_all": "Compare all {count} platforms",
-    "cheapest_badge": "CHEAPEST",
+    "cheapest_badge": "LOWEST FEE",
     "delivery_service_fees": "delivery + service fees",
     "direct_fees": "{fee} fees",
     "save": "Save {amount}",

@@ -81,7 +81,7 @@ export default function CompareSheet({
               <div className="flex gap-6 mb-5">
                 <div>
                   <p className="text-xl font-bold text-stone-900">{centsToEuro(total)}</p>
-                  <p className="text-[10px] text-stone-400 uppercase tracking-wide mt-0.5">{tCompare('total')}</p>
+                  <p className="text-[10px] text-stone-400 uppercase tracking-wide mt-0.5">{isFeesOnly ? tCompare('delivery_fee') : tCompare('total')}</p>
                 </div>
                 {eta && (
                   <div>

@@ -86,7 +86,8 @@
     "partial_coverage": "· {priced} sur {total} articles",
     "compare_cta": "Comparer les plateformes →",
     "subtitle_fees": "Livraison la moins chère dans votre zone.",
-    "why_fees": "Pourquoi {platform} ? Frais de livraison les plus bas."
+    "why_fees": "Pourquoi {platform} ? Frais de livraison les plus bas.",
+    "delivery_fee": "Frais de livraison"
   },
   "direct": {
     "badge": "Commander directement · sans frais",
@@ -115,7 +116,7 @@
     "cheapest_now": "Moins cher maintenant",
     "order_on_direct": "Commander sur Direct",
     "compare_all": "Comparer les {count} plateformes",
-    "cheapest_badge": "MOINS CHER",
+    "cheapest_badge": "FRAIS BAS",
     "delivery_service_fees": "livraison + frais de service",
     "direct_fees": "frais {fee}",
     "save": "Économie {amount}",
