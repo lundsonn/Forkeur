@@ -35,6 +35,52 @@ LISTING_ZONES = [
 
 _CARD_JS = "document.querySelectorAll('[data-qa=\"card-element\"]').length"
 
+_NEXT_DATA_RESTAURANTS_EVAL = """
+() => {
+    try {
+        const el = document.getElementById('__NEXT_DATA__');
+        if (!el) return null;
+        const d = JSON.parse(el.textContent);
+        const rdata = d?.props?.appProps?.preloadedState?.discovery?.restaurantList?.restaurantData;
+        if (!rdata) return null;
+        return Object.values(rdata);
+    } catch(e) { return null; }
+}
+"""
+
+
+def _parse_next_data_restaurant(r: dict) -> dict:
+    """Convert a __NEXT_DATA__ restaurantData entry to the internal card format."""
+    addr = r.get("address") or {}
+    coords = (addr.get("location") or {}).get("coordinates") or [None, None]
+    fees = r.get("deliveryFees") or {}
+    eta = r.get("deliveryEtaMinutes") or {}
+    deals = r.get("deals") or []
+
+    fee_cents = (fees.get("byMinFee") or {}).get("fee")
+    min_cents = (fees.get("byMinOrder") or {}).get("minimumAmount")
+    rating = (r.get("rating") or {}).get("starRating")
+    unique_name = r.get("uniqueName") or ""
+
+    return {
+        "name": r.get("name") or unique_name,
+        "slug": unique_name,
+        "href": f"/be-fr/menu/{unique_name}",
+        "image_url": r.get("logoUrl"),
+        "rating": str(rating) if rating is not None else None,
+        "eta_min": eta.get("rangeLower"),
+        "eta_max": eta.get("rangeUpper"),
+        "delivery_fee": fee_cents / 100.0 if fee_cents is not None else None,
+        "min_order": min_cents / 100.0 if min_cents is not None else None,
+        "promoLines": [d["description"] for d in deals if d.get("description")],
+        "lat": coords[1],
+        "lng": coords[0],
+        "street_address": addr.get("firstLine"),
+        "postal_code": addr.get("postalCode"),
+        "neighborhood": addr.get("city"),
+    }
+
+
 _JSONLD_EVAL = """
 () => {
     try {
@@ -423,6 +469,14 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                             log_fn(f"  CF not cleared — skipping {zone}")
                             return []
 
+                    # Prefer __NEXT_DATA__ — structured, no DOM parsing, includes lat/lng/fees
+                    raw_rdata = await zone_page.evaluate(_NEXT_DATA_RESTAURANTS_EVAL)
+                    if raw_rdata:
+                        results = [_parse_next_data_restaurant(r) for r in raw_rdata if r.get("uniqueName")]
+                        log_fn(f"  {len(results)} from __NEXT_DATA__")
+                        return results
+
+                    # Fallback: DOM card extraction
                     try:
                         await zone_page.wait_for_selector('[data-qa="restaurant-card"]', timeout=20000)
                     except Exception:
@@ -430,7 +484,9 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                         return []
 
                     await zone_page.wait_for_timeout(1000)
-                    return await zone_page.evaluate(_LISTING_EVAL)
+                    cards = await zone_page.evaluate(_LISTING_EVAL)
+                    log_fn(f"  {len(cards)} cards (DOM fallback)")
+                    return cards
 
                 try:
                     page_restaurants = await asyncio.wait_for(_scrape_zone(), timeout=120)
@@ -466,14 +522,22 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
         saved: list[tuple[dict, str]] = []
         for r in restaurants:
             try:
-                rid = db.upsert_restaurant({"name": r["name"], "slug": r["slug"], "image_url": r.get("image_url")})
+                rest_data: dict = {"name": r["name"], "slug": r["slug"], "image_url": r.get("image_url")}
+                if r.get("lat") is not None:
+                    rest_data["lat"] = r["lat"]
+                    rest_data["lng"] = r["lng"]
+                    rest_data["geo_source"] = "takeaway"
+                if r.get("neighborhood"):
+                    rest_data["neighborhood"] = r["neighborhood"]
+                rid = db.upsert_restaurant(rest_data)
             except ValueError:
                 continue
             url = f"https://www.takeaway.com{r['href']}"
-            eta_min = _parse_eta_min(r.get("eta"))
-            eta_max = _parse_eta_max(r.get("eta"))
-            delivery_fee = parse_menu_price(r.get("feeText"))
-            min_order = parse_menu_price(r.get("minOrderText"))
+            # Use pre-parsed values from __NEXT_DATA__ (int/float already); fall back to text parsing for DOM cards
+            eta_min = r["eta_min"] if r.get("eta_min") is not None else _parse_eta_min(r.get("eta"))
+            eta_max = r["eta_max"] if r.get("eta_max") is not None else _parse_eta_max(r.get("eta"))
+            delivery_fee = r["delivery_fee"] if r.get("delivery_fee") is not None else parse_menu_price(r.get("feeText"))
+            min_order = r["min_order"] if r.get("min_order") is not None else parse_menu_price(r.get("minOrderText"))
             lid = db.upsert_listing({
                 "restaurant_id": rid,
                 "platform": "takeaway",
@@ -485,6 +549,17 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 **({"delivery_fee": delivery_fee} if delivery_fee is not None else {}),
                 **({"min_order": min_order} if min_order is not None else {}),
             })
+            # Write address fields from __NEXT_DATA__ to platform_listings
+            addr_patch: dict = {}
+            if r.get("street_address"):
+                addr_patch["street_address"] = r["street_address"]
+            if r.get("postal_code"):
+                addr_patch["postal_code"] = r["postal_code"]
+            if addr_patch:
+                try:
+                    db.patch_listing(lid, addr_patch)
+                except Exception:
+                    pass
             db.upsert_promotions(lid, parse_promo_texts(r.get("promoLines") or []))
             records_saved += 1
             saved.append((r, lid))
@@ -509,23 +584,25 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 menu_page = await new_page(browser, lang="fr-BE")
                 try:
                     _, items, promo_lines, rinfo = await scrape_menu_page(menu_page, lid, url, r["name"])
-                    if rinfo and (rinfo.get("lat") is not None or rinfo.get("neighborhood")):
+                    if rinfo and (rinfo.get("lat") is not None or rinfo.get("neighborhood") or rinfo.get("cuisine") or rinfo.get("phone")):
                         enriched: dict = {"name": r["name"], "slug": r["slug"]}
-                        if rinfo.get("lat") is not None:
+                        # Only write geo from JSON-LD if __NEXT_DATA__ didn't already supply it in Phase 1
+                        if rinfo.get("lat") is not None and r.get("lat") is None:
                             enriched["lat"] = rinfo["lat"]
                             enriched["lng"] = rinfo["lng"]
                             enriched["geo_source"] = "takeaway"
-                        if rinfo.get("neighborhood") and not enriched.get("neighborhood"):
+                            log_fn(f"  geo (JSON-LD): {rinfo['lat']},{rinfo['lng']}")
+                        if rinfo.get("neighborhood") and not r.get("neighborhood"):
                             enriched["neighborhood"] = rinfo["neighborhood"]
                         if rinfo.get("cuisine"):
                             enriched["cuisine"] = rinfo["cuisine"]
                         if rinfo.get("phone"):
                             enriched["phone"] = rinfo["phone"]
-                        # Address goes to platform_listings, not restaurants
+                        # Supplement address from JSON-LD only if __NEXT_DATA__ didn't provide it
                         addr_patch: dict = {}
-                        if rinfo.get("street_address"):
+                        if rinfo.get("street_address") and not r.get("street_address"):
                             addr_patch["street_address"] = rinfo["street_address"]
-                        if rinfo.get("postal_code"):
+                        if rinfo.get("postal_code") and not r.get("postal_code"):
                             addr_patch["postal_code"] = rinfo["postal_code"]
                         try:
                             db.upsert_restaurant(enriched)
@@ -536,7 +613,6 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                                 db.patch_listing(lid, addr_patch)
                             except Exception:
                                 pass
-                        log_fn(f"  geo: {rinfo.get('lat')},{rinfo.get('lng')}")
                     if items:
                         count = db.insert_menu_items(lid, items)
                         menu_items_saved += count
