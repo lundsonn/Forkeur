@@ -20,12 +20,12 @@ from scrapers import ubereats
 
 
 def test_run_timeout_is_env_tunable(monkeypatch):
-    """_RUN_TIMEOUT_S reads UBEREATS_RUN_TIMEOUT_S with a 2400s default."""
+    """_RUN_TIMEOUT_S reads UBEREATS_RUN_TIMEOUT_S with a 14400s default."""
     import importlib
 
     monkeypatch.delenv("UBEREATS_RUN_TIMEOUT_S", raising=False)
     importlib.reload(ubereats)
-    assert ubereats._RUN_TIMEOUT_S == 2400
+    assert ubereats._RUN_TIMEOUT_S == 14400
 
     monkeypatch.setenv("UBEREATS_RUN_TIMEOUT_S", "7")
     importlib.reload(ubereats)
