@@ -43,3 +43,7 @@ backend/static/
 # Root-level screenshots / audit docs
 mobile_*.png
 SCRAPER_TIMING_AUDIT.md
+
+# Throwaway probe/investigation scripts
+backend/scripts/probe_*.py
+backend/scripts/probe_js_bundles.py

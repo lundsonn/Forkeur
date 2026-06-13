@@ -15,6 +15,7 @@ from models import ScraperResult
 from scrapers.base import browser_session, new_page, noop_log, is_safe_url
 from scrapers.direct_classify import classify_url, is_junk_url
 import db
+import pgpool
 
 # Re-check existing direct listings older than this many days
 _RESCRAPE_DAYS = 10
@@ -208,34 +209,28 @@ async def _enrich_existing(browser, log: Callable) -> int:
     - New restaurants (no direct listing yet): insert.
     - Stale listings (scraped_at older than _RESCRAPE_DAYS or null): update.
     """
-    supabase = db.get_client()
-
     stale_cutoff = datetime.now(timezone.utc) - timedelta(days=_RESCRAPE_DAYS)
 
-    existing_listings = (
-        supabase.table('platform_listings')
-        .select('restaurant_id, id, scraped_at')
-        .eq('platform', 'direct')
-        .execute()
-    ).data
+    existing_listings = await asyncio.to_thread(
+        pgpool.fetchall,
+        "SELECT restaurant_id::text, id::text, scraped_at FROM platform_listings WHERE platform = 'direct'",
+    )
 
     # restaurant_id → listing id (for update) or None (new)
     listing_by_rid: dict[str, dict] = {r['restaurant_id']: r for r in existing_listings}
 
     # stale = null scraped_at OR older than cutoff
+    # psycopg3 returns datetime objects (tz-aware); strings from old shim are gone
     stale_rids = {
         rid for rid, listing in listing_by_rid.items()
         if not listing['scraped_at']
-        or datetime.fromisoformat(listing['scraped_at'].replace('Z', '+00:00')) < stale_cutoff
+        or listing['scraped_at'] < stale_cutoff
     }
 
-    all_restaurants = (
-        supabase.table('restaurants')
-        .select('id, name, website, phone, is_chain')
-        .not_.is_('website', 'null')
-        .neq('website', '')
-        .execute()
-    ).data
+    all_restaurants = await asyncio.to_thread(
+        pgpool.fetchall,
+        "SELECT id::text, name, website, phone, is_chain FROM restaurants WHERE website IS NOT NULL AND website != ''",
+    )
 
     # Process: new restaurants + stale existing listings
     to_process = [
@@ -263,17 +258,17 @@ async def _enrich_existing(browser, log: Callable) -> int:
                 await page.close()
 
             if analysis['phone'] and not r.get('phone'):
-                supabase.table('restaurants').update(
-                    {'phone': analysis['phone']}
-                ).eq('id', r['id']).execute()
+                await asyncio.to_thread(db.patch_restaurant_phone, r['id'], analysis['phone'])
 
             order_url = analysis['order_url'] or r['website']
             if is_junk_url(order_url):
                 # Stale listing with now-junk URL: remove it
                 if r['id'] in listing_by_rid:
-                    supabase.table('platform_listings').delete().eq(
-                        'id', listing_by_rid[r['id']]['id']
-                    ).execute()
+                    await asyncio.to_thread(
+                        pgpool.execute,
+                        "DELETE FROM platform_listings WHERE id = %s",
+                        [listing_by_rid[r['id']]['id']],
+                    )
                     log(f"  ✗ removed junk URL for {r['name']}: {order_url[:60]}")
                 return 0
 
@@ -283,23 +278,19 @@ async def _enrich_existing(browser, log: Callable) -> int:
             if r.get('is_chain') and url_type != 'ordering':
                 url_type = 'website'
 
-            now = datetime.now(timezone.utc).isoformat()
             row = {
                 'restaurant_id': r['id'],
                 'platform': 'direct',
                 'url': order_url,
                 'url_type': url_type,
                 'is_available': True,
-                'scraped_at': now,
             }
 
             is_new = r['id'] not in listing_by_rid
             if is_new:
-                supabase.table('platform_listings').insert(row).execute()
+                await asyncio.to_thread(db.upsert_listing, row)
             else:
-                supabase.table('platform_listings').update(row).eq(
-                    'id', listing_by_rid[r['id']]['id']
-                ).execute()
+                await asyncio.to_thread(db.patch_listing, listing_by_rid[r['id']]['id'], row)
 
             log(f"  {'✓' if is_new else '↻'} {r['name']} [{url_type}]: {order_url[:70]}")
             return 1 if is_new else 0
@@ -385,8 +376,6 @@ async def _get_place_details(page, maps_url: str) -> dict:
 
 async def _discover_maps(page, log: Callable) -> int:
     """Search Google Maps for Brussels restaurants, upsert new ones."""
-    supabase = db.get_client()
-
     all_stubs: list[dict] = []
     seen_names: set[str] = set()
 
@@ -422,9 +411,7 @@ async def _discover_maps(page, log: Callable) -> int:
             })
 
             if stub.get('phone'):
-                supabase.table('restaurants').update(
-                    {'phone': stub['phone']}
-                ).eq('id', rest_id).execute()
+                await asyncio.to_thread(db.patch_restaurant_phone, rest_id, stub['phone'])
 
             # Create a direct listing — even without confirmed ordering URL,
             # having a phone / website is already useful to the user.
@@ -432,13 +419,11 @@ async def _discover_maps(page, log: Callable) -> int:
             if not has_channel:
                 continue
 
-            existing = (
-                supabase.table('platform_listings')
-                .select('id')
-                .eq('restaurant_id', rest_id)
-                .eq('platform', 'direct')
-                .execute()
-            ).data
+            existing = await asyncio.to_thread(
+                pgpool.fetchone,
+                "SELECT id FROM platform_listings WHERE restaurant_id = %s AND platform = 'direct' LIMIT 1",
+                [rest_id],
+            )
 
             website_url = stub.get('website')
             if is_junk_url(website_url) or not _validate_order_url(website_url):
@@ -452,7 +437,7 @@ async def _discover_maps(page, log: Callable) -> int:
             }
 
             if not existing:
-                supabase.table('platform_listings').insert(row).execute()
+                await asyncio.to_thread(db.upsert_listing, row)
                 saved += 1
                 log(f"  + {name}")
 
@@ -475,14 +460,10 @@ def _clean_commune(name: str | None) -> str | None:
 
 async def _enrich_neighborhoods(log: Callable) -> None:
     """Reverse-geocode restaurants with null neighborhood using Nominatim (max 1 req/s)."""
-    supabase = db.get_client()
-    rows = (
-        supabase.table('restaurants')
-        .select('id, lat, lng')
-        .is_('neighborhood', 'null')
-        .not_.is_('lat', 'null')
-        .execute()
-    ).data
+    rows = await asyncio.to_thread(
+        pgpool.fetchall,
+        "SELECT id::text, lat, lng FROM restaurants WHERE neighborhood IS NULL AND lat IS NOT NULL",
+    )
 
     log(f"Phase 3: {len(rows)} restaurants to geocode")
     updated = 0
@@ -502,7 +483,11 @@ async def _enrich_neighborhoods(log: Callable) -> None:
                     addr.get('city_district') or addr.get('suburb') or addr.get('municipality')
                 )
                 if hood:
-                    supabase.table('restaurants').update({'neighborhood': hood}).eq('id', row['id']).execute()
+                    await asyncio.to_thread(
+                        pgpool.execute,
+                        "UPDATE restaurants SET neighborhood = %s WHERE id = %s",
+                        [hood, row['id']],
+                    )
                     updated += 1
             except Exception:
                 pass
