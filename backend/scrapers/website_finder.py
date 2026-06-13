@@ -241,9 +241,91 @@ def _is_junk_name(name: str) -> bool:
     return False
 
 
+_CONCURRENCY = 4
+
+
+async def _worker(
+    worker_id: int,
+    queue: asyncio.Queue,
+    total: int,
+    browser,
+    log: Callable,
+    counters: dict,
+    lock: asyncio.Lock,
+) -> None:
+    page = await new_page(browser)
+    try:
+        await page.goto("https://www.google.com/maps", timeout=30_000)
+        await page.wait_for_timeout(1_500)
+        await _accept_google_cookies(page)
+        log(f"[worker-{worker_id}] ready")
+
+        while True:
+            try:
+                idx, row = queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+
+            rid = row["id"]
+            name = row["name"]
+            log(f"[website_finder] [{idx}/{total}] {name}")
+
+            try:
+                if _is_junk_name(name):
+                    log(f"    [{worker_id}] Skipping junk name")
+                    db.mark_restaurant_searched(rid)
+                    async with lock:
+                        counters["processed"] += 1
+                    queue.task_done()
+                    continue
+
+                website, maps_has_delivery, lat, lng = await _find_website_on_maps(page, name, log)
+
+                if lat is not None and lng is not None:
+                    db.get_client().table("restaurants").update({"lat": lat, "lng": lng}).eq("id", rid).execute()
+
+                if not website:
+                    db.mark_restaurant_searched(rid)
+                    async with lock:
+                        counters["processed"] += 1
+                    await asyncio.sleep(1)
+                    queue.task_done()
+                    continue
+
+                log(f"    [{worker_id}] Website: {website} (maps_delivery={maps_has_delivery})")
+                async with lock:
+                    counters["websites_found"] += 1
+
+                if maps_has_delivery:
+                    order_url = website
+                    async with lock:
+                        counters["orders_found"] += 1
+                else:
+                    order_url = await _detect_ordering(page, website, log)
+                    if order_url:
+                        async with lock:
+                            counters["orders_found"] += 1
+
+                db.patch_restaurant_website(rid, website, order_url)
+                async with lock:
+                    counters["processed"] += 1
+
+                await asyncio.sleep(1)
+            except Exception as e:
+                log(f"    [{worker_id}] error on {name}: {e}")
+                db.mark_restaurant_searched(rid)
+                async with lock:
+                    counters["processed"] += 1
+            finally:
+                queue.task_done()
+    finally:
+        await page.close()
+
+
 async def run(
     log: Callable[[str], None] | None = None,
     limit: int | None = None,
+    concurrency: int = _CONCURRENCY,
 ) -> dict:
     """Find websites and detect online ordering for restaurants that have none yet."""
     if log is None:
@@ -260,73 +342,32 @@ async def run(
         query = query.limit(limit)
 
     rows: list[dict] = query.execute().data
-    log(f"[website_finder] {len(rows)} restaurants to process")
+    total = len(rows)
+    log(f"[website_finder] {total} restaurants to process (concurrency={concurrency})")
 
-    processed = 0
-    websites_found = 0
-    orders_found = 0
+    counters = {"processed": 0, "websites_found": 0, "orders_found": 0}
+    lock = asyncio.Lock()
+
+    queue: asyncio.Queue = asyncio.Queue()
+    for i, row in enumerate(rows, 1):
+        queue.put_nowait((i, row))
 
     browser = await new_browser(headed=False)
     try:
-        page = await new_page(browser)
-
-        log("[website_finder] Opening Google Maps to accept cookies")
-        await page.goto("https://www.google.com/maps", timeout=30_000)
-        await page.wait_for_timeout(2_000)
-        await _accept_google_cookies(page)
-        log("[website_finder] Cookie consent handled")
-
-        for i, row in enumerate(rows):
-            rid = row["id"]
-            name = row["name"]
-            log(f"[website_finder] [{i + 1}/{len(rows)}] {name}")
-
-            if _is_junk_name(name):
-                log(f"    Skipping junk name")
-                db.mark_restaurant_searched(rid)
-                processed += 1
-                continue
-
-            website, maps_has_delivery, lat, lng = await _find_website_on_maps(page, name, log)
-
-            if lat is not None and lng is not None:
-                db.get_client().table("restaurants").update({"lat": lat, "lng": lng}).eq("id", rid).execute()
-                log(f"    Coords: {lat:.4f}, {lng:.4f}")
-
-            if not website:
-                log(f"    No website found on Maps")
-                db.mark_restaurant_searched(rid)
-                processed += 1
-                await asyncio.sleep(2)
-                continue
-
-            log(f"    Website: {website} (maps_delivery={maps_has_delivery})")
-            websites_found += 1
-
-            if maps_has_delivery:
-                order_url = website
-                log(f"    Delivery confirmed via Maps")
-                orders_found += 1
-            else:
-                order_url = await _detect_ordering(page, website, log)
-                if order_url:
-                    log(f"    Order URL: {order_url}")
-                    orders_found += 1
-                else:
-                    log(f"    No ordering detected")
-
-            db.patch_restaurant_website(rid, website, order_url)
-            processed += 1
-
-            await asyncio.sleep(2)
-
+        workers = [
+            asyncio.create_task(
+                _worker(i, queue, total, browser, log, counters, lock)
+            )
+            for i in range(min(concurrency, total or 1))
+        ]
+        await asyncio.gather(*workers)
     finally:
         await browser.close()
 
     summary = {
-        "processed": processed,
-        "websites_found": websites_found,
-        "orders_found": orders_found,
+        "processed": counters["processed"],
+        "websites_found": counters["websites_found"],
+        "orders_found": counters["orders_found"],
     }
     log(f"[website_finder] Done: {summary}")
     return summary
