@@ -137,7 +137,7 @@ export default function CompareSheet({
                 </div>
                 <div className="flex flex-col items-end gap-0.5">
                   <div className="flex items-center gap-4">
-                    {e && <span className="text-xs text-stone-400">{e}</span>}
+                    {e && <span className="text-xs text-stone-500">{e}</span>}
                     <span
                       className={`text-sm ${
                         isIncomplete
@@ -162,7 +162,7 @@ export default function CompareSheet({
           })}
 
           {cheapestPlatform && (
-            <p className="text-xs text-stone-400 mt-3 mb-5">
+            <p className="text-xs text-stone-500 mt-3 mb-5">
               {isFeesOnly
                 ? tCompare('why_fees', { platform: PLATFORM_LABELS[cheapestPlatform] })
                 : tCompare('why', { platform: PLATFORM_LABELS[cheapestPlatform] })}

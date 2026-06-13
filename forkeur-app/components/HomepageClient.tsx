@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo, Suspense } from 'react'
+import { useState, useMemo, useEffect, Suspense } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import type { RestaurantSummary } from '@/lib/queries'
@@ -14,6 +14,16 @@ const MapView = dynamic(() => import('./MapView'), {
 
 type SortBy = 'best' | 'cheapest' | 'fastest'
 
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371
+  const dLat = ((lat2 - lat1) * Math.PI) / 180
+  const dLng = ((lng2 - lng1) * Math.PI) / 180
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2
+  return R * 2 * Math.asin(Math.sqrt(a))
+}
+
 export default function HomepageClient({
   restaurants,
   cuisines,
@@ -24,12 +34,21 @@ export default function HomepageClient({
   const PAGE_SIZE = 20
 
   const [search, setSearch] = useState('')
+  const [userCoords, setUserCoords] = useState<[number, number] | null>(null)
   const [selectedCuisine, setSelectedCuisine] = useState<string | null>(null)
   const [selectedNeighborhood, setSelectedNeighborhood] = useState<string | null>(null)
   const [neighborhoodSheetOpen, setNeighborhoodSheetOpen] = useState(false)
   const [sortBy, setSortBy] = useState<SortBy>('best')
   const [view, setView] = useState<'list' | 'map'>('list')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setUserCoords([pos.coords.latitude, pos.coords.longitude]),
+      () => { /* denied or unavailable — stay null */ }
+    )
+  }, [])
 
   function resetAndSet<T>(setter: (v: T) => void) {
     return (v: T) => { setter(v); setVisibleCount(PAGE_SIZE) }
@@ -102,6 +121,15 @@ export default function HomepageClient({
   }, [restaurants, search, selectedNeighborhood, selectedCuisine, sortBy, metrics])
 
   const hasFilter = !!(search || selectedNeighborhood)
+
+  const nearYou = useMemo(() => {
+    if (!userCoords || hasFilter) return []
+    const [ulat, ulng] = userCoords
+    return restaurants
+      .filter((r): r is typeof r & { lat: number; lng: number } => r.lat !== null && r.lng !== null)
+      .sort((a, b) => haversineKm(ulat, ulng, a.lat, a.lng) - haversineKm(ulat, ulng, b.lat, b.lng))
+      .slice(0, 3)
+  }, [userCoords, hasFilter, restaurants])
 
   return (
     <div className="w-full max-w-md mx-auto px-5">
@@ -285,9 +313,44 @@ export default function HomepageClient({
         </Suspense>
       ) : (
         <>
+          {/* Near you */}
+          {nearYou.length > 0 && (
+            <>
+              <p className="text-[10px] font-semibold tracking-widest text-stone-400 uppercase mb-3">
+                {tResults('popular')}
+              </p>
+              <div className="mb-6">
+                {nearYou.map((r, i) => {
+                  const m = metrics.get(r.id)
+                  return (
+                    <RestaurantCard
+                      key={r.id}
+                      restaurant={r}
+                      href={`/restaurant/${r.id}`}
+                      isLast={i === nearYou.length - 1}
+                      maxFee={m?.maxFee}
+                      priority={false}
+                      directBadge={
+                        r.direct_url_type === 'ordering'
+                          ? tCard('direct_cta_ordering')
+                          : r.direct_url_type === 'menu'
+                            ? tCard('direct_cta_menu')
+                            : r.direct_url_type === 'website'
+                              ? tCard('direct_cta_website')
+                              : r.direct_url_type === 'phone'
+                                ? tCard('direct_cta_phone')
+                                : tDirect('badge')
+                      }
+                    />
+                  )
+                })}
+              </div>
+            </>
+          )}
+
           {/* List label */}
           <p className="text-[10px] font-semibold tracking-widest text-stone-400 uppercase mb-3">
-            {hasFilter ? tResults('count', { count: filtered.length }) : tResults('popular')}
+            {hasFilter || nearYou.length > 0 ? tResults('count', { count: filtered.length }) : tResults('popular')}
           </p>
 
           {/* Restaurant list */}

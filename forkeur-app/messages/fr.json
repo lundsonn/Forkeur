@@ -60,7 +60,15 @@
     "bottom_cheapest": "Le moins cher pour votre commande de {count} articles",
     "all_in": "{platform} · {amount} tout compris",
     "order_on": "Commander sur {platform} · {amount}",
-    "allergens": "Allergènes"
+    "allergens": "Allergènes",
+    "empty_hint": "Appuyez sur + pour ajouter des articles et comparer les prix",
+    "restore_usual": "Restaurer votre commande habituelle ?",
+    "restore_btn": "Restaurer",
+    "restore_dismiss": "Non merci",
+    "quick_fill": "Remplissage rapide (2 premiers articles)",
+    "save_usual": "Enregistrer comme d'habitude",
+    "save_usual_done": "Enregistré ✓",
+    "opens_in_app": "· ouvre l'app"
   },
   "compare": {
     "best_now": "Meilleur prix",
@@ -147,7 +155,8 @@
     "build_order_eyebrow": "Composez votre commande",
     "build_order_sub": "Ajoutez ce que vous voulez — on vous montre la plateforme la moins chère, frais inclus.",
     "phone_unverified": "Non vérifié — nous n'avons pas pu confirmer ce numéro",
-    "order_covered_platform": "Cet établissement ne prend les commandes que via les apps comparées ci-dessus."
+    "order_covered_platform": "Cet établissement ne prend les commandes que via les apps comparées ci-dessus.",
+    "last_updated": "Mis à jour {ago}"
   },
   "hours": {
     "closed": "Fermé",

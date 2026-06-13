@@ -60,7 +60,15 @@
     "bottom_cheapest": "Cheapest for your {count}-item order",
     "all_in": "{platform} · {amount} all-in",
     "order_on": "Order on {platform} · {amount}",
-    "allergens": "Allergens"
+    "allergens": "Allergens",
+    "empty_hint": "Tap + to add items and compare prices",
+    "restore_usual": "Restore your usual order?",
+    "restore_btn": "Restore",
+    "restore_dismiss": "No thanks",
+    "quick_fill": "Quick fill (first 2 items)",
+    "save_usual": "Save as usual",
+    "save_usual_done": "Saved ✓",
+    "opens_in_app": "· opens app"
   },
   "compare": {
     "best_now": "Best right now",
@@ -147,7 +155,8 @@
     "build_order_eyebrow": "Build your exact order",
     "build_order_sub": "Add what you want — we'll show the cheapest platform for your basket, all fees in.",
     "phone_unverified": "Unverified — we couldn't corroborate this number",
-    "order_covered_platform": "This venue only takes orders through the apps compared above."
+    "order_covered_platform": "This venue only takes orders through the apps compared above.",
+    "last_updated": "Updated {ago}"
   },
   "hours": {
     "closed": "Closed",

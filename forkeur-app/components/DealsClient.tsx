@@ -93,7 +93,7 @@ export default function DealsClient({ deals }: { deals: DealItem[] }) {
       <h1 className="text-[1.65rem] font-bold leading-tight mb-1" style={{ color: '#1A1A1A' }}>
         {tDeals('heading')}
       </h1>
-      <p className="text-sm text-stone-400 mb-5">
+      <p className="text-sm text-stone-500 mb-5">
         {tDeals('subtitle', { count: deals.length })}
       </p>
 
@@ -141,7 +141,7 @@ export default function DealsClient({ deals }: { deals: DealItem[] }) {
 
       {/* Deal cards */}
       {visible.length === 0 ? (
-        <p className="text-sm text-stone-400 text-center py-16">
+        <p className="text-sm text-stone-500 text-center py-16">
           {tDeals('none')}
         </p>
       ) : (

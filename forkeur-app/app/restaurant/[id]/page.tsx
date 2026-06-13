@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Image from 'next/image'
 import { notFound } from 'next/navigation'
+import { Suspense } from 'react'
 
 export const revalidate = 3600
 
@@ -65,13 +66,15 @@ export default async function Page({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const [data, tDirect, tCard, tDetail, tBadge, tOwners] = await Promise.all([
+  const [data, tDirect, tCard, tDetail, tBadge, tOwners, tCompare, tDeals] = await Promise.all([
     getRestaurantWithListings(id),
     getTranslations('direct'),
     getTranslations('card'),
     getTranslations('detail'),
     getTranslations('badge'),
     getTranslations('owners'),
+    getTranslations('compare'),
+    getTranslations('deals'),
   ])
   if (!data) notFound()
 
@@ -82,6 +85,22 @@ export default async function Page({
     .map((l) => l.rating)
     .filter((r): r is number => r !== null)
     .sort((a, b) => b - a)[0] ?? null
+
+  const newestScrapedAt = data.listings
+    .map((l) => l.last_scraped_at)
+    .filter((s): s is string => s !== null)
+    .sort()
+    .at(-1) ?? null
+
+  function formatAgo(iso: string): string {
+    const diffMs = Date.now() - new Date(iso).getTime()
+    const diffMin = Math.round(diffMs / 60000)
+    if (diffMin < 60) return `${diffMin}m ago`
+    const diffH = Math.round(diffMin / 60)
+    if (diffH < 24) return `${diffH}h ago`
+    const diffD = Math.round(diffH / 24)
+    return `${diffD}d ago`
+  }
 
   // Fee overview rows (cheapest first, with deltas)
   const feeRows = computeFeeRows(data.listings)
@@ -137,6 +156,11 @@ export default async function Page({
             </span>
           </details>
         </div>
+        {newestScrapedAt && (
+          <p className="text-[11px] text-stone-400 mt-0.5">
+            {tDetail('last_updated', { ago: formatAgo(newestScrapedAt) })}
+          </p>
+        )}
         {data.order_url && /^https?:\/\//i.test(data.order_url) && (() => {
           const isActionable = !data.direct_url_type || data.direct_url_type === 'ordering' || data.direct_url_type === 'menu'
           // Actionable direct ordering is surfaced by the "Where to order" card below;
@@ -228,6 +252,55 @@ export default async function Page({
                 </p>
               </div>
             )}
+
+          {/* Winner hero card — delivery-only restaurants */}
+          {(() => {
+            const hasActionableDirect = Boolean(
+              data.order_url &&
+              /^https?:\/\//i.test(data.order_url) &&
+              (!data.direct_url_type || data.direct_url_type === 'ordering' || data.direct_url_type === 'menu')
+            )
+            if (hasActionableDirect) return null
+            if (feeRows.length === 0) return null
+
+            const winnerRow = feeRows.find((r) => r.isCheapest)
+            if (!winnerRow) return null
+
+            const winnerListing = data.listings.find((l) => l.platform === winnerRow.platform)
+            const href =
+              winnerListing?.platform_url && /^https?:\/\//i.test(winnerListing.platform_url)
+                ? winnerListing.platform_url
+                : null
+
+            return (
+              <div className="rounded-2xl bg-orange-50 border border-orange-200 p-4 mx-5 mb-4">
+                <p className="uppercase tracking-widest text-[10px] font-semibold text-orange-600">
+                  {tDetail('where_to_order_eyebrow')}
+                </p>
+                <div className="flex items-center gap-3 mt-2">
+                  <div className="shrink-0">
+                    <PlatformLogo platform={winnerRow.platform} size={40} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-stone-900">{PLATFORM_LABELS[winnerRow.platform]}</p>
+                    <p className="text-xs text-stone-500 mt-0.5">{tCompare('subtitle_fees')}</p>
+                  </div>
+                  <p className="text-xl font-bold text-stone-900 shrink-0">{centsToEuro(winnerRow.feeCents)}</p>
+                </div>
+                {href && (
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white font-semibold text-sm transition-colors bg-[#D85A30] hover:bg-[#c04e28]"
+                  >
+                    {tDeals('order_on', { platform: PLATFORM_LABELS[winnerRow.platform] })}
+                    <ArrowRight size={16} aria-hidden="true" />
+                  </a>
+                )}
+              </div>
+            )
+          })()}
 
           {/* Delivery fees */}
           {feeRows.length > 0 && (
@@ -356,7 +429,9 @@ export default async function Page({
                     </p>
                   </div>
                 ) : (
-                  <BasketSimulator menuItems={data.menuItems} listings={data.listings} phone={data.phone} phoneConfidence={data.phone_confidence} orderChannel={data.order_channel} matchRate={matchRate} />
+                  <Suspense fallback={null}>
+                    <BasketSimulator menuItems={data.menuItems} listings={data.listings} phone={data.phone} phoneConfidence={data.phone_confidence} orderChannel={data.order_channel} matchRate={matchRate} restaurantId={id} />
+                  </Suspense>
                 )}
               </div>
             )

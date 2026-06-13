@@ -54,16 +54,5 @@ export default function OpenStatusBadge({
     }
   }
 
-  return (
-    <span
-      title={t('not_checked_tooltip')}
-      className="inline-flex items-center gap-0.5 text-[10px] font-medium text-stone-400 cursor-default select-none"
-    >
-      <svg width="9" height="9" viewBox="0 0 9 9" fill="none" aria-hidden="true" className="shrink-0">
-        <circle cx="4.5" cy="4.5" r="4" stroke="currentColor" strokeWidth="1"/>
-        <path d="M4.5 3.5v0.1M4.5 5v1.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
-      </svg>
-      {t('not_checked')}
-    </span>
-  )
+  return null
 }

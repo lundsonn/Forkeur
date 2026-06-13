@@ -70,7 +70,7 @@ export default function MenuPriceBars({ items }: Props) {
         </div>
 
         {/* Footnote */}
-        <p className="text-[11px] text-stone-400 mt-3">
+        <p className="text-[11px] text-stone-500 mt-3">
           {t('compared_footnote', { compared: comparedCount, total: totalCount })}
         </p>
       </div>

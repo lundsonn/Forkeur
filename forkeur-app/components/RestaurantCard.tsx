@@ -64,7 +64,7 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge, 
             <p className="text-sm font-semibold text-stone-900 truncate">{name}</p>
             <OpenStatusBadge openingHours={openingHours} isAvailable={isAvailable} />
           </div>
-          <p className="text-xs text-stone-400 truncate">{cuisine.join(' · ')}</p>
+          <p className="text-xs text-stone-500 truncate">{cuisine.join(' · ')}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0 mt-0.5">
           {cheapestFeeCents != null && cheapestFeeCents > 0 && (
@@ -111,7 +111,7 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge, 
                     {tCard('cheapest_badge')}
                   </span>
                 ) : delta !== null && delta > 0 ? (
-                  <span className="text-[10px] text-stone-400 tabular-nums">+{centsToEuro(delta)}</span>
+                  <span className="text-[10px] text-stone-500 tabular-nums">+{centsToEuro(delta)}</span>
                 ) : null}
               </div>
             )
@@ -134,7 +134,7 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge, 
 
       {/* Compare all */}
       {!collapsed && sortedTiles.length > 1 && (
-        <p className="relative z-10 pointer-events-none text-center text-xs text-stone-400 mt-0.5">
+        <p className="relative z-10 pointer-events-none text-center text-xs text-stone-500 mt-0.5">
           {tCard('compare_all', { count: sortedTiles.length })} ›
         </p>
       )}

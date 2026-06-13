@@ -34,7 +34,7 @@ export default function PlatformPriceRow({ item, qty, onAdd, onRemove, isLast }:
             {item.name}
           </p>
           {item.description && (
-            <p className="text-xs text-stone-400 mt-0.5 line-clamp-1">{item.description}</p>
+            <p className="text-xs text-stone-500 mt-0.5 line-clamp-1">{item.description}</p>
           )}
         </div>
 

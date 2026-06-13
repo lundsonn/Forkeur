@@ -1,8 +1,9 @@
 'use client'
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { useTranslations } from 'next-intl'
 import Image from 'next/image'
 import { ArrowRight } from 'lucide-react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import {
   BasketItem,
   PlatformFees,
@@ -21,6 +22,13 @@ import {
 import { MenuItemWithPrices, PlatformListing } from '@/lib/queries'
 import CompareSheet from './CompareSheet'
 import PlatformLogo from './ui/PlatformLogo'
+
+const PLATFORM_SHORT: Record<Platform, string> = {
+  uber_eats: 'UE',
+  deliveroo: 'DE',
+  takeaway: 'TW',
+  direct: 'DR',
+}
 
 function DishModal({
   item,
@@ -191,20 +199,112 @@ type Props = {
   menuItems: MenuItemWithPrices[]
   listings: PlatformListing[]
   phone: string | null
-  // Optional trust/channel signals from the detail payload. Currently wired through for
-  // future use; `phone` is not rendered inside this component today (the detail page owns
-  // the visible phone surface), so these are types-only pass-through for now.
-  // TODO: render phone + confidence caveat here if a call-to-order surfaces inside the basket.
   phoneConfidence?: string | null
   orderChannel?: string | null
   matchRate?: number
+  restaurantId?: string
 }
 
-export default function BasketSimulator({ menuItems, listings, phone, phoneConfidence, orderChannel, matchRate = 1 }: Props) {
+export default function BasketSimulator({ menuItems, listings, phone, phoneConfidence, orderChannel, matchRate = 1, restaurantId }: Props) {
   const [basket, setBasket] = useState<BasketItem[]>([])
   const [sheetOpen, setSheetOpen] = useState(false)
   const [selectedItem, setSelectedItem] = useState<MenuItemWithPrices | null>(null)
+  const [showRestoreBanner, setShowRestoreBanner] = useState(false)
+  const [savedBasket, setSavedBasket] = useState<BasketItem[] | null>(null)
+  const [saveLabel, setSaveLabel] = useState<'default' | 'saved'>('default')
+  const [isMobile, setIsMobile] = useState(false)
   const prevBasketLengthRef = React.useRef(0)
+  const initializedRef = useRef(false)
+  const skipNextUrlSyncRef = useRef(false)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const tBasket = useTranslations('basket')
+  const tCard = useTranslations('card')
+
+  const searchParams = useSearchParams()
+  const router = useRouter()
+
+  // Detect mobile once on mount (SSR-safe)
+  useEffect(() => {
+    const ua = navigator.userAgent
+    if (ua.includes('Android') || /iPhone|iPad|iPod/.test(ua)) {
+      setIsMobile(true)
+    }
+  }, [])
+
+  // On mount: parse ?basket= param and/or show localStorage restore banner
+  useEffect(() => {
+    if (initializedRef.current) return
+    initializedRef.current = true
+
+    const lsKey = restaurantId ? `forkeur-basket-${restaurantId}` : null
+
+    // Try to parse URL basket param first
+    const urlParam = searchParams.get('basket')
+    let urlItems: BasketItem[] = []
+    if (urlParam) {
+      for (const part of urlParam.split(',')) {
+        const colonIdx = part.lastIndexOf(':')
+        if (colonIdx === -1) continue
+        const name = decodeURIComponent(part.slice(0, colonIdx))
+        const qty = parseInt(part.slice(colonIdx + 1), 10)
+        if (!name || isNaN(qty) || qty < 1) continue
+        const found = menuItems.find((m) => m.name === name)
+        if (found) urlItems.push({ name: found.name, qty, prices: found.prices })
+      }
+    }
+
+    if (urlItems.length > 0) {
+      skipNextUrlSyncRef.current = true
+      setBasket(urlItems)
+      return
+    }
+
+    // No URL basket — check localStorage for restore banner
+    if (lsKey) {
+      try {
+        const raw = localStorage.getItem(lsKey)
+        if (raw) {
+          const parsed: BasketItem[] = JSON.parse(raw)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setSavedBasket(parsed)
+            setShowRestoreBanner(true)
+          }
+        }
+      } catch {
+        // ignore malformed localStorage
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Save basket to localStorage on every non-empty change
+  useEffect(() => {
+    if (!restaurantId || basket.length === 0) return
+    try {
+      localStorage.setItem(`forkeur-basket-${restaurantId}`, JSON.stringify(basket))
+    } catch {
+      // ignore storage errors
+    }
+  }, [basket, restaurantId])
+
+  // Sync basket to URL (skip first render before initialization completes)
+  useEffect(() => {
+    if (!initializedRef.current) return
+    if (skipNextUrlSyncRef.current) {
+      skipNextUrlSyncRef.current = false
+      return
+    }
+    if (basket.length === 0) {
+      router.replace(window.location.pathname)
+    } else {
+      const encoded = basket
+        .map((b) => encodeURIComponent(b.name) + ':' + b.qty)
+        .join(',')
+      router.replace(window.location.pathname + '?basket=' + encoded)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [basket])
 
   // When basket first appears (0→1 items), scroll down so sticky bar doesn't cover menu rows
   useEffect(() => {
@@ -214,8 +314,11 @@ export default function BasketSimulator({ menuItems, listings, phone, phoneConfi
     prevBasketLengthRef.current = basket.length
   }, [basket.length])
 
-  const tBasket = useTranslations('basket')
-  const tCard = useTranslations('card')
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    }
+  }, [])
 
   const fees: PlatformFees = useMemo(() => {
     const result: PlatformFees = { uber_eats: null, deliveroo: null, takeaway: null, direct: null }
@@ -260,11 +363,6 @@ export default function BasketSimulator({ menuItems, listings, phone, phoneConfi
     [basket, fees]
   )
 
-  /**
-   * Menu-aware savings: uses item prices from menuItems to compute direct savings.
-   * Applies threshold: ≥3 basket items with direct prices AND ≥50% coverage.
-   * platformTotals must be in euros (float) as required by computeDirectSavingsCentsFromMenu.
-   */
   const menuDirectSavingsCents = useMemo(() => {
     if (basket.length === 0) return null
     const platformTotalsEuros: Record<Platform, number | null> = {
@@ -307,6 +405,43 @@ export default function BasketSimulator({ menuItems, listings, phone, phoneConfi
       if (existing.qty <= 1) return prev.filter((b) => b.name !== item.name)
       return prev.map((b) => b.name === item.name ? { ...b, qty: b.qty - 1 } : b)
     })
+  }
+
+  function handleRestore() {
+    if (savedBasket) setBasket(savedBasket)
+    setShowRestoreBanner(false)
+  }
+
+  function handleDismissRestore() {
+    setShowRestoreBanner(false)
+  }
+
+  function handleQuickFill() {
+    const first2 = menuItems.slice(0, 2)
+    setBasket((prev) => {
+      let next = [...prev]
+      for (const item of first2) {
+        const existing = next.find((b) => b.name === item.name)
+        if (existing) {
+          next = next.map((b) => b.name === item.name ? { ...b, qty: b.qty + 1 } : b)
+        } else {
+          next = [...next, { name: item.name, qty: 1, prices: item.prices }]
+        }
+      }
+      return next
+    })
+  }
+
+  function handleSaveUsual() {
+    if (!restaurantId || basket.length === 0) return
+    try {
+      localStorage.setItem(`forkeur-basket-${restaurantId}`, JSON.stringify(basket))
+    } catch {
+      // ignore storage errors
+    }
+    setSaveLabel('saved')
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(() => setSaveLabel('default'), 2000)
   }
 
   const itemCount = basket.reduce((sum, b) => sum + b.qty, 0)
@@ -372,11 +507,35 @@ export default function BasketSimulator({ menuItems, listings, phone, phoneConfi
     ? listings.find((l) => l.platform === effectiveCheapestPlatform)?.eta_label ?? null
     : null
 
+  const showAppHint = isMobile && effectiveCheapestPlatform !== null &&
+    (effectiveCheapestPlatform === 'uber_eats' || effectiveCheapestPlatform === 'deliveroo')
+
   return (
     <div className="px-5">
+      {/* Restore usual order banner */}
+      {showRestoreBanner && (
+        <div className="mb-4 p-3.5 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-between gap-3">
+          <p className="text-sm text-stone-700">{tBasket('restore_usual')}</p>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleRestore}
+              className="px-3 py-1.5 rounded-lg bg-orange-500 text-white text-xs font-semibold hover:bg-orange-600 transition-colors"
+            >
+              {tBasket('restore_btn')}
+            </button>
+            <button
+              onClick={handleDismissRestore}
+              className="px-3 py-1.5 rounded-lg bg-stone-200 text-stone-600 text-xs font-semibold hover:bg-stone-300 transition-colors"
+            >
+              {tBasket('restore_dismiss')}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Menu items list */}
       {menuItems.length === 0 ? (
-        <p className="text-sm text-stone-400 py-6">{tBasket('no_menu')}</p>
+        <p className="text-sm text-stone-500 py-6">{tBasket('no_menu')}</p>
       ) : (
         <div className="mb-6 -mx-5 px-5 overflow-x-auto">
           <table className="w-full min-w-[300px]">
@@ -384,8 +543,13 @@ export default function BasketSimulator({ menuItems, listings, phone, phoneConfi
               <tr className="border-b border-stone-200">
                 <th className="text-left text-[10px] font-semibold tracking-widest text-stone-400 uppercase pb-2 pr-2">{tBasket('item')}</th>
                 {PLATFORMS.map((p) => (
-                  <th key={p} className={`text-center pb-2 w-14`}>
-                    <PlatformLogo platform={p} size={16} className="mx-auto" />
+                  <th key={p} className="text-center pb-2 w-14">
+                    <div className="flex flex-col items-center gap-0.5">
+                      <PlatformLogo platform={p} size={16} />
+                      <span className="text-[9px] font-medium text-stone-400 leading-none">
+                        {PLATFORM_SHORT[p]}
+                      </span>
+                    </div>
                   </th>
                 ))}
                 <th className="w-9 pb-2" />
@@ -419,11 +583,11 @@ export default function BasketSimulator({ menuItems, listings, phone, phoneConfi
                               />
                             )}
                             <div className="min-w-0">
-                              <p className={`text-sm text-stone-900 truncate ${qty > 0 ? 'font-bold' : 'font-medium'}`}>
+                              <p className={`text-sm text-stone-900 line-clamp-2 ${qty > 0 ? 'font-bold' : 'font-medium'}`}>
                                 {item.name}
                               </p>
                               {item.description && (
-                                <p className="text-xs text-stone-400 truncate">{item.description}</p>
+                                <p className="text-xs text-stone-500 line-clamp-1">{item.description}</p>
                               )}
                               {item.allergens && item.allergens.length > 0 && (
                                 <div className="flex flex-wrap gap-0.5 mt-0.5">
@@ -492,6 +656,34 @@ export default function BasketSimulator({ menuItems, listings, phone, phoneConfi
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {menuItems.length > 0 && basket.length === 0 && (
+        <div className="text-center py-3">
+          <p className="text-xs text-stone-400">
+            {tBasket('empty_hint')}
+          </p>
+          {menuItems.length >= 2 && (
+            <button
+              onClick={handleQuickFill}
+              className="mt-2 px-4 py-1.5 rounded-lg bg-stone-100 text-stone-600 text-xs font-semibold hover:bg-stone-200 transition-colors"
+            >
+              {tBasket('quick_fill')}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Save as usual button — shown when basket is non-empty and restaurantId is available */}
+      {restaurantId && basket.length > 0 && (
+        <div className="flex justify-center mb-3">
+          <button
+            onClick={handleSaveUsual}
+            className="px-3 py-1.5 rounded-lg bg-stone-100 text-stone-500 text-xs font-medium hover:bg-stone-200 transition-colors"
+          >
+            {saveLabel === 'saved' ? tBasket('save_usual_done') : tBasket('save_usual')}
+          </button>
         </div>
       )}
 
@@ -568,6 +760,9 @@ export default function BasketSimulator({ menuItems, listings, phone, phoneConfi
                     platform: PLATFORM_LABELS[effectiveCheapestPlatform],
                     amount: centsToEuro(effectiveCheapestTotal),
                   })}
+                  {showAppHint && (
+                    <span className="text-white/80 text-xs font-normal">{tBasket('opens_in_app')}</span>
+                  )}
                   <ArrowRight size={16} aria-hidden="true" />
                 </a>
               ) : (

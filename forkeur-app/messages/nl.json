@@ -60,7 +60,15 @@
     "bottom_cheapest": "Goedkoopst voor je bestelling van {count} items",
     "all_in": "{platform} · {amount} alles inbegrepen",
     "order_on": "Bestel op {platform} · {amount}",
-    "allergens": "Allergenen"
+    "allergens": "Allergenen",
+    "empty_hint": "Tik op + om items toe te voegen en prijzen te vergelijken",
+    "restore_usual": "Uw gebruikelijke bestelling herstellen?",
+    "restore_btn": "Herstellen",
+    "restore_dismiss": "Nee bedankt",
+    "quick_fill": "Snel vullen (eerste 2 artikelen)",
+    "save_usual": "Opslaan als gebruikelijk",
+    "save_usual_done": "Opgeslagen ✓",
+    "opens_in_app": "· opent app"
   },
   "compare": {
     "best_now": "Beste aanbieding",
@@ -147,7 +155,8 @@
     "build_order_eyebrow": "Stel je bestelling samen",
     "build_order_sub": "Voeg toe wat je wilt — wij tonen het goedkoopste platform, kosten inbegrepen.",
     "phone_unverified": "Niet geverifieerd — we konden dit nummer niet bevestigen",
-    "order_covered_platform": "Deze zaak neemt alleen bestellingen aan via de apps die hierboven worden vergeleken."
+    "order_covered_platform": "Deze zaak neemt alleen bestellingen aan via de apps die hierboven worden vergeleken.",
+    "last_updated": "Bijgewerkt {ago}"
   },
   "hours": {
     "closed": "Gesloten",
