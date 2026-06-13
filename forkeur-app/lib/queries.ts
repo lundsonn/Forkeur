@@ -266,9 +266,13 @@ export async function getRestaurants(): Promise<{
     .sort((a, b) => {
       const countA = a.listings.filter((l) => l.delivery_fee_cents !== null).length
       const countB = b.listings.filter((l) => l.delivery_fee_cents !== null).length
-      if (countA !== countB) return countB - countA
+      // Direct listings with confirmed ordering capability count as +0.5
+      // so they rank above same-count restaurants with info-only sites
+      const scoreA = countA + (a.direct_url_type === 'ordering' ? 0.5 : 0)
+      const scoreB = countB + (b.direct_url_type === 'ordering' ? 0.5 : 0)
+      if (scoreA !== scoreB) return scoreB - scoreA
 
-      // Within same platform-count tier: chains sink to the bottom
+      // Within same score tier: chains sink to the bottom
       if (a.is_chain !== b.is_chain) return a.is_chain ? 1 : -1
 
       // Within same tier + chain status: biggest delivery-fee savings first

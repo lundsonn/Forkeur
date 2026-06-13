@@ -88,14 +88,28 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                     # Address input: on first zone the homepage is already loaded;
                     # on subsequent zones we navigate back to the homepage first.
                     if zone_idx > 0:
-                        # 'pl' (place) lives in localStorage, not cookies — clear it while
-                        # still on ubereats.com domain so delivery-details doesn't redirect
-                        # to /de/feed?pl=<zone-1-coords>.
+                        # Clear 'pl' from localStorage AND cookies — Hetzner (Nuremberg) GeoIP
+                        # causes /be/delivery-details to redirect to /de/feed?pl=<prev-coords>.
+                        # localStorage.removeItem alone isn't enough because 'pl' is also stored
+                        # in a cookie that survives page navigations.
                         try:
-                            await page.evaluate("localStorage.removeItem('pl')")
+                            await page.evaluate(
+                                "localStorage.removeItem('pl'); sessionStorage.removeItem('pl')"
+                            )
                         except Exception:
                             pass
-                        await page.goto("https://www.ubereats.com/be/delivery-details", wait_until="load", timeout=60000)
+                        try:
+                            await page.context.clear_cookies()
+                        except Exception:
+                            pass
+                        # Navigate to /be (homepage) — avoids the /be/delivery-details GeoIP trap.
+                        await page.goto("https://www.ubereats.com/be", wait_until="load", timeout=60000)
+                        # If still redirected to /de/* (GeoIP), rewrite country code to /be/.
+                        cur_url = page.url
+                        if "/de/" in cur_url and "ubereats.com" in cur_url:
+                            fixed = cur_url.replace("ubereats.com/de/", "ubereats.com/be/")
+                            log_fn(f"Zone {zone_idx+1} GeoIP /de/ redirect → retrying {fixed!r}")
+                            await page.goto(fixed, wait_until="load", timeout=60000)
                         log_fn(f"Zone {zone_idx+1} nav result: url={page.url!r} title={await page.title()!r}")
                         check_cloudflare(await page.title())
 
@@ -113,7 +127,15 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                         await page.wait_for_selector(input_sel, timeout=20000)
                         log_fn("Address input visible directly")
                     except Exception:
-                        bar_sel = "[data-testid='address-entry-bar-link']"
+                        # Multiple selectors cover different UberEats layouts/locales.
+                        bar_sel = (
+                            "[data-testid='address-entry-bar-link'], "
+                            "[data-testid='delivery-location-link'], "
+                            "[data-testid='location-edit-link'], "
+                            "[data-testid='address-bar'], "
+                            "button[data-testid*='location'], "
+                            "a[href*='delivery-details']"
+                        )
                         try:
                             await page.wait_for_selector(bar_sel, timeout=15000)
                             log_fn(f"Clicking address bar link (url={page.url!r})")

@@ -472,8 +472,9 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, m
                     async with zone_sem:
                         url = _LISTING_BASE + zone
                         log_fn(f"Loading zone {zone}")
-                        zone_page = await new_page(browser, lang="fr-BE")
+                        zone_page = None
                         try:
+                            zone_page = await new_page(browser, lang="fr-BE")
                             async def _scrape_zone():
                                 await zone_page.goto(url, wait_until="domcontentloaded", timeout=60000)
 
@@ -514,7 +515,11 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, m
                             log_fn(f"  Error ({zone}): {exc}")
                             return []
                         finally:
-                            await zone_page.close()
+                            if zone_page is not None:
+                                try:
+                                    await zone_page.close()
+                                except Exception:
+                                    pass
 
                 zone_results = await asyncio.gather(*[_scrape_one_zone(z) for z in LISTING_ZONES])
                 # Merge sequentially after gather → no race on all_by_slug.
@@ -604,8 +609,9 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, m
                     for r, lid in slice_items:
                         url = f"https://www.takeaway.com{r['href']}"
                         log_fn(f"Menu worker {wid}: {r['name']}")
-                        menu_page = await new_page(browser, lang="fr-BE")
+                        menu_page = None
                         try:
+                            menu_page = await new_page(browser, lang="fr-BE")
                             _, items, promo_lines, rinfo = await scrape_menu_page(menu_page, lid, url, r["name"])
                             if rinfo and (rinfo.get("lat") is not None or rinfo.get("neighborhood") or rinfo.get("cuisine") or rinfo.get("phone")):
                                 enriched: dict = {"name": r["name"], "slug": r["slug"]}
@@ -651,7 +657,11 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, m
                             if metrics: metrics.fail()
                             log_fn(f"  Error: {exc}")
                         finally:
-                            await menu_page.close()
+                            if menu_page is not None:
+                                try:
+                                    await menu_page.close()
+                                except Exception:
+                                    pass
                         await asyncio.sleep(1)
 
                 await asyncio.gather(*[_worker(w, s) for w, s in enumerate(slices) if s])

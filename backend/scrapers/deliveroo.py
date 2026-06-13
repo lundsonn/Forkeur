@@ -643,7 +643,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, m
                     }
 
                     function addItem(title, price, catalogName, imageUrl, description) {
-                        title = title.trim();
+                        title = title.trim().replace(/ /g, ' ');
                         if (!title || title.length < 2 || price === null) return;
                         // Skip promotional banners (delivery fee, spend-X-get-Y) that share notranslate structure
                         if (/frais de livraison|leveringskosten|delivery fee|livraison offert/i.test(title)) return;
