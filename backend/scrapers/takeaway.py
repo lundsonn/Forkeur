@@ -1,5 +1,6 @@
 from __future__ import annotations
 import asyncio
+import os
 import re
 from typing import Callable
 import httpx
@@ -449,63 +450,71 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
     menu_items_saved = 0
 
     async with browser_session(lang="fr-BE", headed=True) as browser:
-        # Phase 0: collect listings — one fresh browser context per zone to avoid CF re-challenge.
+        # Phase 0: collect listings — one fresh page per zone to avoid CF re-challenge.
         # All restaurant cards are rendered server-side on the first page load (no infinite scroll /
         # lazy pagination), so a single load + extract is sufficient per zone.
+        # Zones run concurrently behind a semaphore. Each zone owns its own page in the shared
+        # browser, so RAM cost per concurrent zone is a context (~modest), not a full browser.
+        # Concurrency is conservative (4) to avoid tripping CF rate-limiting with simultaneous
+        # challenges. Override with TAKEAWAY_ZONE_WORKERS.
         all_by_slug: dict[str, dict] = {}
-        for zone in LISTING_ZONES:
-            url = _LISTING_BASE + zone
-            log_fn(f"Loading zone {zone}")
-            zone_page = await new_page(browser, lang="fr-BE")
-            try:
-                async def _scrape_zone():
-                    await zone_page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        ZONE_WORKERS = int(os.environ.get("TAKEAWAY_ZONE_WORKERS", "4"))
+        zone_sem = asyncio.Semaphore(ZONE_WORKERS)
+        log_fn(f"Phase 0: {len(LISTING_ZONES)} zones, {ZONE_WORKERS} concurrent")
 
-                    title = await zone_page.title()
-                    if "just a moment" in title.lower():
-                        log_fn(f"  CF challenge — waiting up to 60s")
-                        cleared = await wait_for_cf_clear(zone_page, timeout_s=60)
-                        if not cleared:
-                            log_fn(f"  CF not cleared — skipping {zone}")
+        async def _scrape_one_zone(zone: str) -> list[dict]:
+            async with zone_sem:
+                url = _LISTING_BASE + zone
+                log_fn(f"Loading zone {zone}")
+                zone_page = await new_page(browser, lang="fr-BE")
+                try:
+                    async def _scrape_zone():
+                        await zone_page.goto(url, wait_until="domcontentloaded", timeout=60000)
+
+                        title = await zone_page.title()
+                        if "just a moment" in title.lower():
+                            log_fn(f"  CF challenge — waiting up to 60s")
+                            cleared = await wait_for_cf_clear(zone_page, timeout_s=60)
+                            if not cleared:
+                                log_fn(f"  CF not cleared — skipping {zone}")
+                                return []
+
+                        # Prefer __NEXT_DATA__ — structured, no DOM parsing, includes lat/lng/fees
+                        raw_rdata = await zone_page.evaluate(_NEXT_DATA_RESTAURANTS_EVAL)
+                        if raw_rdata:
+                            results = [_parse_next_data_restaurant(r) for r in raw_rdata if r.get("uniqueName")]
+                            log_fn(f"  {len(results)} from __NEXT_DATA__ ({zone})")
+                            return results
+
+                        # Fallback: DOM card extraction
+                        try:
+                            await zone_page.wait_for_selector('[data-qa="restaurant-card"]', timeout=20000)
+                        except Exception:
+                            log_fn(f"  No cards — skipping {zone}")
                             return []
 
-                    # Prefer __NEXT_DATA__ — structured, no DOM parsing, includes lat/lng/fees
-                    raw_rdata = await zone_page.evaluate(_NEXT_DATA_RESTAURANTS_EVAL)
-                    if raw_rdata:
-                        results = [_parse_next_data_restaurant(r) for r in raw_rdata if r.get("uniqueName")]
-                        log_fn(f"  {len(results)} from __NEXT_DATA__")
-                        return results
+                        await zone_page.wait_for_timeout(1000)
+                        cards = await zone_page.evaluate(_LISTING_EVAL)
+                        log_fn(f"  {len(cards)} cards DOM fallback ({zone})")
+                        return cards
 
-                    # Fallback: DOM card extraction
                     try:
-                        await zone_page.wait_for_selector('[data-qa="restaurant-card"]', timeout=20000)
-                    except Exception:
-                        log_fn(f"  No cards — skipping {zone}")
+                        return await asyncio.wait_for(_scrape_zone(), timeout=120)
+                    except asyncio.TimeoutError:
+                        log_fn(f"  ⚠ zone {zone} timed out after 120s, skipping")
                         return []
+                except Exception as exc:
+                    log_fn(f"  Error ({zone}): {exc}")
+                    return []
+                finally:
+                    await zone_page.close()
 
-                    await zone_page.wait_for_timeout(1000)
-                    cards = await zone_page.evaluate(_LISTING_EVAL)
-                    log_fn(f"  {len(cards)} cards (DOM fallback)")
-                    return cards
-
-                try:
-                    page_restaurants = await asyncio.wait_for(_scrape_zone(), timeout=120)
-                except asyncio.TimeoutError:
-                    log_fn(f"  ⚠ zone timed out after 120s, skipping")
-                    page_restaurants = []
-
-                new_count = 0
-                for r in page_restaurants:
-                    if r["slug"] not in all_by_slug:
-                        all_by_slug[r["slug"]] = r
-                        new_count += 1
-
-                log_fn(f"  {len(page_restaurants)} cards, {new_count} new (total {len(all_by_slug)})")
-                await asyncio.sleep(2)
-            except Exception as exc:
-                log_fn(f"  Error: {exc}")
-            finally:
-                await zone_page.close()
+        zone_results = await asyncio.gather(*[_scrape_one_zone(z) for z in LISTING_ZONES])
+        # Merge sequentially after gather → no race on all_by_slug.
+        for page_restaurants in zone_results:
+            for r in page_restaurants:
+                if r["slug"] not in all_by_slug:
+                    all_by_slug[r["slug"]] = r
 
         restaurants = list(all_by_slug.values())
         log_fn(f"Found {len(restaurants)} unique restaurants across all zones")
