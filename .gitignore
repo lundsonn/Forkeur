@@ -36,3 +36,10 @@ __pycache__/
 # Misc
 *.html
 skills-lock.json
+
+# Dashboard build output (rebuilt on server after git pull)
+backend/static/
+
+# Root-level screenshots / audit docs
+mobile_*.png
+SCRAPER_TIMING_AUDIT.md
