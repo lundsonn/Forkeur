@@ -5,6 +5,7 @@ import re
 from typing import Callable
 import httpx
 from models import ScraperConfig, ScraperResult
+from scrapers.metrics import RunMetrics
 from scrapers.base import (
     browser_session, new_page, wait_for_cf_clear,
     noop_log, parse_menu_price, CloudflareBlockedError,
@@ -143,7 +144,7 @@ _MENU_EVAL = """
 }
 """
 
-_LISTING_EVAL = """
+_LISTING_EVAL = r"""
 () => {
     const cards = Array.from(document.querySelectorAll('[data-qa="restaurant-card"]'));
     const seen = new Set();
@@ -195,7 +196,7 @@ _LISTING_EVAL = """
 """
 
 
-_PROMO_EVAL = """
+_PROMO_EVAL = r"""
 () => {
     const texts = new Set();
     // data-qa promo elements
@@ -445,7 +446,7 @@ async def scrape_menu_page(page, listing_id: str, url: str, name: str = "") -> t
         return (listing_id, [], [], None)
 
 
-async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -> ScraperResult:
+async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, metrics: RunMetrics | None = None) -> ScraperResult:
     log_fn("Starting Takeaway scraper (Playwright DOM)")
     # headed=True required — CF passes on datacenter IP only with headed Chromium
     records_saved = 0
@@ -461,6 +462,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 # browser, so RAM cost per concurrent zone is a context (~modest), not a full browser.
                 # Concurrency is conservative (4) to avoid tripping CF rate-limiting with simultaneous
                 # challenges. Override with TAKEAWAY_ZONE_WORKERS.
+                if metrics: metrics.phase_start("phase0")
                 all_by_slug: dict[str, dict] = {}
                 ZONE_WORKERS = int(os.environ.get("TAKEAWAY_ZONE_WORKERS", "4"))
                 zone_sem = asyncio.Semaphore(ZONE_WORKERS)
@@ -477,6 +479,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
 
                                 title = await zone_page.title()
                                 if "just a moment" in title.lower():
+                                    if metrics: metrics.cooldown()
                                     log_fn(f"  CF challenge — waiting up to 60s")
                                     cleared = await wait_for_cf_clear(zone_page, timeout_s=60)
                                     if not cleared:
@@ -521,6 +524,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                             all_by_slug[r["slug"]] = r
 
                 restaurants = list(all_by_slug.values())
+                if metrics: metrics.phase_end("phase0")
                 log_fn(f"Found {len(restaurants)} unique restaurants across all zones")
 
                 if config.target:
@@ -532,6 +536,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                     restaurants = restaurants[:config.max_items]
 
                 # Phase 1: upsert listings
+                if metrics: metrics.phase_start("phase1")
                 saved: list[tuple[dict, str]] = []
                 for r in restaurants:
                     try:
@@ -578,6 +583,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                     saved.append((r, lid))
 
                 log_fn(f"Phase 1 done — {records_saved} listings saved")
+                if metrics: metrics.phase_end("phase1")
 
                 if config.listing_only:
                     return ScraperResult(records_saved=records_saved)

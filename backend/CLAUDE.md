@@ -1,12 +1,12 @@
 # Forkeur Backend
 
-FastAPI scraper manager: trigger/schedule Playwright scrapers, stream logs via WebSocket, persist to Supabase.
+FastAPI scraper manager: trigger/schedule Playwright scrapers, stream logs via WebSocket, persist to PostgreSQL.
 
 ## Stack
 
 - **FastAPI** + **APScheduler** — HTTP API + cron scheduling
 - **Playwright** — headless Chromium scrapers (stealth mode via `base.py`)
-- **Supabase** — storage (python-supabase client)
+- **PostgreSQL 16** — storage via psycopg3 sync pool (`pgpool.py`); PgBouncer transaction mode on :5432
 - **uv** — package manager
 
 ## Commands
@@ -27,7 +27,8 @@ backend/
 ├── auth.py           ← JWT token create/verify (HS256, 30-day expiry)
 ├── scheduler.py      ← APScheduler setup
 ├── ws.py             ← WebSocket log streaming
-├── db.py             ← Supabase client + DB helpers
+├── db.py             ← DB helpers (upsert_restaurant, upsert_listing, patch_listing, …)
+├── pgpool.py         ← psycopg3 sync connection pool (fetchall/fetchone/execute)
 ├── models.py         ← Pydantic models
 ├── scrapers/
 │   ├── base.py       ← BaseScraper (stealth, browser lifecycle)
@@ -53,4 +54,4 @@ Each scraper extends `BaseScraper`. Override `scrape(address, coords)` → retur
 
 ## Env vars
 
-See `.env.example`. Required: `SUPABASE_URL`, `SUPABASE_KEY`, `JWT_SECRET`, `ADMIN_PASSWORD`.
+See `.env.example`. Required: `DATABASE_URL`, `JWT_SECRET`, `ADMIN_PASSWORD`.
