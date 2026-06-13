@@ -7,6 +7,7 @@ realistic (haversine, lat-only offset).
 
 import os
 import sys
+from decimal import Decimal
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
@@ -156,6 +157,16 @@ def test_coords_missing_dissimilar_name_is_absent():
 
 
 # --- proximity-only mid-band -----------------------------------------------
+
+def test_decimal_restaurant_coords_do_not_crash_haversine():
+    # Postgres returns lat/lng as Decimal; candidate coords are float. The mix
+    # must not raise (regression: 'unsupported operand float - Decimal').
+    res = classify_presence(
+        lat=Decimal("50.8466"), lng=Decimal("4.3528"), cuisine=None, name="Pizza Roma",
+        candidates=[_cand("Pizza Roma", metres=80)], missing_platform="uber_eats",
+    )
+    assert res.outcome == "present"
+
 
 def test_proximity_only_without_corroboration_is_uncertain():
     # ~100 m away, name unrelated and no cuisine -> proximity alone is not enough.

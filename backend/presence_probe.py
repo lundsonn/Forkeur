@@ -97,6 +97,11 @@ def classify_presence(
     if blocked:
         return ProbeResult("uncertain", None, None, None, block_reason or "blocked")
 
+    # Restaurant coords come from Postgres as decimal.Decimal; candidate coords
+    # from platform JSON are float. Coerce so haversine never mixes the two.
+    lat = float(lat)
+    lng = float(lng)
+
     deliveroo = missing_platform == "deliveroo"
     present_m = PRESENT_M_DELIV if deliveroo else PRESENT_M
     max_m = UNCERTAIN_MAX_DELIV if deliveroo else UNCERTAIN_MAX_M
@@ -111,7 +116,7 @@ def classify_presence(
             if _name_sim(name, c.name) >= WEAK_NAME_SIM:
                 eligible.append((float("inf"), c))
             continue
-        d = haversine_m(lat, lng, c.lat, c.lng)
+        d = haversine_m(lat, lng, float(c.lat), float(c.lng))
         if d > max_m and _name_sim(name, c.name) < STRONG_NAME_SIM:
             continue
         eligible.append((d, c))
