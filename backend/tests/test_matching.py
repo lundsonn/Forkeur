@@ -500,10 +500,10 @@ def test_decide_website_plus_near_identical_name_queues_without_proof():
     assert matching.decide(f) == matching.Decision.QUEUE
 
 
-def test_decide_phone_signal_queues_below_auto_band():
-    # name_high(1.0) + phone(3.0) = 4.0 < AUTO_BAND=4.5 → QUEUE
+def test_decide_phone_plus_name_high_auto_merges():
+    # name_high(1.0) + phone(3.0) = 4.0 >= AUTO_BAND=3.5; proof=phone, identity=name_sim → AUTO_MERGE
     f = _f(name_sim=0.95, phone_match=True)
-    assert matching.decide(f) == matching.Decision.QUEUE
+    assert matching.decide(f) == matching.Decision.AUTO_MERGE
 
 
 def test_decide_website_with_location_suffix_queues_not_merges():

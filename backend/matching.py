@@ -29,7 +29,8 @@ VENUE_GRADE_SOURCES = {"uber_eats", "direct", "deliveroo_venue", "takeaway"}
 
 # --- Additive evidence model --------------------------------------------------
 HARD_GEO_SEPARATE_M = 1000.0   # both venue-grade coords > 1 km apart → always SEPARATE
-AUTO_BAND  = 4.5    # total >= AUTO_BAND → AUTO_MERGE (+ hard proof + identity)
+AUTO_GEO_BRANCH_M  = 600.0    # phone-sharing chain branches > 600 m apart stay QUEUE
+AUTO_BAND  = 3.5    # total >= AUTO_BAND → AUTO_MERGE (+ hard proof + identity)
 QUEUE_BAND = 1.5    # total >= QUEUE_BAND → QUEUE
 IDENTITY_AUTO_NAME_SIM = 0.80  # AUTO needs name agreement OR slug — see ghost-kitchen guard
 COLOCATION_GATE_NAME_SIM = 0.80  # geo/address count only above this name floor (or phone/slug/addr)
@@ -634,7 +635,14 @@ def decide(f: MatchFeatures) -> Decision:
         proof = (f.phone_match or f.slug_match or f.address_match is True
                  or geo_band(f.geo_dist, f.deliveroo_geo) == "very_close")
         identity = f.name_sim >= IDENTITY_AUTO_NAME_SIM or f.slug_match
-        return Decision.AUTO_MERGE if (proof and identity) else Decision.QUEUE
+        if proof and identity:
+            # Branch guard: phone-sharing chains bypass HARD_GEO_SEPARATE_M but
+            # must not auto-merge when venue-grade coords place them 600 m+ apart.
+            if (f.geo_dist is not None and not f.deliveroo_geo
+                    and f.geo_dist > AUTO_GEO_BRANCH_M):
+                return Decision.QUEUE
+            return Decision.AUTO_MERGE
+        return Decision.QUEUE
     if total >= QUEUE_BAND:
         return Decision.QUEUE
     return Decision.SEPARATE
