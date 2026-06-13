@@ -210,10 +210,17 @@ async def _run_group(plat: str, checks: list[dict], client: httpx.AsyncClient, s
                 name=check["name"], candidates=cands, missing_platform=plat,
                 blocked=is_blocked, block_reason=reason,
             )
-            # Auditability: on a genuine absent, record the closest-by-name card we
-            # actually saw (matched_url stays null — it is NOT a match), so a human
-            # can sanity-check "we searched N cards; nearest name was X".
-            if result.outcome == "absent" and cands:
+            # Takeaway's public commune page exposes only ~27 venues (not the full
+            # commune, not pin-sorted), so a non-hit there cannot prove absence.
+            # Keep present-hits (a venue in the ~27 IS really on takeaway) but
+            # downgrade absent -> uncertain so we never claim a false exclusive.
+            if plat == "takeaway" and result.outcome == "absent":
+                result.outcome = "uncertain"
+                result.block_reason = "partial_coverage"
+            # Auditability: on any non-present outcome that actually searched cards,
+            # record the closest-by-name card seen (matched_url stays null — it is
+            # NOT a match) so a human can sanity-check "nearest name was X".
+            if cands and result.outcome != "present" and not result.candidate_name:
                 tgt = normalize_name(check["name"])
                 best = max(cands, key=lambda c: JaroWinkler.similarity(tgt, normalize_name(c.name)))
                 result.candidate_name = best.name
