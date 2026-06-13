@@ -455,7 +455,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
     async with browser_session(lang="fr-BE") as browser:
         # Phase 0: collect listings across all zones, dedup by slug.
         # Zones are independent (own page, same browser/CF session) → run concurrently.
-        ZONE_WORKERS = 4
+        ZONE_WORKERS = int(os.environ.get("DELIVEROO_ZONE_WORKERS", "8"))
         zones = LISTING_ZONES
         zone_sem = asyncio.Semaphore(ZONE_WORKERS)
 
