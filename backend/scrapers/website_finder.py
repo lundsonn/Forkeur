@@ -241,7 +241,7 @@ def _is_junk_name(name: str) -> bool:
     return False
 
 
-_CONCURRENCY = 4
+_CONCURRENCY = 2
 
 
 async def _worker(
