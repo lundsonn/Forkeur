@@ -85,12 +85,27 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                     # Address input: on first zone the homepage is already loaded;
                     # on subsequent zones we navigate back to the homepage first.
                     if zone_idx > 0:
-                        await page.goto("https://www.ubereats.com/be", wait_until="domcontentloaded", timeout=60000)
+                        # Use "load" (not "domcontentloaded") so React hydrates before we probe
+                        # for the input — domcontentloaded fires before the SPA bootstraps.
+                        await page.goto("https://www.ubereats.com/be", wait_until="load", timeout=60000)
                         check_cloudflare(await page.title())
 
                     # Address input is already visible on the homepage — no "Find food" click needed
-                    input_sel = "#location-typeahead-home-input"
-                    await page.wait_for_selector(input_sel, timeout=20000)
+                    # Multiple selectors as fallback in case UberEats A/B-tests the input ID.
+                    input_sel = (
+                        "#location-typeahead-home-input, "
+                        "[data-testid='location-typeahead-home-input'], "
+                        "input[id*='typeahead'][id*='home'], "
+                        "input[placeholder*='adresse' i], input[placeholder*='address' i]"
+                    )
+                    try:
+                        await page.wait_for_selector(input_sel, timeout=40000)
+                    except Exception as sel_err:
+                        log_fn(f"Input selector timed out (title={await page.title()!r}, url={page.url!r}): {sel_err}")
+                        raise
+                    # Normalise: use the first matching element's actual locator for click/type
+                    matched = await page.query_selector(input_sel)
+                    input_sel = "#" + await matched.get_attribute("id") if matched and await matched.get_attribute("id") else input_sel
                     log_fn(f"Input found: {input_sel}")
                     await page.click(input_sel)
                     await page.type(input_sel, zone_addr, delay=60)
