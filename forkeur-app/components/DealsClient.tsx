@@ -1,239 +1,219 @@
 'use client'
-import { useState, useMemo, useDeferredValue } from 'react'
-import Link from 'next/link'
-import type { DealItem, DealFilter } from '@/lib/deals'
-import {
-  DEAL_FILTERS,
-  matchesFilter,
-  filterCounts,
-  sortDeals,
-} from '@/lib/deals'
-import { useTranslations } from 'next-intl'
-import LangToggle from './LangToggle'
-import OpenStatusBadge from './OpenStatusBadge'
-import { getOpenStatus } from '@/lib/hours'
 
-const PLATFORM_META: Record<string, { name: string; color: string }> = {
-  uber_eats: { name: 'UberEats', color: 'bg-black text-white' },
-  deliveroo: { name: 'Deliveroo', color: 'bg-teal-500 text-white' },
-  takeaway: { name: 'Takeaway', color: 'bg-orange-500 text-white' },
+import { useState, useMemo } from 'react'
+import { useTranslations } from 'next-intl'
+import type { DealItem } from '../lib/deals'
+import type { ActiveType, ActivePlatform, SortMode } from '../lib/deals'
+import { matchesFilter, filterCounts, sortDeals, savingsEstimate } from '../lib/deals'
+import FeaturedStrip from './FeaturedStrip'
+
+function freshnessColor(oldestScrapedAt: string): 'stone' | 'amber' | 'red' {
+  const ageMs = Date.now() - new Date(oldestScrapedAt).getTime()
+  const ageMin = ageMs / 60_000
+  if (ageMin < 90) return 'stone'
+  if (ageMin < 180) return 'amber'
+  return 'red'
 }
 
-type ActiveSet = Set<Exclude<DealFilter, 'all'>>
+function FreshnessChip({ deals }: { deals: DealItem[] }) {
+  const t = useTranslations()
+  if (deals.length === 0) return null
+  const oldest = deals.reduce((min, d) => d.scraped_at < min ? d.scraped_at : min, deals[0].scraped_at)
+  const ageMin = Math.round((Date.now() - new Date(oldest).getTime()) / 60_000)
+  const color = freshnessColor(oldest)
+  const colorClass = { stone: 'text-stone-500', amber: 'text-amber-600', red: 'text-red-600' }[color]
+  const label = color === 'red'
+    ? t('deals.freshness_stale')
+    : color === 'amber'
+    ? t('deals.freshness_warning', { minutes: ageMin })
+    : t('deals.freshness', { minutes: ageMin })
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs ${colorClass}`}>
+      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+      </svg>
+      {label}
+    </span>
+  )
+}
+
+const BADGE_COLOR: Record<string, string> = {
+  pct_discount: 'bg-orange-500 text-white',
+  abs_discount: 'bg-orange-500 text-white',
+  free_delivery: 'bg-stone-700 text-white',
+  bogo: 'bg-amber-600 text-white',
+  free_item: 'bg-stone-600 text-white',
+}
+
+const PLATFORM_DOT: Record<string, string> = {
+  uber_eats: 'bg-orange-500',
+  deliveroo: 'bg-teal-500',
+  takeaway: 'bg-stone-700',
+}
+
+function DealCard({ deal }: { deal: DealItem }) {
+  const t = useTranslations()
+  const badgeColor = BADGE_COLOR[deal.promo_type] ?? 'bg-stone-500 text-white'
+  const dotColor = PLATFORM_DOT[deal.platform] ?? 'bg-stone-400'
+  const savings = savingsEstimate(deal)
+  return (
+    <div className="rounded-xl border border-stone-200 bg-white shadow-sm overflow-hidden flex flex-col">
+      <div className={`${badgeColor} px-4 py-4 relative`}>
+        <p className="text-base font-bold leading-snug line-clamp-2">{deal.label}</p>
+        <div className="absolute top-2 right-3 text-right text-xs opacity-80 space-y-0.5">
+          <div className="flex items-center justify-end gap-1">
+            <span className={`inline-block w-2 h-2 rounded-full ${dotColor} opacity-90`} />
+            <span>{t(`platform.${deal.platform}`)}</span>
+          </div>
+          {deal.rating && (
+            <div>★ {deal.rating.toFixed(1)}{deal.review_count ? ` (${deal.review_count})` : ''}</div>
+          )}
+        </div>
+      </div>
+      <div className="px-4 py-3 flex flex-col gap-1.5 flex-1">
+        <p className="font-semibold text-stone-900 leading-snug">{deal.restaurant_name}</p>
+        {(deal.cuisine.length > 0 || deal.area) && (
+          <p className="text-sm text-stone-400">
+            {[deal.cuisine.slice(0, 2).join(' · '), deal.area].filter(Boolean).join(' · ')}
+          </p>
+        )}
+        {savings && <p className="text-sm text-stone-600">{savings}</p>}
+        {deal.min_order != null && deal.min_order > 0 && (
+          <p className="text-xs text-stone-400">{t('deals.min_order', { amount: deal.min_order })}</p>
+        )}
+        <div className="mt-auto pt-3">
+          {deal.platform_url ? (
+            <a href={deal.platform_url} target="_blank" rel="noopener noreferrer"
+               className="block text-center text-sm font-medium text-orange-600 hover:text-orange-700 border border-orange-200 rounded-lg py-2">
+              {t('deals.order_on', { platform: t(`platform.${deal.platform}`) })}
+            </a>
+          ) : (
+            <span className="block text-center text-sm text-stone-400 py-2">
+              {t(`platform.${deal.platform}`)}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const TYPE_FILTERS: { key: ActiveType; i18nKey: string }[] = [
+  { key: 'all',           i18nKey: 'filters.all' },
+  { key: 'free_delivery', i18nKey: 'filters.free_delivery' },
+  { key: 'pct',           i18nKey: 'filters.pct' },
+  { key: 'bogo',          i18nKey: 'filters.bogo' },
+  { key: 'abs',           i18nKey: 'filters.eur_off' },
+  { key: 'free_item',     i18nKey: 'filters.free_item' },
+]
+
+const PLATFORM_FILTERS: { key: ActivePlatform; labelKey: string; dotColor: string }[] = [
+  { key: 'all',       labelKey: 'filters.all',        dotColor: '' },
+  { key: 'uber_eats', labelKey: 'platform.uber_eats', dotColor: 'bg-orange-500' },
+  { key: 'deliveroo', labelKey: 'platform.deliveroo', dotColor: 'bg-teal-500' },
+  { key: 'takeaway',  labelKey: 'platform.takeaway',  dotColor: 'bg-stone-700' },
+]
+
+const SORT_OPTIONS: { value: SortMode; i18nKey: string }[] = [
+  { value: 'best',   i18nKey: 'deals.sort_best' },
+  { value: 'saving', i18nKey: 'deals.sort_saving' },
+  { value: 'rated',  i18nKey: 'deals.sort_rated' },
+  { value: 'newest', i18nKey: 'deals.sort_newest' },
+]
 
 export default function DealsClient({ deals }: { deals: DealItem[] }) {
-  const [active, setActive] = useState<ActiveSet>(new Set())
-  const [search, setSearch] = useState('')
-  const deferredSearch = useDeferredValue(search)
+  const t = useTranslations()
+  const [activeType, setActiveType] = useState<ActiveType>('all')
+  const [activePlatform, setActivePlatform] = useState<ActivePlatform>('all')
+  const [sortMode, setSortMode] = useState<SortMode>('best')
 
-  const tNav = useTranslations('nav')
-  const tDeals = useTranslations('deals')
-  const tFilters = useTranslations('filters')
-  const tBadge = useTranslations('badge')
-  const tHours = useTranslations('hours')
+  const counts = useMemo(() => filterCounts(deals, activePlatform), [deals, activePlatform])
+  const filtered = useMemo(
+    () => sortDeals(deals.filter(d => matchesFilter(d, activeType, activePlatform)), sortMode),
+    [deals, activeType, activePlatform, sortMode]
+  )
 
-  function localizedBadge(d: DealItem): string {
-    switch (d.promo_type) {
-      case 'bogo': return tBadge('bogo')
-      case 'pct_discount': return d.value != null ? tBadge('pct_off', { value: Math.round(d.value) }) : '%'
-      case 'abs_discount': return d.value != null ? tBadge('eur_off', { value: d.value.toFixed(2) }) : '€'
-      case 'free_delivery': return tBadge('free_delivery')
-      case 'free_item': return tBadge('free_item')
-      default: return d.label
-    }
-  }
+  const clearFilters = () => { setActiveType('all'); setActivePlatform('all'); setSortMode('best') }
+  const isFiltered = activeType !== 'all' || activePlatform !== 'all'
 
-  const filterLabel: Record<DealFilter, string> = {
-    all: tFilters('all'),
-    bogo: tFilters('bogo'),
-    pct: tFilters('pct'),
-    free_delivery: tFilters('free_delivery'),
-    free_item: tFilters('free_item'),
-  }
-
-  const counts = useMemo(() => filterCounts(deals), [deals])
-
-  const visible = useMemo(() => {
-    const q = deferredSearch.toLowerCase()
-    const matched = deals.filter(
-      (d) => matchesFilter(d, active) && (!q || d.restaurant_name.toLowerCase().includes(q))
+  if (deals.length === 0) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-12 text-center text-stone-500">
+        <p className="font-medium">{t('deals.empty_total')}</p>
+        <p className="text-sm mt-1">{t('deals.empty_total_hint')}</p>
+      </div>
     )
-    return sortDeals(matched, active)
-  }, [deals, active, deferredSearch])
-
-  function toggle(key: DealFilter) {
-    if (key === 'all') { setActive(new Set()); return }
-    setActive((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
   }
 
   return (
-    <div className="w-full max-w-md mx-auto px-5">
-      {/* Nav */}
-      <div className="flex items-center justify-between pt-5 pb-4">
-        <Link href="/" className="flex items-center gap-1.5">
-          <span className="text-stone-700 text-base">⑂</span>
-          <span className="font-bold text-base tracking-tight">
-            fork<span className="text-orange-500">eur</span>
-          </span>
-        </Link>
-        <div className="flex items-center gap-1">
-          <LangToggle />
-          <Link href="/" className="text-xs text-stone-400 hover:text-stone-600 min-h-[44px] inline-flex items-center px-1">
-            {tNav('back_restaurants')}
-          </Link>
+    <div className="max-w-5xl mx-auto px-4 pb-12">
+      {/* Page header */}
+      <div className="py-6 flex flex-col gap-1">
+        <h1 className="text-2xl font-bold text-stone-900">{t('deals.heading')}</h1>
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="text-stone-500 text-sm">{filtered.length} {t('filters.all').toLowerCase()} offers</span>
+          <FreshnessChip deals={deals} />
         </div>
       </div>
 
-      {/* Hero */}
-      <h1 className="text-[1.65rem] font-bold leading-tight mb-1" style={{ color: '#1A1A1A' }}>
-        {tDeals('heading')}
-      </h1>
-      <p className="text-sm text-stone-500 mb-5">
-        {tDeals('subtitle', { count: deals.length })}
-      </p>
-
-      {/* Search */}
-      <div className="flex items-center gap-2.5 border border-stone-200 rounded-xl px-4 py-3 mb-4">
-        <span className="text-stone-400 text-sm">🔍</span>
-        <input
-          className="flex-1 text-sm outline-none placeholder:text-stone-400"
-          placeholder={tDeals('search_placeholder')}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        {search && (
-          <button type="button" onClick={() => setSearch('')} className="text-stone-300 text-xs">✕</button>
-        )}
-      </div>
-
-      {/* Filter pills */}
-      <div className="flex gap-2 overflow-x-auto pb-2 mb-5 scrollbar-hide">
-        {DEAL_FILTERS.map(({ key }) => {
-          const isActive = key === 'all' ? active.size === 0 : active.has(key)
-          const count = counts[key]
-          if (key !== 'all' && count === 0) return null
-          return (
-            <button
-              key={key}
-              onClick={() => toggle(key)}
-              className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 min-h-[44px] rounded-full text-xs font-medium border transition-colors ${
-                isActive
-                  ? 'text-white border-transparent'
-                  : 'bg-white text-stone-600 border-stone-200 hover:border-stone-300'
-              }`}
-              style={isActive ? { backgroundColor: '#2E86D8' } : undefined}
-            >
-              <span>{filterLabel[key]}</span>
-              {key !== 'all' && (
-                <span className={`text-[10px] ${isActive ? 'text-blue-100' : 'text-stone-400'}`}>
-                  {count}
-                </span>
-              )}
+      {/* Sticky filter bar */}
+      <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b border-stone-100 py-3 -mx-4 px-4 mb-6">
+        {/* Row 1: type filters */}
+        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+          {TYPE_FILTERS.map(({ key, i18nKey }) => (
+            <button key={key} onClick={() => setActiveType(key)}
+              className={`flex-shrink-0 rounded-full px-3 py-1 text-sm font-medium transition-colors ${
+                activeType === key ? 'bg-orange-500 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+              }`}>
+              {t(i18nKey)}
+              {key !== 'all' && counts[key] > 0 && <span className="ml-1 opacity-70">({counts[key]})</span>}
+              {key === 'all' && <span className="ml-1 opacity-70">({counts.all})</span>}
             </button>
-          )
-        })}
+          ))}
+        </div>
+
+        {/* Row 2: platform filters — horizontal scroll, no wrap */}
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none mt-2">
+          {PLATFORM_FILTERS.map(({ key, labelKey, dotColor }) => (
+            <button key={key} onClick={() => setActivePlatform(key)}
+              className={`flex-shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-colors ${
+                activePlatform === key ? 'bg-stone-800 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+              }`}>
+              {dotColor && <span className={`inline-block w-2 h-2 rounded-full ${dotColor}`} />}
+              {t(labelKey)}
+            </button>
+          ))}
+        </div>
+
+        {/* Row 3: sort — right-aligned */}
+        <div className="flex items-center justify-end gap-1.5 mt-2">
+          <span className="text-xs text-stone-400">{t('deals.sort_label')}:</span>
+          <select value={sortMode} onChange={e => setSortMode(e.target.value as SortMode)}
+            className="text-sm text-stone-700 bg-transparent border-0 outline-none cursor-pointer pr-1">
+            {SORT_OPTIONS.map(({ value, i18nKey }) => (
+              <option key={value} value={value}>{t(i18nKey)}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      {/* Deal cards */}
-      {visible.length === 0 ? (
-        <p className="text-sm text-stone-500 text-center py-16">
-          {tDeals('none')}
-        </p>
+      {/* Featured deals strip */}
+      <FeaturedStrip deals={deals} />
+
+      {/* Deal grid / empty state */}
+      {filtered.length === 0 ? (
+        <div className="py-12 text-center text-stone-500">
+          <p className="font-medium">{t('deals.empty_filtered')}</p>
+          <p className="text-sm mt-1">{t('deals.empty_filtered_hint', { total: deals.length })}</p>
+          {isFiltered && (
+            <button onClick={clearFilters} className="mt-4 text-sm text-orange-600 hover:text-orange-700 font-medium">
+              {t('deals.clear_filters')}
+            </button>
+          )}
+        </div>
       ) : (
-        <div className="space-y-3 pb-10">
-          {visible.map((d) => {
-            const plat = PLATFORM_META[d.platform] ?? {
-              name: d.platform,
-              color: 'bg-stone-200 text-stone-700',
-            }
-            const meta = [d.cuisine.join(' · '), d.area].filter(Boolean).join(' · ')
-            const status = getOpenStatus(d.opening_hours)
-            const isClosed = !d.is_available || status.status === 'closed'
-            return (
-              <div
-                key={d.id}
-                className={`border border-stone-100 rounded-2xl p-4 hover:border-stone-300 hover:shadow-sm transition-all ${isClosed ? 'opacity-60' : ''}`}
-              >
-                <Link href={`/restaurant/${d.restaurant_id}`} className="block">
-                  {/* Top row: name + platform */}
-                  <div className="flex items-start justify-between gap-3 mb-1">
-                    <div className="flex-1 min-w-0">
-                      <span className="font-semibold text-sm leading-snug" style={{ color: '#1A1A1A' }}>
-                        {d.restaurant_name}
-                      </span>
-                      <div className="mt-0.5">
-                        <OpenStatusBadge openingHours={d.opening_hours} isAvailable={d.is_available} />
-                      </div>
-                    </div>
-                    <span className={`flex-shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${plat.color}`}>
-                      {plat.name}
-                    </span>
-                  </div>
-
-                  {/* Cuisine · area */}
-                  {meta && (
-                    <p className="text-xs mb-2.5" style={{ color: '#888780' }}>
-                      {meta}
-                    </p>
-                  )}
-
-                  {/* Deal badge + min order + rating */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span
-                      className="inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full text-white"
-                      style={{ backgroundColor: '#1E8A5A' }}
-                    >
-                      {localizedBadge(d)}
-                    </span>
-                    {d.min_order != null && (
-                      <span className="text-xs" style={{ color: '#888780' }}>
-                        {tDeals('min_order', { amount: d.min_order })}
-                      </span>
-                    )}
-                    {d.rating != null && (
-                      <span className="ml-auto text-xs font-medium flex items-center gap-0.5" style={{ color: '#1A1A1A' }}>
-                        <span className="text-amber-400">★</span>
-                        {d.rating.toFixed(1)}
-                        {d.review_count != null && (
-                          <span className="text-stone-400 font-normal">({d.review_count})</span>
-                        )}
-                      </span>
-                    )}
-                  </div>
-                </Link>
-
-                {/* Closed banner */}
-                {isClosed && (() => {
-                  const s = status
-                  const label = !d.is_available
-                    ? tHours('unavailable')
-                    : s.status === 'closed' && s.opensAt
-                      ? s.opensAt.startsWith('tomorrow ')
-                        ? tHours('opens_tomorrow', { time: s.opensAt.replace('tomorrow ', '') })
-                        : tHours('opens_at', { time: s.opensAt })
-                      : tHours('closed')
-                  return (
-                    <div className="mt-3 flex items-center justify-center py-2 rounded-xl bg-stone-100 text-xs font-medium text-stone-500">
-                      {label}
-                    </div>
-                  )
-                })()}
-
-                {/* Compare & Order CTA */}
-                <Link
-                  href={`/restaurant/${d.restaurant_id}`}
-                  className="mt-2 flex items-center justify-center w-full py-2 rounded-xl text-xs font-semibold text-white bg-stone-900 hover:bg-stone-700 transition-colors"
-                >
-                  {tDeals('compare_and_order', { platform: plat.name })}
-                </Link>
-              </div>
-            )
-          })}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map(deal => <DealCard key={deal.id} deal={deal} />)}
         </div>
       )}
     </div>
