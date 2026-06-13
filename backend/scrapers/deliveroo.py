@@ -589,6 +589,18 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, m
                 except Exception:
                     pass
 
+                # Expand collapsed accordion sections (Deliveroo lazy-renders category sections).
+                try:
+                    expanded = await page.evaluate("""() => {
+                        const btns = Array.from(document.querySelectorAll('button[aria-expanded="false"]'));
+                        btns.forEach(b => { try { b.click(); } catch {} });
+                        return btns.length;
+                    }""")
+                    if expanded:
+                        await page.wait_for_timeout(600)
+                except Exception:
+                    pass
+
                 # Unified scroll: stable when BOTH height AND item count unchanged for 2 consecutive ticks.
                 prev_h, prev_count, stale = 0, 0, 0
                 for _ in range(40):
@@ -633,6 +645,8 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, m
                     function addItem(title, price, catalogName, imageUrl, description) {
                         title = title.trim();
                         if (!title || title.length < 2 || price === null) return;
+                        // Skip promotional banners (delivery fee, spend-X-get-Y) that share notranslate structure
+                        if (/frais de livraison|leveringskosten|delivery fee|livraison offert/i.test(title)) return;
                         const key = title + '|' + price;
                         if (seen.has(key)) return;
                         seen.add(key);
