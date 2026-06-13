@@ -162,7 +162,10 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                     stale_ticks = 0
                     max_stale = 3  # stop after 3 scroll cycles with no new responses
                     while stale_ticks < max_stale:
-                        await asyncio.wait_for(page.evaluate("window.scrollTo(0, document.body.scrollHeight)"), timeout=5)
+                        try:
+                            await asyncio.wait_for(page.evaluate("window.scrollTo(0, document.body.scrollHeight)"), timeout=5)
+                        except asyncio.TimeoutError:
+                            pass
                         await asyncio.sleep(0.5)
                         cur_count = len(feed_pages)
                         if cur_count == prev_count:
