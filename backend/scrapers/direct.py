@@ -480,7 +480,8 @@ async def _enrich_neighborhoods(log: Callable) -> None:
                 )
                 addr = r.json().get('address', {})
                 hood = _clean_commune(
-                    addr.get('city_district') or addr.get('suburb') or addr.get('municipality')
+                    addr.get('city_district') or addr.get('suburb') or addr.get('town')
+                    or addr.get('municipality') or addr.get('city')
                 )
                 if hood:
                     await asyncio.to_thread(
