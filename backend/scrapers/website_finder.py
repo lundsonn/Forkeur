@@ -276,7 +276,6 @@ async def _worker(
                     db.mark_restaurant_searched(rid)
                     async with lock:
                         counters["processed"] += 1
-                    queue.task_done()
                     continue
 
                 website, maps_has_delivery, lat, lng = await _find_website_on_maps(page, name, log)
@@ -289,7 +288,6 @@ async def _worker(
                     async with lock:
                         counters["processed"] += 1
                     await asyncio.sleep(1)
-                    queue.task_done()
                     continue
 
                 log(f"    [{worker_id}] Website: {website} (maps_delivery={maps_has_delivery})")
