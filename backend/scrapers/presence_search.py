@@ -279,7 +279,7 @@ def _zone_from_postal(postal_code: str | None) -> str | None:
     return f"bruxelles-{m.group(1)}" if m else None
 
 
-async def takeaway_search(browser, *, target_name: str, postal_code: str | None, log_fn=noop_log):
+async def takeaway_search(browser, *, target_name: str, postal_code: str | None, max_steps: int = 80, log_fn=noop_log):
     zone = _zone_from_postal(postal_code)
     if not zone:
         return [], True, "no_postal"
@@ -296,13 +296,34 @@ async def takeaway_search(browser, *, target_name: str, postal_code: str | None,
             # No cards in a valid commune zone => CF/interstitial, not a real empty.
             return [], True, "no_cards"
         await page.wait_for_timeout(1000)
-        rows = await page.evaluate(_TAKEAWAY_LISTING_EVAL)
-        out: list[Candidate] = []
-        for r in rows:
-            href = r.get("href") or ""
-            url = href if href.startswith("http") else f"https://www.takeaway.com{href}"
-            out.append(Candidate(name=r.get("name") or r.get("slug") or "", url=url, lat=None, lng=None, cuisine=None))
-        return out, False, None
+
+        # The commune listing is VIRTUALISED (cards unmount when scrolled out of
+        # view: a single eval after load returns only the first viewport, ~15).
+        # The zone page is NOT distance-sorted from a pin, so the venue may sit
+        # anywhere in the commune list — full coverage is required to trust an
+        # `absent`. Scroll in small steps and re-extract, accumulating by slug
+        # before virtualisation tears each card back down (same as Deliveroo).
+        acc: dict[str, Candidate] = {}
+        stale = 0
+        for _ in range(max_steps):
+            for r in await page.evaluate(_TAKEAWAY_LISTING_EVAL):
+                slug = r.get("slug")
+                if slug and slug not in acc:
+                    href = r.get("href") or ""
+                    url = href if href.startswith("http") else f"https://www.takeaway.com{href}"
+                    acc[slug] = Candidate(name=r.get("name") or slug, url=url, lat=None, lng=None, cuisine=None)
+                    if _strong(target_name, acc[slug].name):
+                        return list(acc.values()), False, None  # confident hit, stop early
+            before = len(acc)
+            await page.evaluate("window.scrollBy(0, Math.round(window.innerHeight * 0.8))")
+            await asyncio.sleep(0.3)
+            if len(acc) == before:
+                stale += 1
+                if stale >= 8:
+                    break
+            else:
+                stale = 0
+        return list(acc.values()), False, None
     except CloudflareBlockedError:
         return [], True, "cloudflare"
     except Exception as exc:  # noqa: BLE001

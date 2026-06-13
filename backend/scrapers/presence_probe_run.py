@@ -36,8 +36,11 @@ import random
 
 import httpx
 
+from rapidfuzz.distance import JaroWinkler
+
 import db
 import pgpool
+from matching import normalize_name
 from presence_probe import classify_presence
 from scrapers import presence_search as psearch
 from scrapers.base import browser_session
@@ -207,6 +210,13 @@ async def _run_group(plat: str, checks: list[dict], client: httpx.AsyncClient, s
                 name=check["name"], candidates=cands, missing_platform=plat,
                 blocked=is_blocked, block_reason=reason,
             )
+            # Auditability: on a genuine absent, record the closest-by-name card we
+            # actually saw (matched_url stays null — it is NOT a match), so a human
+            # can sanity-check "we searched N cards; nearest name was X".
+            if result.outcome == "absent" and cands:
+                tgt = normalize_name(check["name"])
+                best = max(cands, key=lambda c: JaroWinkler.similarity(tgt, normalize_name(c.name)))
+                result.candidate_name = best.name
             _store(check, result, pin)
 
             done += 1
