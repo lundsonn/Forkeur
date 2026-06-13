@@ -1,4 +1,4 @@
-.PHONY: install dev build prod
+.PHONY: install dev build prod migrate migrate-check migrate-baseline
 
 install:
 	cd backend && uv sync
@@ -14,3 +14,12 @@ build:
 
 prod:
 	cd backend && uv run uvicorn main:app --port 8000
+
+migrate:
+	cd backend && uv run python ops/migrate.py up
+
+migrate-check:
+	cd backend && uv run python ops/migrate.py check
+
+migrate-baseline:
+	cd backend && uv run python ops/migrate.py baseline

@@ -9,6 +9,15 @@ from routers.auth_router import require_auth
 router = APIRouter(prefix="/find-websites", tags=["websites"], dependencies=[Depends(require_auth)])
 
 _running: bool = False
+_state_lock = asyncio.Lock()
+# Hold a strong ref to the background task so it isn't garbage-collected
+# mid-run (a bare create_task() result can be reaped if nothing references it).
+_bg_tasks: set[asyncio.Task] = set()
+
+
+def _track_bg(task: asyncio.Task) -> None:
+    _bg_tasks.add(task)
+    task.add_done_callback(_bg_tasks.discard)
 
 
 @router.post("")
@@ -19,20 +28,24 @@ async def trigger_find_websites(limit: int | None = None):
         limit (int, optional): Process only N restaurants (useful for testing).
     """
     global _running
-    if _running:
-        return {"status": "already_running"}
+    # Atomic check-and-set: without the lock two near-simultaneous requests can
+    # both read _running == False and both launch the scraper.
+    async with _state_lock:
+        if _running:
+            return {"status": "already_running"}
+        _running = True
 
     from scrapers.website_finder import run
 
     async def _bg():
         global _running
-        _running = True
         try:
             await run(log=print, limit=limit)
         finally:
-            _running = False
+            async with _state_lock:
+                _running = False
 
-    asyncio.create_task(_bg())
+    _track_bg(asyncio.create_task(_bg()))
     return {"status": "started", "limit": limit}
 
 

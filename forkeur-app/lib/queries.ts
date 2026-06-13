@@ -308,7 +308,19 @@ export async function getDeals(): Promise<DealItem[]> {
 export const getRestaurantWithListings = cache(async (
   id: string
 ): Promise<RestaurantDetail | null> => {
-  const data = await backendFetch<RawRestaurantDetail | null>(`/api/public/restaurants/${encodeURIComponent(id)}`, { revalidate: 3600 }).catch(() => null)
+  // A genuine 404 (backend 404, or 200 with a null body) means "restaurant not
+  // found" → return null so the caller can call notFound(). Any OTHER failure
+  // (5xx, timeout, network) is an outage, not a missing record → re-throw so the
+  // error.tsx boundary shows "try again" instead of a misleading 404 page.
+  let data: RawRestaurantDetail | null
+  try {
+    data = await backendFetch<RawRestaurantDetail | null>(`/api/public/restaurants/${encodeURIComponent(id)}`, { revalidate: 3600 })
+  } catch (err) {
+    // backendFetch throws `Error("backend <status>: <path>")`. Treat 404 as
+    // not-found; rethrow everything else (5xx, timeout, network).
+    if (err instanceof Error && /^backend 404:/.test(err.message)) return null
+    throw err
+  }
   if (!data) return null
 
   const raw = data as unknown as RawRestaurantDetail

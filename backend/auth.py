@@ -4,8 +4,21 @@ import re
 from datetime import datetime, timedelta, timezone
 import jwt
 
-_SECRET = os.environ["JWT_SECRET"]
+_SECRET: str | None = None
 _ALGO = "HS256"
+
+
+def _secret() -> str:
+    """Lazily read JWT_SECRET so importing this module never crashes before
+    main.py's _check_required_env() can emit a clean error. Cached after first
+    successful read."""
+    global _SECRET
+    if _SECRET is None:
+        s = os.environ.get("JWT_SECRET")
+        if not s:
+            raise RuntimeError("JWT_SECRET environment variable is not set")
+        _SECRET = s
+    return _SECRET
 # Hours, not days: 30-day tokens on a single shared admin password offer too
 # wide a window for credential reuse if the token ever leaks.
 _EXPIRE_HOURS = int(os.environ.get("JWT_EXPIRE_HOURS", "12"))
@@ -37,7 +50,7 @@ def create_token(admin_id: str | None = None) -> str:
         "nbf": now,
         "exp": now + timedelta(hours=_EXPIRE_HOURS),
     }
-    return jwt.encode(payload, _SECRET, algorithm=_ALGO)
+    return jwt.encode(payload, _secret(), algorithm=_ALGO)
 
 
 def _decode(token: str) -> dict | None:
@@ -46,7 +59,7 @@ def _decode(token: str) -> dict | None:
     try:
         return jwt.decode(
             token,
-            _SECRET,
+            _secret(),
             algorithms=[_ALGO],
             audience=_AUDIENCE,
             issuer=_ISSUER,

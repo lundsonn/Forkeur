@@ -225,5 +225,12 @@
   },
   "footer": {
     "disclaimer": "Prices shown are each platform's <b>delivery + service fees</b>, updated live. <b>Green</b> is the cheapest. Menu prices are compared too once you build your order."
+  },
+  "error": {
+    "title": "Something went wrong",
+    "body": "We couldn't load this page right now — our price data may be temporarily unavailable. Please try again in a moment.",
+    "retry": "Try again",
+    "restaurant_title": "Couldn't load this restaurant",
+    "restaurant_body": "We couldn't load this restaurant's prices right now. Please try again in a moment."
   }
 }

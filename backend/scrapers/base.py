@@ -125,6 +125,16 @@ async def new_context(browser: Browser, lang: str = "fr-BE") -> BrowserContext:
     return context
 
 
+async def _close_context_if_empty(context: BrowserContext) -> None:
+    """Close an auto-created context once its last page is gone, so callers
+    that only `await page.close()` don't leak the context (RSS + browser refcount)."""
+    try:
+        if not context.pages:
+            await context.close()
+    except Exception as exc:
+        _log.debug("auto context close failed: %s", exc)
+
+
 async def new_page(
     browser_or_context: Browser | BrowserContext,
     lang: str = "fr-BE",
@@ -132,9 +142,24 @@ async def new_page(
 ) -> Page:
     if isinstance(browser_or_context, BrowserContext):
         context = browser_or_context
+        owns_context = False
     else:
         context = await new_context(browser_or_context, lang=lang)
+        owns_context = True
     page = await context.new_page()
+    if owns_context:
+        # We created the context, but callers only ever `await page.close()`.
+        # Reap the context when its last page closes so it doesn't leak. Safe
+        # for sibling fan-out (new_sibling_page): only fires once context.pages
+        # is empty, i.e. after the LAST page in the context has closed.
+        def _on_close(_p=None, _ctx=context):
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                return
+            loop.create_task(_close_context_if_empty(_ctx))
+
+        page.on("close", _on_close)
     await _stealth.apply_stealth_async(page)
     if block_media:
         # Images and media are not needed for data scraping and are the biggest

@@ -346,15 +346,26 @@ def patch_listing(listing_id: str, data: dict) -> None:
 
 
 def upsert_promotions(listing_id: str, promotions: list[dict]) -> int:
-    pgpool.execute("DELETE FROM promotions WHERE listing_id = %s", [listing_id])
-    if not promotions:
-        return 0
-    saved = 0
-    for p in promotions:
-        sql, params = _build_insert("promotions", {"listing_id": listing_id, **p})
-        pgpool.fetchone(sql, params)
-        saved += 1
-    return saved
+    # One connection = one transaction: the DELETE and every INSERT commit or
+    # roll back together. The previous version ran the DELETE and each INSERT on
+    # SEPARATE pooled connections, so a mid-loop failure committed the DELETE and
+    # lost the listing's promos (and cost one pool round-trip per promo).
+    with pgpool.get_pool().connection() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM promotions WHERE listing_id = %s", [listing_id])
+        if not promotions:
+            return 0
+        for p in promotions:
+            row = {"listing_id": listing_id, **p}
+            cols = ", ".join(row.keys())
+            ph = ", ".join(["%s"] * len(row))
+            # column names come from scraper-controlled promo dicts (hardcoded
+            # field names), never end-user input — safe to interpolate (mirrors
+            # insert_menu_items).
+            cur.execute(
+                f"INSERT INTO promotions ({cols}) VALUES ({ph})",
+                [_coerce(v) for v in row.values()],
+            )
+        return len(promotions)
 
 
 def delete_menu_items(listing_id: str) -> None:

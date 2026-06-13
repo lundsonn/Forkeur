@@ -225,5 +225,12 @@
   },
   "footer": {
     "disclaimer": "Les prix affichés sont les <b>frais de livraison + service</b> de chaque plateforme, mis à jour en direct. <b>Vert</b> = le moins cher. Les prix du menu sont aussi comparés une fois votre commande constituée."
+  },
+  "error": {
+    "title": "Une erreur est survenue",
+    "body": "Impossible de charger cette page pour le moment — nos données de prix sont peut-être temporairement indisponibles. Veuillez réessayer dans un instant.",
+    "retry": "Réessayer",
+    "restaurant_title": "Impossible de charger ce restaurant",
+    "restaurant_body": "Impossible de charger les prix de ce restaurant pour le moment. Veuillez réessayer dans un instant."
   }
 }

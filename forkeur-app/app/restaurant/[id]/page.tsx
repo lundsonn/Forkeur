@@ -39,7 +39,7 @@ export async function generateMetadata({
   if (!data) return { title: 'Restaurant — Forkeur' }
 
   const t = await getTranslations('detail')
-  const cuisine = data.cuisine.join(', ')
+  const cuisine = (data.cuisine ?? []).join(', ')
   const description = t('meta_description', { name: data.name, cuisine: cuisine || 'Brussels' })
   const title = `${data.name} — Forkeur`
 
@@ -139,7 +139,7 @@ export default async function Page({
         <h1 className="text-2xl font-bold text-stone-900">{data.name}</h1>
         <div className="flex items-center gap-2 mt-1 flex-wrap">
           <p className="text-sm text-stone-400">
-            {data.cuisine.join(' · ')} · {data.city}
+            {(data.cuisine ?? []).join(' · ')} · {data.city}
             {bestRating !== null && ` · ★ ${bestRating.toFixed(1)}`}
           </p>
           <details className="inline-flex items-center gap-1 relative">

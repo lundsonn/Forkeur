@@ -225,5 +225,12 @@
   },
   "footer": {
     "disclaimer": "Getoonde prijzen zijn de <b>bezorg- + servicekosten</b> per platform, live bijgewerkt. <b>Groen</b> is de goedkoopste. Menuprijzen worden ook vergeleken zodra u uw bestelling samenstelt."
+  },
+  "error": {
+    "title": "Er ging iets mis",
+    "body": "We konden deze pagina nu niet laden — onze prijsgegevens zijn mogelijk tijdelijk niet beschikbaar. Probeer het zo meteen opnieuw.",
+    "retry": "Opnieuw proberen",
+    "restaurant_title": "Kon dit restaurant niet laden",
+    "restaurant_body": "We konden de prijzen van dit restaurant nu niet laden. Probeer het zo meteen opnieuw."
   }
 }

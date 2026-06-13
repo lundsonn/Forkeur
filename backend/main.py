@@ -14,7 +14,7 @@ from starlette.requests import Request
 import auth
 import scheduler as sched
 import ws as ws_mod
-from routers import scrapers, runs, schedule, data, websites, claims as claims_router_mod, cleanup, public
+from routers import scrapers, runs, schedule, data, websites, claims as claims_router_mod, cleanup, public, metrics
 from routers.auth_router import router as auth_router
 
 _PUBLIC_PATHS = {"/api/auth/login"}
@@ -67,6 +67,46 @@ async def lifespan(app: FastAPI):
     import db
     import pgpool
     pgpool.get_pool()  # open the pool eagerly so a bad DATABASE_URL fails fast
+
+    # Read-only check that all DB migrations are recorded as applied. The app
+    # role can SELECT but cannot run DDL — migrations are applied out-of-band
+    # via `make migrate` (ops/migrate.py as a superuser). Non-fatal by default;
+    # set MIGRATIONS_STRICT=1 to refuse startup when migrations are pending.
+    import logging
+    _log = logging.getLogger(__name__)
+    try:
+        from ops.migrate import compute_pending_via_pool, TrackingTableMissing
+
+        try:
+            pending = compute_pending_via_pool(pgpool)
+        except TrackingTableMissing:
+            _log.warning(
+                "Migration tracking not initialized (no schema_migrations "
+                "table); run `make migrate-baseline` to record applied "
+                "migrations."
+            )
+            pending = []
+
+        if pending:
+            strict = os.environ.get("MIGRATIONS_STRICT", "").lower() in (
+                "1",
+                "true",
+                "yes",
+            )
+            if strict:
+                raise RuntimeError(
+                    f"Pending DB migrations not applied: {pending}"
+                )
+            _log.warning(
+                "Pending DB migrations not applied: %s; run `make migrate`. "
+                "Set MIGRATIONS_STRICT=1 to make this fatal.",
+                pending,
+            )
+    except RuntimeError:
+        raise
+    except Exception as exc:  # noqa: BLE001 — a check bug must never brick startup
+        _log.warning("Migration pending-check failed (ignored): %s", exc)
+
     # On a fresh process start, any run still marked 'running' is orphaned —
     # the previous process was killed and those runs will never finish.
     cleaned = db.orphan_stale_runs(max_age_hours=0)
@@ -99,6 +139,7 @@ app.include_router(websites.router, prefix="/api")
 app.include_router(claims_router_mod.router, prefix="/api")
 app.include_router(cleanup.router, prefix="/api")
 app.include_router(public.router, prefix="/api")
+app.include_router(metrics.router, prefix="/api")
 
 
 @app.websocket("/ws/{run_id}")
