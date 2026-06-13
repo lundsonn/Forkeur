@@ -8,7 +8,7 @@ admin dashboard and health checks see it.
 Run detached so `systemctl restart forkeur-backend` does NOT kill the scrape:
 
     cd /opt/forkeur/backend
-    nohup /root/.local/bin/uv run python -m scripts.run_batch_standalone \
+    DISPLAY=:99 nohup /root/.local/bin/uv run python -m scripts.run_batch_standalone \
         > /tmp/batch_standalone.log 2>&1 &
 
 Env overrides (same as scheduler.py):
@@ -23,6 +23,9 @@ import os
 import sys
 import time
 from datetime import datetime
+
+# Playwright scrapers need a display; Xvfb runs on :99 in production.
+os.environ.setdefault("DISPLAY", ":99")
 
 import db
 from models import ScraperConfig
