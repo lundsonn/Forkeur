@@ -4,40 +4,56 @@ import json
 import os
 import re
 from typing import Callable
+from constants import DEFAULT_ADDRESS
 from models import ScraperConfig, ScraperResult
 from scrapers.base import browser_session, new_page, check_cloudflare, noop_log
 from scrapers.promos import classify_promo, extract_min_order, parse_promo_texts
 import db
 
 
-_RUN_TIMEOUT_S = int(os.getenv("UBEREATS_RUN_TIMEOUT_S", "2400"))  # 40min; healthy run ~19min
+_RUN_TIMEOUT_S = int(os.getenv("UBEREATS_RUN_TIMEOUT_S", "14400"))  # 4h; 20-zone run ~3h
+
+# One representative address per Brussels postal code.
+LISTING_ZONES = [
+    "Place Royale 1, 1000 Bruxelles",
+    "Place de Laeken 1, 1020 Bruxelles",
+    "Place Colignon 1, 1030 Bruxelles",
+    "Chaussée d'Etterbeek 100, 1040 Bruxelles",
+    "Chaussée d'Ixelles 100, 1050 Bruxelles",
+    "Parvis de Saint-Gilles 1, 1060 Bruxelles",
+    "Place de la Vaillance 1, 1070 Bruxelles",
+    "Chaussée de Gand 100, 1080 Bruxelles",
+    "Parvis de la Basilique 1, 1081 Bruxelles",
+    "Rue au Bois 100, 1082 Bruxelles",
+    "Avenue Charles-Quint 100, 1083 Bruxelles",
+    "Rue du Prêtre 100, 1090 Bruxelles",
+    "Rue de Fiennes 1, 1140 Bruxelles",
+    "Avenue de Tervuren 1, 1150 Bruxelles",
+    "Chaussée de Wavre 1, 1160 Bruxelles",
+    "Drève du Caporal 1, 1170 Bruxelles",
+    "Avenue Brugmann 100, 1180 Bruxelles",
+    "Rue de Forest 100, 1190 Bruxelles",
+    "Avenue de Tervuren 200, 1200 Bruxelles",
+    "Rue Royale 100, 1210 Bruxelles",
+]
 
 async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, run_id: str | None = None) -> ScraperResult:
     log_fn("Starting UberEats scraper")
     records_saved = 0
+
+    zones = LISTING_ZONES if config.address == DEFAULT_ADDRESS else [config.address]
 
     async with browser_session(lang="fr-BE") as browser:
         try:
             async with asyncio.timeout(_RUN_TIMEOUT_S):
                 page = await new_page(browser, lang="fr-BE")
 
-                feed_event = asyncio.Event()
-                feed_pages: list[dict] = []
-
-                async def on_response(response):
-                    if "getFeedV1" in response.url:
-                        try:
-                            text = await response.text()
-                            parsed = json.loads(text)
-                            # Extract only feed data to avoid accumulating 4-10MB of raw dicts
-                            feed_data = parsed.get("data", {}).get("feedItems", [])
-                            if feed_data:
-                                feed_pages.append(feed_data)
-                                feed_event.set()
-                        except Exception:
-                            pass
-
-                page.on("response", on_response)
+                # ── Phase 1: collect restaurant listings across all zones ──────────
+                # Global dedup across zones — same restaurant may appear in multiple zones.
+                seen_uuids: set[str] = set()
+                # 4-tuple: (restaurant_dict, listing_id, restaurant_id, zone_listing_url)
+                saved_listings: list[tuple[dict, str, str, str]] = []
+                promo_total = 0
 
                 log_fn("Loading ubereats.com...")
                 # Navigate directly to /be to avoid GeoIP redirect to /de (server is in Germany)
@@ -45,156 +61,193 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                 check_cloudflare(await page.title())
                 log_fn(f"Page loaded: {page.url}")
 
-                # Address input is already visible on the homepage — no "Find food" click needed
-                input_sel = "#location-typeahead-home-input"
-                await page.wait_for_selector(input_sel, timeout=20000)
-                log_fn(f"Input found: {input_sel}")
-                await page.click(input_sel)
-                await page.type(input_sel, config.address, delay=60)
-                log_fn(f"Typed address: {config.address}")
-                await asyncio.sleep(3)
+                for zone_idx, zone_addr in enumerate(zones):
+                    log_fn(f"Zone {zone_idx + 1}/{len(zones)}: {zone_addr}")
 
-                # Wait for suggestions dropdown to appear
-                try:
-                    await page.wait_for_selector('[role="option"], li[role="option"], .uber-cache, [data-testid*="suggestion"]', timeout=5000)
-                    log_fn("Suggestions dropdown appeared")
-                except Exception:
-                    log_fn("No suggestions dropdown, trying direct Enter")
+                    feed_event = asyncio.Event()
+                    feed_pages: list[dict] = []
 
-                await page.keyboard.press("ArrowDown")
-                await asyncio.sleep(0.5)
-                await page.keyboard.press("Enter")
-                log_fn(f"Pressed ArrowDown+Enter, page URL: {page.url}")
+                    async def on_response(response, _fe=feed_event, _fp=feed_pages):
+                        if "getFeedV1" in response.url:
+                            try:
+                                text = await response.text()
+                                parsed = json.loads(text)
+                                # Extract only feed data to avoid accumulating 4-10MB of raw dicts
+                                feed_data = parsed.get("data", {}).get("feedItems", [])
+                                if feed_data:
+                                    _fp.append(feed_data)
+                                    _fe.set()
+                            except Exception:
+                                pass
 
-                # Wait for URL to change or navigation to complete
-                try:
-                    await page.wait_for_url("**/restaurants**", timeout=10000)
-                except Exception:
-                    log_fn("URL didn't change to /restaurants, may still work")
+                    page.on("response", on_response)
 
-                await asyncio.sleep(2)
+                    # Address input: on first zone the homepage is already loaded;
+                    # on subsequent zones we navigate back to the homepage first.
+                    if zone_idx > 0:
+                        await page.goto("https://www.ubereats.com/be", wait_until="domcontentloaded", timeout=60000)
+                        check_cloudflare(await page.title())
 
-                log_fn("Waiting for first feed API response...")
-                try:
-                    async with asyncio.timeout(25):
-                        await feed_event.wait()
-                except asyncio.TimeoutError:
-                    pass
+                    # Address input is already visible on the homepage — no "Find food" click needed
+                    input_sel = "#location-typeahead-home-input"
+                    await page.wait_for_selector(input_sel, timeout=20000)
+                    log_fn(f"Input found: {input_sel}")
+                    await page.click(input_sel)
+                    await page.type(input_sel, zone_addr, delay=60)
+                    log_fn(f"Typed address: {zone_addr}")
+                    await asyncio.sleep(3)
 
-                if not feed_pages:
-                    # NOT a bare TimeoutError: that aliases asyncio.TimeoutError, which
-                    # the router treats as a wall-clock run timeout and mislabels as
-                    # "timed out after N min". This is a distinct, retryable condition —
-                    # UberEats never returned a restaurant feed (address not selected or
-                    # an anti-bot interstitial). Raise a plain RuntimeError so the run is
-                    # labelled accurately and the router's transient-retry path engages.
-                    raise RuntimeError("Feed API not captured (no restaurant feed returned)")
-
-                # Scroll to load all pages — UberEats uses infinite scroll with getFeedV1 per batch
-                log_fn("Scrolling to load all restaurants...")
-                prev_count = 0
-                stale_ticks = 0
-                max_stale = 3  # stop after 3 scroll cycles with no new responses
-                while stale_ticks < max_stale:
-                    await asyncio.wait_for(page.evaluate("window.scrollTo(0, document.body.scrollHeight)"), timeout=5)
-                    await asyncio.sleep(0.5)
-                    cur_count = len(feed_pages)
-                    if cur_count == prev_count:
-                        stale_ticks += 1
-                    else:
-                        log_fn(f"Scroll: {cur_count} feed responses so far")
-                        stale_ticks = 0
-                    prev_count = cur_count
-
-                page.remove_listener("response", on_response)
-
-                # Aggregate all stores across all pages, dedup by storeUuid
-                seen_uuids: set[str] = set()
-                stores = []
-                for feed in feed_pages:
-                    # feed is now already the feedItems list (extracted in on_response)
-                    feed_items = feed if isinstance(feed, list) else []
-                    for item in feed_items:
-                        if item.get("type") != "REGULAR_STORE":
-                            continue
-                        uuid = (item.get("store") or {}).get("storeUuid") or item.get("uuid") or ""
-                        if uuid and uuid in seen_uuids:
-                            continue
-                        seen_uuids.add(uuid)
-                        stores.append(item)
-
-                log_fn(f"Feed: {len(stores)} unique restaurants across {len(feed_pages)} pages")
-
-                restaurants = []
-                for item in stores:
-                    s = item.get("store", {})
-                    meta = s.get("meta", []) or []
-                    eta_meta = next((m for m in meta if m.get("badgeType") == "ETD"), None)
-                    tracking = s.get("tracking") or {}
-                    payload = tracking.get("storePayload") or {}
-                    fare_info = payload.get("fareInfo") or {}
-                    marker = s.get("mapMarker") or {}
-                    signposts = s.get("signposts") or []
-                    # Keep first label for backward-compat discount_label; full promos parsed separately
-                    discount = signposts[0].get("text") if signposts else None
-                    restaurants.append({
-                        "name": (s.get("title") or {}).get("text", "Unknown"),
-                        "url": f"https://www.ubereats.com{s['actionUrl'].split('?')[0]}" if s.get("actionUrl") else None,
-                        "store_uuid": s.get("storeUuid") or item.get("uuid"),
-                        "rating": (s.get("rating") or {}).get("text", "N/A"),
-                        "delivery_fee": fare_info.get("serviceFee"),
-                        "eta": (eta_meta or {}).get("text", "N/A"),
-                        "lat": marker.get("latitude"),
-                        "lng": marker.get("longitude"),
-                        "discount": discount,
-                        "image_url": _extract_store_image(s),
-                        "_store": s,
-                    })
-
-                if config.target:
-                    restaurants = [r for r in restaurants if config.target.lower() in r["name"].lower()]
-
-                log_fn(f"Saving {len(restaurants)} restaurants...")
-                saved_listings: list[tuple[dict, str, str]] = []  # (restaurant_dict, listing_id, restaurant_id)
-                promo_total = 0
-                for r in (restaurants[:config.max_items] if config.max_items else restaurants):
+                    # Wait for suggestions dropdown to appear
                     try:
-                        slug = (r.get("url") or "").split("/store/")[-1].strip("/") or r["name"].lower().replace(" ", "-")
-                        rid = db.upsert_restaurant({
-                            "name": r["name"],
-                            "slug": slug,
-                            "lat": r.get("lat"),
-                            "lng": r.get("lng"),
-                            "image_url": r.get("image_url"),
-                            "geo_source": "uber_eats",
+                        await page.wait_for_selector('[role="option"], li[role="option"], .uber-cache, [data-testid*="suggestion"]', timeout=5000)
+                        log_fn("Suggestions dropdown appeared")
+                    except Exception:
+                        log_fn("No suggestions dropdown, trying direct Enter")
+
+                    await page.keyboard.press("ArrowDown")
+                    await asyncio.sleep(0.5)
+                    await page.keyboard.press("Enter")
+                    log_fn(f"Pressed ArrowDown+Enter, page URL: {page.url}")
+
+                    # Wait for URL to change or navigation to complete
+                    try:
+                        await page.wait_for_url("**/restaurants**", timeout=10000)
+                    except Exception:
+                        log_fn("URL didn't change to /restaurants, may still work")
+
+                    await asyncio.sleep(2)
+
+                    log_fn("Waiting for first feed API response...")
+                    try:
+                        async with asyncio.timeout(25):
+                            await feed_event.wait()
+                    except asyncio.TimeoutError:
+                        pass
+
+                    if not feed_pages:
+                        # NOT a bare TimeoutError: that aliases asyncio.TimeoutError, which
+                        # the router treats as a wall-clock run timeout and mislabels as
+                        # "timed out after N min". This is a distinct, retryable condition —
+                        # UberEats never returned a restaurant feed (address not selected or
+                        # an anti-bot interstitial). Raise a plain RuntimeError so the run is
+                        # labelled accurately and the router's transient-retry path engages.
+                        if len(zones) == 1:
+                            raise RuntimeError("Feed API not captured (no restaurant feed returned)")
+                        log_fn(f"Zone {zone_idx + 1}: no feed captured, skipping")
+                        page.remove_listener("response", on_response)
+                        continue
+
+                    # Capture the zone listing URL after address selection (used for Phase 2 click-nav)
+                    zone_listing_url = page.url
+
+                    # Scroll to load all pages — UberEats uses infinite scroll with getFeedV1 per batch
+                    log_fn("Scrolling to load all restaurants...")
+                    prev_count = 0
+                    stale_ticks = 0
+                    max_stale = 3  # stop after 3 scroll cycles with no new responses
+                    while stale_ticks < max_stale:
+                        await asyncio.wait_for(page.evaluate("window.scrollTo(0, document.body.scrollHeight)"), timeout=5)
+                        await asyncio.sleep(0.5)
+                        cur_count = len(feed_pages)
+                        if cur_count == prev_count:
+                            stale_ticks += 1
+                        else:
+                            log_fn(f"Scroll: {cur_count} feed responses so far")
+                            stale_ticks = 0
+                        prev_count = cur_count
+
+                    page.remove_listener("response", on_response)
+
+                    # Aggregate stores for this zone, dedup globally by storeUuid
+                    zone_stores = []
+                    for feed in feed_pages:
+                        feed_items = feed if isinstance(feed, list) else []
+                        for item in feed_items:
+                            if item.get("type") != "REGULAR_STORE":
+                                continue
+                            uuid = (item.get("store") or {}).get("storeUuid") or item.get("uuid") or ""
+                            if uuid and uuid in seen_uuids:
+                                continue
+                            seen_uuids.add(uuid)
+                            zone_stores.append(item)
+
+                    log_fn(f"Zone {zone_idx + 1}: {len(zone_stores)} new unique restaurants (total seen: {len(seen_uuids)})")
+
+                    zone_restaurants = []
+                    for item in zone_stores:
+                        s = item.get("store", {})
+                        meta = s.get("meta", []) or []
+                        eta_meta = next((m for m in meta if m.get("badgeType") == "ETD"), None)
+                        tracking = s.get("tracking") or {}
+                        payload = tracking.get("storePayload") or {}
+                        fare_info = payload.get("fareInfo") or {}
+                        marker = s.get("mapMarker") or {}
+                        signposts = s.get("signposts") or []
+                        # Keep first label for backward-compat discount_label; full promos parsed separately
+                        discount = signposts[0].get("text") if signposts else None
+                        zone_restaurants.append({
+                            "name": (s.get("title") or {}).get("text", "Unknown"),
+                            "url": f"https://www.ubereats.com{s['actionUrl'].split('?')[0]}" if s.get("actionUrl") else None,
+                            "store_uuid": s.get("storeUuid") or item.get("uuid"),
+                            "rating": (s.get("rating") or {}).get("text", "N/A"),
+                            "delivery_fee": fare_info.get("serviceFee"),
+                            "eta": (eta_meta or {}).get("text", "N/A"),
+                            "lat": marker.get("latitude"),
+                            "lng": marker.get("longitude"),
+                            "discount": discount,
+                            "image_url": _extract_store_image(s),
+                            "_store": s,
                         })
-                    except ValueError:
-                        continue  # junk entry filtered by db._is_junk
-                    hours = _parse_regular_hours(r.get("_store") or {})
-                    eta_min = _parse_eta_min(r.get("eta"))
-                    eta_max = _parse_eta_max(r.get("eta"))
-                    delivery_fee = r.get("delivery_fee")
-                    min_order = _parse_min_order(r.get("_store") or {})
-                    lid = db.upsert_listing({
-                        "restaurant_id": rid,
-                        "platform": "uber_eats",
-                        "url": r.get("url"),
-                        "rating": _parse_float(r.get("rating")),
-                        "discount_label": r.get("discount"),
-                        **({"eta_min": eta_min} if eta_min is not None else {}),
-                        **({"eta_max": eta_max} if eta_max is not None else {}),
-                        **({"delivery_fee": delivery_fee} if delivery_fee is not None else {}),
-                        **({"min_order": min_order} if min_order is not None else {}),
-                        **({"opening_hours": hours} if hours else {}),
-                    })
-                    promos = _parse_promotions(r.get("_store") or {})
-                    promo_total += db.upsert_promotions(lid, promos)
-                    saved_listings.append((r, lid, rid))
-                    records_saved += 1
+
+                    if config.target:
+                        zone_restaurants = [r for r in zone_restaurants if config.target.lower() in r["name"].lower()]
+
+                    log_fn(f"Saving {len(zone_restaurants)} restaurants from zone {zone_idx + 1}...")
+                    zone_cap = config.max_items - records_saved if config.max_items else None
+                    for r in (zone_restaurants[:zone_cap] if zone_cap is not None else zone_restaurants):
+                        try:
+                            slug = (r.get("url") or "").split("/store/")[-1].strip("/") or r["name"].lower().replace(" ", "-")
+                            rid = db.upsert_restaurant({
+                                "name": r["name"],
+                                "slug": slug,
+                                "lat": r.get("lat"),
+                                "lng": r.get("lng"),
+                                "image_url": r.get("image_url"),
+                                "geo_source": "uber_eats",
+                            })
+                        except ValueError:
+                            continue  # junk entry filtered by db._is_junk
+                        hours = _parse_regular_hours(r.get("_store") or {})
+                        eta_min = _parse_eta_min(r.get("eta"))
+                        eta_max = _parse_eta_max(r.get("eta"))
+                        delivery_fee = r.get("delivery_fee")
+                        min_order = _parse_min_order(r.get("_store") or {})
+                        lid = db.upsert_listing({
+                            "restaurant_id": rid,
+                            "platform": "uber_eats",
+                            "url": r.get("url"),
+                            "rating": _parse_float(r.get("rating")),
+                            "discount_label": r.get("discount"),
+                            **({"eta_min": eta_min} if eta_min is not None else {}),
+                            **({"eta_max": eta_max} if eta_max is not None else {}),
+                            **({"delivery_fee": delivery_fee} if delivery_fee is not None else {}),
+                            **({"min_order": min_order} if min_order is not None else {}),
+                            **({"opening_hours": hours} if hours else {}),
+                        })
+                        promos = _parse_promotions(r.get("_store") or {})
+                        promo_total += db.upsert_promotions(lid, promos)
+                        saved_listings.append((r, lid, rid, zone_listing_url))
+                        records_saved += 1
+                        if config.max_items and records_saved >= config.max_items:
+                            break
+
+                    log_fn(f"Zone {zone_idx + 1} done — {records_saved} total listings so far")
+                    if run_id:
+                        db.update_run_progress(run_id, records_saved)
+                    if config.max_items and records_saved >= config.max_items:
+                        break
 
                 log_fn(f"Phase 1 done — {records_saved} listings, {promo_total} promotions saved")
-                if run_id:
-                    db.update_run_progress(run_id, records_saved)
 
                 if config.listing_only:
                     return ScraperResult(records_saved=records_saved)
@@ -205,10 +258,11 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                 # We fan out across N sibling pages (same context = same delivery-address
                 # session + cookies) so the menu loop runs ~N× faster. Each worker owns a
                 # contiguous slice and click-navs within its own page independently.
-                listing_url = page.url
+                # Workers are grouped by zone so each worker page navigates back to the
+                # correct zone listing (different zone URLs serve different restaurant sets).
                 menu_items_saved = 0
                 n = len(saved_listings)
-                failed_listings: list[tuple[dict, str, str]] = []
+                failed_listings: list[tuple[dict, str, str, str]] = []
                 _fail_lock = asyncio.Lock()
                 from scrapers.base import new_sibling_page
 
@@ -232,11 +286,11 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                     except asyncio.TimeoutError:
                         pass
 
-                async def _scrape_one(wpage, r, lid, rid) -> None:
+                async def _scrape_one(wpage, r, lid, rid, zone_url: str) -> None:
                     """Scrape one restaurant's menu on `wpage` (already on the listing).
 
                     Click-navs to the store, captures getStoreV1, parses + saves.
-                    On capture/click failure, queues (r, lid, rid) for the retry pass.
+                    On capture/click failure, queues (r, lid, rid, zone_url) for the retry pass.
                     Re-raises only on a page crash so the worker can recreate its page.
                     """
                     nonlocal menu_items_saved
@@ -262,14 +316,14 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                     wpage.on("response", on_store_response)
                     try:
                         # Ensure we're on the listing page (go_back preserves scroll state)
-                        if listing_url not in wpage.url:
+                        if zone_url not in wpage.url:
                             try:
                                 await asyncio.wait_for(
                                     wpage.go_back(wait_until="domcontentloaded", timeout=15000),
                                     timeout=20,
                                 )
                             except (asyncio.TimeoutError, Exception):
-                                await wpage.goto(listing_url, wait_until="domcontentloaded", timeout=20000)
+                                await wpage.goto(zone_url, wait_until="domcontentloaded", timeout=20000)
                             await asyncio.sleep(2)
 
                         # Click restaurant anchor; scroll-retry if not yet in DOM.
@@ -303,7 +357,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                         except Exception:
                             pass
                         async with _fail_lock:
-                            failed_listings.append((r, lid, rid))
+                            failed_listings.append((r, lid, rid, zone_url))
                         if "crashed" in str(exc).lower():
                             raise  # bubble up so the worker recreates its page
                         return
@@ -321,7 +375,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
 
                     if not store_raw:
                         async with _fail_lock:
-                            failed_listings.append((r, lid, rid))
+                            failed_listings.append((r, lid, rid, zone_url))
                         return
 
                     try:
@@ -357,25 +411,25 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                     except Exception as exc:
                         log_fn(f"Menu: {name} — parse/save error: {exc}")
 
-                async def _fresh_worker_page():
-                    """Recreate a worker's sibling page, bounded so a wedged/poisoned
+                async def _fresh_worker_page(zone_url: str):
+                    """Recreate a worker's sibling page on `zone_url`, bounded so a wedged/poisoned
                     context can't hang the worker forever. Returns the page or None."""
                     try:
                         wp = await asyncio.wait_for(new_sibling_page(page), timeout=30)
-                        await wp.goto(listing_url, wait_until="domcontentloaded", timeout=20000)
+                        await wp.goto(zone_url, wait_until="domcontentloaded", timeout=20000)
                         await asyncio.sleep(2)
                         await _scroll_listing(wp)
                         return wp
                     except Exception:
                         return None
 
-                async def _worker(wid: int, slice_items: list) -> None:
+                async def _worker(wid: int, slice_items: list, zone_url: str) -> None:
                     wpage = await new_sibling_page(page)
                     try:
-                        await wpage.goto(listing_url, wait_until="domcontentloaded", timeout=20000)
+                        await wpage.goto(zone_url, wait_until="domcontentloaded", timeout=20000)
                         await asyncio.sleep(2)
                         await _scroll_listing(wpage)
-                        for k, (r, lid, rid) in enumerate(slice_items):
+                        for k, (r, lid, rid, _zu) in enumerate(slice_items):
                             # Recycle the worker page every 30 restaurants — reusing one page
                             # across a whole slice of heavy menu loads leaks renderer RSS
                             # (full-batch creep drove free RAM to ~300MB). Close+reopen caps it.
@@ -384,7 +438,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                                     await wpage.close()
                                 except Exception:
                                     pass
-                                wpage = await _fresh_worker_page()
+                                wpage = await _fresh_worker_page(zone_url)
                                 if wpage is None:
                                     remaining = slice_items[k:]
                                     log_fn(f"Menu worker {wid}: recycle failed, abandoning {len(remaining)} to retry")
@@ -395,11 +449,11 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                             try:
                                 # Hard per-restaurant wall cap — a page crash can poison the
                                 # shared context and wedge Playwright past its own timeouts.
-                                await asyncio.wait_for(_scrape_one(wpage, r, lid, rid), timeout=45)
+                                await asyncio.wait_for(_scrape_one(wpage, r, lid, rid, zone_url), timeout=45)
                             except asyncio.TimeoutError:
                                 log_fn(f"Menu worker {wid}: {r.get('name','?')} timed out, requeuing")
                                 async with _fail_lock:
-                                    failed_listings.append((r, lid, rid))
+                                    failed_listings.append((r, lid, rid, zone_url))
                                 needs_recover = True  # page likely wedged
                             except Exception:
                                 # Crash bubbled from _scrape_one (already queued the item).
@@ -410,7 +464,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                                     await wpage.close()
                                 except Exception:
                                     pass
-                                wpage = await _fresh_worker_page()
+                                wpage = await _fresh_worker_page(zone_url)
                                 if wpage is None:
                                     # Context unrecoverable — hand the rest to the retry pass.
                                     remaining = slice_items[k + 1:]
@@ -425,16 +479,26 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                             except Exception:
                                 pass
 
-                # 3 parallel workers; round-robin split keeps slices balanced.
-                # 3 (not 4) keeps batch peak RAM well clear of the 8GB ceiling — at 4-each
-                # for ube+del, full-batch peak hit 6.6GB / 1.15GB free (too tight).
+                # Group saved_listings by zone_url, then run 3 parallel workers per zone serially.
+                # Serial zones: each zone needs its own listing page (different address context);
+                # parallel across zones would require separate browser contexts or race on page.
+                # 3 (not 4) keeps batch peak RAM well clear of the 8GB ceiling.
                 WORKERS = 3
-                slices = [saved_listings[w::WORKERS] for w in range(WORKERS)]
-                log_fn(f"Phase 2: {n} menus across {WORKERS} parallel workers")
-                await asyncio.gather(
-                    *[_worker(w, s) for w, s in enumerate(slices) if s],
-                    return_exceptions=True,
-                )
+                from itertools import groupby
+                zone_groups: dict[str, list] = {}
+                for item in saved_listings:
+                    zu = item[3]
+                    zone_groups.setdefault(zu, []).append(item)
+
+                log_fn(f"Phase 2: {n} menus across {len(zone_groups)} zones, {WORKERS} workers/zone")
+                for zone_url, zone_items in zone_groups.items():
+                    slices = [zone_items[w::WORKERS] for w in range(WORKERS)]
+                    log_fn(f"Phase 2: zone {zone_url} — {len(zone_items)} menus")
+                    await asyncio.gather(
+                        *[_worker(w, s, zone_url) for w, s in enumerate(slices) if s],
+                        return_exceptions=True,
+                    )
+
                 log_fn(f"Phase 2 done — {menu_items_saved} menu items; {len(failed_listings)} queued for retry")
                 if run_id:
                     db.update_run_progress(run_id, records_saved)
@@ -442,114 +506,121 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                 # ── Phase 3: retry pass via listing click (direct goto doesn't trigger getStoreV1)
                 if failed_listings:
                     log_fn(f"Retry pass: {len(failed_listings)} restaurants missed in Phase 2")
-                    try:
-                        await page.goto(listing_url, wait_until="domcontentloaded", timeout=20000)
-                        await asyncio.sleep(3)
-                        # Scroll to load all cards
-                        prev_h = 0
-                        for _ in range(15):
-                            try:
-                                h = await asyncio.wait_for(page.evaluate("document.body.scrollHeight"), timeout=5)
-                                await asyncio.wait_for(page.evaluate("window.scrollTo(0, document.body.scrollHeight)"), timeout=5)
-                            except asyncio.TimeoutError:
-                                break
-                            await asyncio.sleep(0.6)
-                            if h == prev_h:
-                                break
-                            prev_h = h
-                    except Exception as _e:
-                        log_fn(f"Retry pass: failed to load listing: {_e}")
 
-                    for r, lid, rid in failed_listings:
-                        url = r.get("url")
-                        name = r.get("name", "?")
-                        if not url:
-                            continue
-                        store_path = url.split("/store/")[-1].strip("/") if "/store/" in url else ""
-                        if not store_path:
-                            continue
-                        retry_buf: list[str] = []
-                        retry_event = asyncio.Event()
-                        async def on_retry_response(response, _buf=retry_buf, _evt=retry_event):
-                            if "getStoreV1" in response.url and not _buf:
-                                try:
-                                    text = await response.text()
-                                    _buf.append(text)
-                                    _evt.set()
-                                except Exception:
-                                    pass
-                        page.on("response", on_retry_response)
+                    retry_zone_groups: dict[str, list] = {}
+                    for item in failed_listings:
+                        zu = item[3]
+                        retry_zone_groups.setdefault(zu, []).append(item)
+
+                    for zone_url, retry_items in retry_zone_groups.items():
                         try:
-                            log_fn(f"Retry: {name}")
-                            slug_only = store_path.split("/")[0] if "/" in store_path else store_path
-                            clicked = await asyncio.wait_for(page.evaluate(
-                                """([storePath, slugOnly]) => {
-                                    const needle1 = '/store/' + storePath;
-                                    const needle2 = '/store/' + slugOnly;
-                                    const links = Array.from(document.querySelectorAll('a[href]'));
-                                    const a = links.find(l => l.href.includes(needle1) || l.href.includes(needle2));
-                                    if (a) { a.click(); return true; }
-                                    return false;
-                                }""",
-                                [store_path, slug_only],
-                            ), timeout=10)
-                            if not clicked:
-                                log_fn(f"Retry: {name} — not in DOM, skipping")
-                                page.remove_listener("response", on_retry_response)
+                            await page.goto(zone_url, wait_until="domcontentloaded", timeout=20000)
+                            await asyncio.sleep(3)
+                            # Scroll to load all cards
+                            prev_h = 0
+                            for _ in range(15):
+                                try:
+                                    h = await asyncio.wait_for(page.evaluate("document.body.scrollHeight"), timeout=5)
+                                    await asyncio.wait_for(page.evaluate("window.scrollTo(0, document.body.scrollHeight)"), timeout=5)
+                                except asyncio.TimeoutError:
+                                    break
+                                await asyncio.sleep(0.6)
+                                if h == prev_h:
+                                    break
+                                prev_h = h
+                        except Exception as _e:
+                            log_fn(f"Retry pass: failed to load zone listing {zone_url}: {_e}")
+
+                        for r, lid, rid, _zu in retry_items:
+                            url = r.get("url")
+                            name = r.get("name", "?")
+                            if not url:
                                 continue
-                            await page.wait_for_load_state("domcontentloaded", timeout=15000)
+                            store_path = url.split("/store/")[-1].strip("/") if "/store/" in url else ""
+                            if not store_path:
+                                continue
+                            retry_buf: list[str] = []
+                            retry_event = asyncio.Event()
+                            async def on_retry_response(response, _buf=retry_buf, _evt=retry_event):
+                                if "getStoreV1" in response.url and not _buf:
+                                    try:
+                                        text = await response.text()
+                                        _buf.append(text)
+                                        _evt.set()
+                                    except Exception:
+                                        pass
+                            page.on("response", on_retry_response)
                             try:
-                                async with asyncio.timeout(15):
-                                    await retry_event.wait()
-                            except asyncio.TimeoutError:
-                                pass
-                        except Exception as exc:
-                            import traceback
-                            log_fn(f"Retry: {name} — failed: {exc}\n{traceback.format_exc()}")
-                            if "crashed" in str(exc).lower():
+                                log_fn(f"Retry: {name}")
+                                slug_only = store_path.split("/")[0] if "/" in store_path else store_path
+                                clicked = await asyncio.wait_for(page.evaluate(
+                                    """([storePath, slugOnly]) => {
+                                        const needle1 = '/store/' + storePath;
+                                        const needle2 = '/store/' + slugOnly;
+                                        const links = Array.from(document.querySelectorAll('a[href]'));
+                                        const a = links.find(l => l.href.includes(needle1) || l.href.includes(needle2));
+                                        if (a) { a.click(); return true; }
+                                        return false;
+                                    }""",
+                                    [store_path, slug_only],
+                                ), timeout=10)
+                                if not clicked:
+                                    log_fn(f"Retry: {name} — not in DOM, skipping")
+                                    page.remove_listener("response", on_retry_response)
+                                    continue
+                                await page.wait_for_load_state("domcontentloaded", timeout=15000)
                                 try:
-                                    page = await new_page(browser, lang="fr-BE")
-                                    await page.goto(listing_url, wait_until="domcontentloaded", timeout=20000)
-                                    await asyncio.sleep(2)
-                                except Exception:
+                                    async with asyncio.timeout(15):
+                                        await retry_event.wait()
+                                except asyncio.TimeoutError:
                                     pass
-                        page.remove_listener("response", on_retry_response)
-                        if not retry_buf:
-                            log_fn(f"Retry: {name} — still no getStoreV1, giving up")
-                            continue
-                        try:
-                            store_data = json.loads(retry_buf[0])
-                            items = _parse_menu_items(store_data)
-                            count = db.insert_menu_items(lid, items)
-                            menu_items_saved += count
-                            store_obj = store_data.get("data") or {}
-                            if store_obj:
-                                rich_promos = _parse_promotions(store_obj)
-                                if rich_promos:
-                                    db.upsert_promotions(lid, rich_promos)
-                                rich_hours = _parse_section_hours(store_obj) or _parse_regular_hours(store_obj)
-                                addr = _parse_address(store_obj)
-                                phone = _parse_phone(store_obj)
-                                patch: dict = {}
-                                if rich_hours:
-                                    patch["opening_hours"] = rich_hours
-                                if addr["street_address"]:
-                                    patch["street_address"] = addr["street_address"]
-                                if addr["postal_code"]:
-                                    patch["postal_code"] = addr["postal_code"]
-                                if patch:
-                                    db.patch_listing(lid, patch)
-                                if phone:
-                                    db.patch_restaurant_phone(rid, phone)
-                            log_fn(f"Retry: {name} — {count} items saved")
-                        except Exception as exc:
-                            log_fn(f"Retry: {name} — parse/save error: {exc}")
-                        await asyncio.sleep(2)
+                            except Exception as exc:
+                                import traceback
+                                log_fn(f"Retry: {name} — failed: {exc}\n{traceback.format_exc()}")
+                                if "crashed" in str(exc).lower():
+                                    try:
+                                        page = await new_page(browser, lang="fr-BE")
+                                        await page.goto(zone_url, wait_until="domcontentloaded", timeout=20000)
+                                        await asyncio.sleep(2)
+                                    except Exception:
+                                        pass
+                            page.remove_listener("response", on_retry_response)
+                            if not retry_buf:
+                                log_fn(f"Retry: {name} — still no getStoreV1, giving up")
+                                continue
+                            try:
+                                store_data = json.loads(retry_buf[0])
+                                items = _parse_menu_items(store_data)
+                                count = db.insert_menu_items(lid, items)
+                                menu_items_saved += count
+                                store_obj = store_data.get("data") or {}
+                                if store_obj:
+                                    rich_promos = _parse_promotions(store_obj)
+                                    if rich_promos:
+                                        db.upsert_promotions(lid, rich_promos)
+                                    rich_hours = _parse_section_hours(store_obj) or _parse_regular_hours(store_obj)
+                                    addr = _parse_address(store_obj)
+                                    phone = _parse_phone(store_obj)
+                                    patch: dict = {}
+                                    if rich_hours:
+                                        patch["opening_hours"] = rich_hours
+                                    if addr["street_address"]:
+                                        patch["street_address"] = addr["street_address"]
+                                    if addr["postal_code"]:
+                                        patch["postal_code"] = addr["postal_code"]
+                                    if patch:
+                                        db.patch_listing(lid, patch)
+                                    if phone:
+                                        db.patch_restaurant_phone(rid, phone)
+                                log_fn(f"Retry: {name} — {count} items saved")
+                            except Exception as exc:
+                                log_fn(f"Retry: {name} — parse/save error: {exc}")
+                            await asyncio.sleep(2)
 
                 log_fn(f"Done — {records_saved} listings, {menu_items_saved} menu items saved")
                 return ScraperResult(
                     records_saved=records_saved,
-                    restaurants=restaurants,
+                    restaurants=[r for r, lid, rid, z in saved_listings],
                     menu_items_saved=menu_items_saved,
                 )
         except asyncio.TimeoutError:

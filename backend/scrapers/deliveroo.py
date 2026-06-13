@@ -20,10 +20,14 @@ LISTING_ZONES = [
     "Parvis de Saint-Gilles 1, 1060 Bruxelles",# Saint-Gilles
     "Place de la Vaillance 1, 1070 Bruxelles", # Anderlecht
     "Chaussée de Gand 1, 1080 Bruxelles",      # Molenbeek
+    "Parvis de la Basilique 1, 1081 Bruxelles", # Koekelberg
+    "Rue au Bois 100, 1082 Bruxelles",          # Berchem-Sainte-Agathe
+    "Avenue Charles-Quint 100, 1083 Bruxelles", # Ganshoren
     "Rue du Prêtre 1, 1090 Bruxelles",         # Jette
     "Rue de Fiennes 1, 1140 Bruxelles",        # Evere
     "Avenue de Tervuren 1, 1150 Bruxelles",    # Woluwe-Saint-Pierre
     "Chaussée de Wavre 1, 1160 Bruxelles",     # Auderghem
+    "Drève du Caporal 1, 1170 Bruxelles",      # Watermael-Boitsfort
     "Avenue Brugmann 1, 1180 Bruxelles",       # Uccle
     "Rue de Forest 1, 1190 Bruxelles",         # Forest
     "Avenue de Tervuren 200, 1200 Bruxelles",  # Woluwe-Saint-Lambert
