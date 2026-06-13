@@ -36,7 +36,10 @@ export type PromoItem = {
   value: number | null
 }
 
-export type OpeningHours = Record<string, [string, string]> // {mon: ["11:00","22:30"], ...}
+// Per-day entry is either a legacy single-slot ["11:00","22:30"] or a
+// multi-slot list [["11:00","14:30"],["18:00","22:30"]]. Both supported via
+// normalizeSlots in lib/hours.ts. Existing DB rows keep the legacy shape until re-scraped.
+export type OpeningHours = Record<string, [string, string] | [string, string][]>
 
 export type PlatformListing = {
   id: string
@@ -62,6 +65,7 @@ export type MenuItemWithPrices = {
   image_url: string | null
   prices: Record<Platform, number | null>
   platformTitles?: Record<Platform, string | null>
+  allergens: string[] | null
 }
 
 export type RestaurantDetail = {
@@ -129,6 +133,7 @@ type RawMenuItemRow = {
   catalog_name: string | null
   image_url: string | null
   description: string | null
+  allergens: string[] | null
 }
 
 type RawListingDetail = {
@@ -356,6 +361,7 @@ export const getRestaurantWithListings = cache(async (
           image_url: item.image_url ?? null,
           prices: { uber_eats: null, deliveroo: null, takeaway: null, direct: null },
           platformTitles: { uber_eats: null, deliveroo: null, takeaway: null, direct: null },
+          allergens: item.allergens ?? null,
         })
       }
       const entry = itemMap.get(key)!
@@ -363,6 +369,7 @@ export const getRestaurantWithListings = cache(async (
       if (entry.platformTitles) {
         entry.platformTitles[platform] = item.title.replace(EMOJI_RE, '').trim()
       }
+      if (!entry.allergens?.length && item.allergens?.length) entry.allergens = item.allergens
     }
   }
 
@@ -393,6 +400,11 @@ export const getRestaurantWithListings = cache(async (
         const maxP = Math.max(priceA, priceB)
         if (maxP > 0 && Math.abs(priceA - priceB) / maxP > 0.20) continue
       }
+      // Allergen disjoint-set veto: two items with entirely different allergen sets are distinct products
+      if (itemA.allergens?.length && itemB.allergens?.length) {
+        const setA = new Set(itemA.allergens.map(a => a.toLowerCase()))
+        if (!itemB.allergens.some(a => setA.has(a.toLowerCase()))) continue
+      }
       // Merge B into A
       for (const p of ALL_PLATFORMS) {
         if (itemA.prices[p] === null && itemB.prices[p] !== null) {
@@ -402,6 +414,7 @@ export const getRestaurantWithListings = cache(async (
       }
       if (!itemA.description && itemB.description) itemA.description = itemB.description
       if (!itemA.image_url && itemB.image_url) itemA.image_url = itemB.image_url
+      if (!itemA.allergens?.length && itemB.allergens?.length) itemA.allergens = itemB.allergens
       absorbed.add(keyB)
     }
   }

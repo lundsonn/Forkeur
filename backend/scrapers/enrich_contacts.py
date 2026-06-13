@@ -272,11 +272,26 @@ async def _accept_consent(page) -> bool:
 
 
 async def _scrape_place(page) -> tuple[str | None, str | None]:
-    """From a place page in [role=main]: phone + website."""
-    main = await page.query_selector('[role="main"]')
-    if not main:
-        return None, None
-    phone = _extract_phone(await main.inner_text())
+    """From a place page: phone + website.
+
+    Google Maps renders the phone as a button/link attribute
+    (`a[href="tel:+32..."]` / `data-item-id="phone:tel:+32..."`), NOT reliably as
+    visible text — so reading it from the attribute gives the canonical number
+    (e.g. +32498020902) instead of whatever `_extract_phone` happens to grep off
+    the panel text (which on a datacenter render can miss it entirely or grab a
+    stray number). Fall back to the inner-text scrape only if the attribute is
+    absent. Website uses the same attribute pattern (`data-item-id="authority"`).
+    """
+    phone = None
+    tel = await page.query_selector('a[href^="tel:"], button[data-item-id^="phone:tel:"]')
+    if tel:
+        raw = (await tel.get_attribute("href")) or (await tel.get_attribute("data-item-id")) or ""
+        phone = raw.split("tel:")[-1].strip() or None
+    if not phone:
+        main = await page.query_selector('[role="main"]')
+        if main:
+            phone = _extract_phone(await main.inner_text())
+
     website = None
     el = await page.query_selector('a[data-item-id="authority"]')
     if el:
@@ -529,16 +544,17 @@ async def _enrich_one(page, restaurant: dict, log_fn: Callable[[str], None]) -> 
     return res
 
 
-def _select_targets(limit: int) -> list[dict]:
-    return pgpool.fetchall(
+def _select_targets(limit: int | None) -> list[dict]:
+    sql = (
         "SELECT id, name, lat, lng, phone, website, neighborhood "
         "FROM restaurants "
         "WHERE (phone IS NULL OR phone = '') "
         "  AND lat IS NOT NULL AND lng IS NOT NULL "
         "ORDER BY contacts_enriched_at ASC NULLS FIRST, name "
-        "LIMIT %s",
-        [limit],
     )
+    if limit is None:  # full run — every restaurant missing a phone
+        return pgpool.fetchall(sql)
+    return pgpool.fetchall(sql + "LIMIT %s", [limit])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -551,14 +567,15 @@ async def run(
 ) -> ScraperResult:
     if config is None:
         config = ScraperConfig()
-    # Default to a small batch unless an explicit larger limit is passed.
-    limit = config.max_items if config.max_items else _DEFAULT_LIMIT
+    # max_items None = full run (every missing phone); test_mode sets it to 10.
+    limit = config.max_items
 
     run_id = db.create_run("enrich")
     saved = 0
     try:
         targets = await asyncio.to_thread(_select_targets, limit)
-        log_fn(f"enrich: {len(targets)} restaurant(s) missing a phone (limit {limit})")
+        log_fn(f"enrich: {len(targets)} restaurant(s) missing a phone "
+               f"(limit {limit if limit is not None else 'all'})")
         if not targets:
             db.finish_run(run_id, "success", records_saved=0)
             return ScraperResult(records_saved=0)

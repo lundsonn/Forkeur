@@ -59,7 +59,8 @@
     "cheapest_delivery_subline": "Livraison la moins chère de votre zone",
     "bottom_cheapest": "Le moins cher pour votre commande de {count} articles",
     "all_in": "{platform} · {amount} tout compris",
-    "order_on": "Commander sur {platform} · {amount}"
+    "order_on": "Commander sur {platform} · {amount}",
+    "allergens": "Allergènes"
   },
   "compare": {
     "best_now": "Meilleur prix",

@@ -33,24 +33,24 @@ const L = (overrides: Partial<PlatformListing>): PlatformListing => ({
 //                         direct subtotal = 3*800 = 2400 cents = €24.00
 // Savings = 3299 - 2400 = 899 cents → banner shows €8.99
 const bannerMenuItems: MenuItemWithPrices[] = [
-  { name: 'Item A', description: null, category: 'Mains', image_url: null, prices: { uber_eats: 1000, deliveroo: 1050, takeaway: 1100, direct: 800 } },
-  { name: 'Item B', description: null, category: 'Mains', image_url: null, prices: { uber_eats: 1000, deliveroo: 1050, takeaway: 1100, direct: 800 } },
-  { name: 'Item C', description: null, category: 'Mains', image_url: null, prices: { uber_eats: 1000, deliveroo: 1050, takeaway: 1100, direct: 800 } },
+  { name: 'Item A', description: null, category: 'Mains', image_url: null, allergens: null, prices: { uber_eats: 1000, deliveroo: 1050, takeaway: 1100, direct: 800 } },
+  { name: 'Item B', description: null, category: 'Mains', image_url: null, allergens: null, prices: { uber_eats: 1000, deliveroo: 1050, takeaway: 1100, direct: 800 } },
+  { name: 'Item C', description: null, category: 'Mains', image_url: null, allergens: null, prices: { uber_eats: 1000, deliveroo: 1050, takeaway: 1100, direct: 800 } },
 ]
 
 // 3 menu items WITHOUT direct prices (threshold not met)
 const noDirectMenuItems: MenuItemWithPrices[] = [
-  { name: 'Item A', description: null, category: 'Mains', image_url: null, prices: { uber_eats: 1000, deliveroo: 1050, takeaway: 1100, direct: null } },
-  { name: 'Item B', description: null, category: 'Mains', image_url: null, prices: { uber_eats: 1000, deliveroo: 1050, takeaway: 1100, direct: null } },
-  { name: 'Item C', description: null, category: 'Mains', image_url: null, prices: { uber_eats: 1000, deliveroo: 1050, takeaway: 1100, direct: null } },
+  { name: 'Item A', description: null, category: 'Mains', image_url: null, allergens: null, prices: { uber_eats: 1000, deliveroo: 1050, takeaway: 1100, direct: null } },
+  { name: 'Item B', description: null, category: 'Mains', image_url: null, allergens: null, prices: { uber_eats: 1000, deliveroo: 1050, takeaway: 1100, direct: null } },
+  { name: 'Item C', description: null, category: 'Mains', image_url: null, allergens: null, prices: { uber_eats: 1000, deliveroo: 1050, takeaway: 1100, direct: null } },
 ]
 
 // 3 items with direct prices that are MORE expensive than platform
 // UE total = 3*800 + 299 = 2699; direct = 3*1000 = 3000 → no savings
 const directMoreExpensiveMenuItems: MenuItemWithPrices[] = [
-  { name: 'Item A', description: null, category: 'Mains', image_url: null, prices: { uber_eats: 800, deliveroo: 850, takeaway: 900, direct: 1000 } },
-  { name: 'Item B', description: null, category: 'Mains', image_url: null, prices: { uber_eats: 800, deliveroo: 850, takeaway: 900, direct: 1000 } },
-  { name: 'Item C', description: null, category: 'Mains', image_url: null, prices: { uber_eats: 800, deliveroo: 850, takeaway: 900, direct: 1000 } },
+  { name: 'Item A', description: null, category: 'Mains', image_url: null, allergens: null, prices: { uber_eats: 800, deliveroo: 850, takeaway: 900, direct: 1000 } },
+  { name: 'Item B', description: null, category: 'Mains', image_url: null, allergens: null, prices: { uber_eats: 800, deliveroo: 850, takeaway: 900, direct: 1000 } },
+  { name: 'Item C', description: null, category: 'Mains', image_url: null, allergens: null, prices: { uber_eats: 800, deliveroo: 850, takeaway: 900, direct: 1000 } },
 ]
 
 const bannerListings: PlatformListing[] = [
@@ -65,7 +65,7 @@ const listings: PlatformListing[] = [
 ]
 
 const menuItems: MenuItemWithPrices[] = [
-  { name: 'Margherita', description: null, category: 'Pizza', image_url: null, prices: { uber_eats: 950, deliveroo: 940, takeaway: null, direct: null } },
+  { name: 'Margherita', description: null, category: 'Pizza', image_url: null, allergens: null, prices: { uber_eats: 950, deliveroo: 940, takeaway: null, direct: null } },
 ]
 
 // Listings with a direct entry (no menu items for direct)
@@ -82,7 +82,7 @@ const listingsWithDirectAndMenu: PlatformListing[] = [
 ]
 
 const menuItemsWithDirect: MenuItemWithPrices[] = [
-  { name: 'Margherita', description: null, category: 'Pizza', image_url: null, prices: { uber_eats: 950, deliveroo: null, takeaway: null, direct: 850 } },
+  { name: 'Margherita', description: null, category: 'Pizza', image_url: null, allergens: null, prices: { uber_eats: 950, deliveroo: null, takeaway: null, direct: 850 } },
 ]
 
 describe('BasketSimulator', () => {

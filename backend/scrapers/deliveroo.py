@@ -6,7 +6,7 @@ from typing import Callable
 from urllib.parse import urlparse, parse_qs
 from models import ScraperConfig, ScraperResult
 from scrapers.base import browser_session, new_page, check_cloudflare, noop_log, CloudflareBlockedError, parse_menu_price
-from scrapers.promos import parse_promo_texts
+from scrapers.promos import parse_promo_texts, extract_min_order
 import db
 
 # One representative address per Brussels postal code — mirrors Takeaway zone strategy.
@@ -780,6 +780,41 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 if fee is not None:
                     db.patch_listing(lid, {"delivery_fee": fee})
                     log_fn(f"  Delivery fee: {fee}")
+
+                # Extract minimum order from restaurant page
+                min_order_text: str | None = await page.evaluate(
+                    r"""() => {
+                        // 1. Semantic test attributes (stable across deploys)
+                        for (const sel of [
+                            '[data-test*="minimum"]',
+                            '[data-testid*="minimum"]',
+                            '[data-test*="min-order"]',
+                            '[data-testid*="min-order"]',
+                        ]) {
+                            for (const el of document.querySelectorAll(sel)) {
+                                const t = (el.innerText || '').trim();
+                                if (/€\s*\d|\d+[,.]\d+\s*€/i.test(t) && t.length < 80) return t;
+                            }
+                        }
+                        // 2. Text-node walk: short strings mentioning minimum + price
+                        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+                        let node;
+                        while ((node = walker.nextNode())) {
+                            const t = node.textContent.trim();
+                            if (t.length > 0 && t.length < 80 &&
+                                /minimum|commande min|min\. bestelling/i.test(t) &&
+                                /€\s*\d|\d+[,.]\d+\s*€/.test(t)) {
+                                return t;
+                            }
+                        }
+                        return null;
+                    }"""
+                )
+                if min_order_text:
+                    mo = extract_min_order(min_order_text)
+                    if mo is not None:
+                        db.patch_listing(lid, {"min_order": mo})
+                        log_fn(f"  Min order: {mo}")
 
                 # Extract promotions from the restaurant page — richer than listing card
                 promo_texts: list[str] = await page.evaluate(r"""() => {

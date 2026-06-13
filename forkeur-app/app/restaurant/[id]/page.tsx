@@ -12,7 +12,6 @@ import { PLATFORM_LABELS, centsToEuro } from '@/lib/basket'
 import { computeFeeRows, computeDirectSavingsCents } from '@/lib/where-to-order'
 import BasketSimulator from '@/components/BasketSimulator'
 import MenuPriceBars from '@/components/MenuPriceBars'
-import StaleRefresh from '@/components/StaleRefresh'
 import OpenStatusBadge from '@/components/OpenStatusBadge'
 import PlatformLogo from '@/components/ui/PlatformLogo'
 
@@ -84,13 +83,6 @@ export default async function Page({
     .filter((r): r is number => r !== null)
     .sort((a, b) => b - a)[0] ?? null
 
-  // Most recent last_scraped_at across all listings (used by StaleRefresh)
-  const mostRecentScrape = data.listings
-    .map((l) => l.last_scraped_at)
-    .filter((s): s is string => s !== null)
-    .sort()
-    .pop() ?? null
-
   // Fee overview rows (cheapest first, with deltas)
   const feeRows = computeFeeRows(data.listings)
 
@@ -102,7 +94,6 @@ export default async function Page({
 
   return (
     <div className="w-full max-w-md mx-auto">
-      <StaleRefresh lastScrapedAt={mostRecentScrape} />
       {/* Nav */}
       <div className="flex items-center px-5 pt-5 pb-3">
         <Link href="/" className="text-stone-500 hover:text-stone-800 text-lg mr-auto min-w-[44px] min-h-[44px] flex items-center">‹</Link>

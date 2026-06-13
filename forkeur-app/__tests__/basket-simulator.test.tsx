@@ -37,14 +37,14 @@ const menuItems: MenuItemWithPrices[] = [
     name: 'Margherita',
     description: 'Classic pizza',
     category: 'Pizzas',
-    image_url: null,
+    image_url: null, allergens: null,
     prices: { uber_eats: 899, deliveroo: 950, takeaway: 870, direct: null },
   },
   {
     name: 'Quattro Formaggi',
     description: null,
     category: 'Pizzas',
-    image_url: null,
+    image_url: null, allergens: null,
     prices: { uber_eats: 1050, deliveroo: 1100, takeaway: 1020, direct: null },
   },
 ]
@@ -120,8 +120,8 @@ describe('BasketSimulator', () => {
 
   it('groups items by category', () => {
     const multiCat: MenuItemWithPrices[] = [
-      { name: 'Salad', description: null, category: 'Starters', image_url: null, prices: { uber_eats: 500, deliveroo: 500, takeaway: 500, direct: null } },
-      { name: 'Steak', description: null, category: 'Mains', image_url: null, prices: { uber_eats: 1500, deliveroo: 1500, takeaway: 1500, direct: null } },
+      { name: 'Salad', description: null, category: 'Starters', image_url: null, allergens: null, prices: { uber_eats: 500, deliveroo: 500, takeaway: 500, direct: null } },
+      { name: 'Steak', description: null, category: 'Mains', image_url: null, allergens: null, prices: { uber_eats: 1500, deliveroo: 1500, takeaway: 1500, direct: null } },
     ]
     renderWithIntl(<BasketSimulator menuItems={multiCat} listings={listings} phone={null} />)
     expect(screen.getByText('Starters')).toBeInTheDocument()

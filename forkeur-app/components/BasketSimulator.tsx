@@ -101,6 +101,15 @@ function DishModal({
           {item.description && (
             <p className="text-sm text-stone-500 mt-1 leading-relaxed">{item.description}</p>
           )}
+          {item.allergens && item.allergens.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2" aria-label={tBasket('allergens')}>
+              {item.allergens.map((a) => (
+                <span key={a} className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-50 text-amber-700 border border-amber-200 capitalize">
+                  {a}
+                </span>
+              ))}
+            </div>
+          )}
 
           {platformsWithPrice.length > 0 && (
             <div className="mt-4">
@@ -415,6 +424,15 @@ export default function BasketSimulator({ menuItems, listings, phone, phoneConfi
                               </p>
                               {item.description && (
                                 <p className="text-xs text-stone-400 truncate">{item.description}</p>
+                              )}
+                              {item.allergens && item.allergens.length > 0 && (
+                                <div className="flex flex-wrap gap-0.5 mt-0.5">
+                                  {item.allergens.map((a) => (
+                                    <span key={a} className="px-1 py-px text-[9px] font-medium rounded bg-amber-50 text-amber-700 border border-amber-200 capitalize leading-tight">
+                                      {a}
+                                    </span>
+                                  ))}
+                                </div>
                               )}
                             </div>
                           </button>

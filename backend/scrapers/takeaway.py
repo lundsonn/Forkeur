@@ -71,13 +71,13 @@ _MENU_EVAL = """
         }
         const nameEl = node.querySelector('[data-qa="item-name"]');
         const priceEl = node.querySelector('[data-qa="item-price"]');
-        if (!nameEl || !priceEl) continue;
+        if (!nameEl) continue;
         const title = (nameEl.innerText || '').trim();
-        let price = (priceEl.innerText || '').trim();
-        // Fallback: if the price node has no digit (empty/icon-only), scan the
-        // whole item node's text for the first €-amount.
+        let price = priceEl ? (priceEl.innerText || '').trim() : '';
+        // Fallback: if the price node has no digit (empty/icon-only/absent), scan
+        // the whole item node's text. Matches: €12, €12.50, 12,50 €, 12€.
         if (!/\\d/.test(price)) {
-            const m = (node.innerText || '').match(/€\\s?\\d+[.,]\\d{2}/);
+            const m = (node.innerText || '').match(/€\\s*\\d+[.,]?\\d*|\\d+(?:[.,]\\d{1,2})?\\s*€/);
             if (m) price = m[0].trim();
         }
         if (!title) continue;
@@ -473,6 +473,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
             eta_min = _parse_eta_min(r.get("eta"))
             eta_max = _parse_eta_max(r.get("eta"))
             delivery_fee = parse_menu_price(r.get("feeText"))
+            min_order = parse_menu_price(r.get("minOrderText"))
             lid = db.upsert_listing({
                 "restaurant_id": rid,
                 "platform": "takeaway",
@@ -482,6 +483,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                 **({"eta_min": eta_min} if eta_min is not None else {}),
                 **({"eta_max": eta_max} if eta_max is not None else {}),
                 **({"delivery_fee": delivery_fee} if delivery_fee is not None else {}),
+                **({"min_order": min_order} if min_order is not None else {}),
             })
             db.upsert_promotions(lid, parse_promo_texts(r.get("promoLines") or []))
             records_saved += 1

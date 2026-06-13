@@ -59,7 +59,8 @@
     "cheapest_delivery_subline": "Cheapest delivery to your area",
     "bottom_cheapest": "Cheapest for your {count}-item order",
     "all_in": "{platform} · {amount} all-in",
-    "order_on": "Order on {platform} · {amount}"
+    "order_on": "Order on {platform} · {amount}",
+    "allergens": "Allergens"
   },
   "compare": {
     "best_now": "Best right now",

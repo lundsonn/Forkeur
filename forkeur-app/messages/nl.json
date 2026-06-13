@@ -59,7 +59,8 @@
     "cheapest_delivery_subline": "Goedkoopste bezorging in uw buurt",
     "bottom_cheapest": "Goedkoopst voor je bestelling van {count} items",
     "all_in": "{platform} · {amount} alles inbegrepen",
-    "order_on": "Bestel op {platform} · {amount}"
+    "order_on": "Bestel op {platform} · {amount}",
+    "allergens": "Allergenen"
   },
   "compare": {
     "best_now": "Beste aanbieding",

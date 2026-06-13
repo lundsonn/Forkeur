@@ -13,6 +13,7 @@ function item(
     description: null,
     category: null,
     image_url: null,
+    allergens: null,
     prices: {
       uber_eats: null,
       deliveroo: null,
