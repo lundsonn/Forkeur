@@ -5,6 +5,7 @@ import re
 from typing import Callable
 from urllib.parse import urlparse, parse_qs
 from models import ScraperConfig, ScraperResult
+from scrapers.metrics import RunMetrics
 from scrapers.base import browser_session, new_page, check_cloudflare, noop_log, CloudflareBlockedError, parse_menu_price
 from scrapers.promos import parse_promo_texts, extract_min_order
 import db
@@ -447,7 +448,7 @@ async def _scrape_zone_listings(browser, zone_address: str, log_fn) -> list[dict
         await page.close()
 
 
-async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -> ScraperResult:
+async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, metrics: RunMetrics | None = None) -> ScraperResult:
     log_fn("Starting Deliveroo scraper")
     records_saved = 0
     page = None
@@ -474,6 +475,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                     log_fn(f"  ⚠ zone error ({zone_address}): {exc}")
                     return []
 
+        if metrics: metrics.phase_start("phase0")
         log_fn(f"Phase 0: {len(zones)} zones, {ZONE_WORKERS} concurrent")
         zone_results: list[list[dict]] = await asyncio.gather(
             *[_scrape_zone_safe(z) for z in zones]
@@ -488,11 +490,13 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
         restaurants = list(all_by_slug.values())
         total_cards = sum(len(zr) for zr in zone_results)
         log_fn(f"Phase 0 done — {total_cards} cards across {len(zones)} zones → {len(restaurants)} unique")
+        if metrics: metrics.phase_end("phase0")
 
         if config.target:
             restaurants = [r for r in restaurants if config.target.lower() in r["name"].lower() or config.target.lower() in r["slug"].lower()]
 
         # --- Phase 1: upsert restaurants + listings ---
+        if metrics: metrics.phase_start("phase1")
         saved: list[tuple[dict, str, str]] = []  # (r, rid, lid)
         promo_total = 0
         for r in (restaurants[:config.max_items] if config.max_items else restaurants):
@@ -523,6 +527,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
             saved.append((r, rid, lid))
 
         log_fn(f"Phase 1 — {records_saved} listings, {promo_total} promotions saved")
+        if metrics: metrics.phase_end("phase1")
 
         if config.listing_only:
             return ScraperResult(records_saved=records_saved)
@@ -533,6 +538,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
         # Deliveroo has no CF on menu pages so goto is safe.
         menu_items_saved = 0
         n = len(saved)
+        if metrics: metrics.phase_start("phase2"); metrics.attempt(n)
 
         async def _scrape_one(page, i, r, rid, lid):
             nonlocal menu_items_saved
@@ -874,10 +880,12 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                         log_fn(f"  {len(rich_promos)} promotions saved")
 
             except CloudflareBlockedError:
+                if metrics: metrics.cooldown(); metrics.fail()
                 log_fn(f"  Cloudflare blocked — skipping menu for {r['name']}")
             except Exception as exc:
                 if "crashed" in str(exc).lower():
                     raise  # bubble up so the worker recreates its page
+                if metrics: metrics.fail()
                 log_fn(f"  Error scraping menu for {r['name']}: {exc}")
 
         # Phase 2 fan-out: Deliveroo menus use direct goto (no click-nav, no CF),
@@ -904,8 +912,10 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
                         # guards against a crashed page wedging past Playwright timeouts.
                         await asyncio.wait_for(_scrape_one(wpage, k, r, rid, lid), timeout=150)
                     except asyncio.TimeoutError:
+                        if metrics: metrics.fail()
                         log_fn(f"  worker {wid}: {r['name']} timed out, skipping")
                     except Exception:
+                        if metrics: metrics.fail()
                         log_fn(f"  worker {wid}: page crashed, recreating")
                         try:
                             await wpage.close()
@@ -931,6 +941,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
             *[_worker(w, s) for w, s in enumerate(slices) if s],
             return_exceptions=True,
         )
+        if metrics: metrics.phase_end("phase2")
         log_fn(f"Done — {records_saved} listings, {menu_items_saved} menu items, {promo_total} promos saved")
         return ScraperResult(records_saved=records_saved, restaurants=restaurants, menu_items_saved=menu_items_saved)
 

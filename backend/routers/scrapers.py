@@ -11,6 +11,7 @@ import ws as ws_mod
 from scrapers import ubereats, deliveroo, takeaway, direct, direct_menu, match
 from scrapers import dom_menu, enrich_contacts, website_finder
 from scrapers.base import CloudflareBlockedError
+from scrapers.metrics import RamSampler, RunMetrics
 from routers.auth_router import require_auth
 
 router = APIRouter(prefix="/scrapers", tags=["scrapers"], dependencies=[Depends(require_auth)])
@@ -94,12 +95,16 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
         if platform in _running:
             raise HTTPException(409, f"{platform} scraper already running")
         _running.add(platform)
+        concurrent_with = sorted(_running - {platform})
     try:
         run_id = db.create_run(platform)
     except Exception:
         async with _state_lock:
             _running.discard(platform)
         raise
+
+    metrics = RunMetrics()
+    sampler = RamSampler()
 
     if body is None:
         body = RunTriggerIn()
@@ -121,9 +126,27 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
 
     # Fix B: precompute scraper_fn and kwargs once, before the retry loop.
     scraper_fn = SCRAPERS[platform]
-    kwargs = {"run_id": run_id} if "run_id" in inspect.signature(scraper_fn).parameters else {}
+    sig = inspect.signature(scraper_fn).parameters
+    kwargs = {}
+    if "run_id" in sig:
+        kwargs["run_id"] = run_id
+    if "metrics" in sig:
+        kwargs["metrics"] = metrics
 
     async def _run():
+        def _finish(status: str, records_saved: int = 0, error_msg: str | None = None) -> None:
+            peak_mb, avg_mb = sampler.stop()
+            db.finish_run(
+                run_id, status, records_saved=records_saved, error_msg=error_msg,
+                peak_ram_mb=peak_mb, avg_ram_mb=avg_mb,
+                phase_durations=metrics.phase_durations,
+                cooldown_hits=metrics.cooldown_hits,
+                items_attempted=metrics.items_attempted,
+                items_skipped=metrics.items_skipped,
+                items_failed=metrics.items_failed,
+                concurrent_with=concurrent_with,
+            )
+
         try:
             config = ScraperConfig(
                 scrape_menus=body.scrape_menus,
@@ -152,23 +175,24 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
             else:
                 raise last_exc  # both attempts failed
 
-            db.finish_run(run_id, "success", records_saved=result.records_saved)
+            _finish("success", records_saved=result.records_saved)
             await ws_mod.send_done(run_id, result.records_saved)
         except asyncio.TimeoutError:
             msg = f"timed out after {timeout // 60} min"
-            db.finish_run(run_id, "failed", error_msg=msg)
+            _finish("failed", error_msg=msg)
             await ws_mod.send_error(run_id, msg)
             alerting.send_failure_alert(platform, msg, run_id)
         except CloudflareBlockedError as e:
-            db.finish_run(run_id, "blocked", error_msg=str(e))
+            metrics.cooldown()
+            _finish("blocked", error_msg=str(e))
             await ws_mod.send_error(run_id, str(e))
             alerting.send_failure_alert(platform, str(e), run_id)
         except Exception as e:
-            db.finish_run(run_id, "failed", error_msg=str(e))
+            _finish("failed", error_msg=str(e))
             await ws_mod.send_error(run_id, str(e))
             alerting.send_failure_alert(platform, str(e), run_id)
         except BaseException as e:
-            db.finish_run(run_id, "failed", error_msg=f"Process killed: {type(e).__name__}")
+            _finish("failed", error_msg=f"Process killed: {type(e).__name__}")
             raise
         finally:
             _running.discard(platform)

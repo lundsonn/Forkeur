@@ -48,6 +48,14 @@ class ScraperRunOut(BaseModel):
     finished_at: datetime | None = None
     records_saved: int = 0
     error_msg: str | None = None
+    peak_ram_mb: int | None = None
+    avg_ram_mb: int | None = None
+    phase_durations: dict | None = None
+    cooldown_hits: int = 0
+    items_attempted: int = 0
+    items_skipped: int = 0
+    items_failed: int = 0
+    concurrent_with: list[str] = []
 
 
 class ScraperStatusOut(BaseModel):

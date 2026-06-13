@@ -421,12 +421,28 @@ def update_run_progress(run_id: str, records_saved: int) -> None:
     )
 
 
-def finish_run(run_id: str, status: str, records_saved: int = 0,
-               error_msg: str | None = None) -> None:
+def finish_run(
+    run_id: str, status: str, records_saved: int = 0, error_msg: str | None = None, *,
+    peak_ram_mb: int | None = None, avg_ram_mb: int | None = None,
+    phase_durations: dict | None = None, cooldown_hits: int = 0,
+    items_attempted: int = 0, items_skipped: int = 0, items_failed: int = 0,
+    concurrent_with: list[str] | None = None,
+) -> None:
+    import json as _json
     pgpool.execute(
         "UPDATE scraper_runs SET status = %s, records_saved = %s, "
-        "finished_at = now(), error_msg = %s WHERE id = %s",
-        [status, records_saved, error_msg, run_id],
+        "finished_at = now(), error_msg = %s, "
+        "peak_ram_mb = %s, avg_ram_mb = %s, "
+        "phase_durations = %s::jsonb, "
+        "cooldown_hits = %s, items_attempted = %s, items_skipped = %s, items_failed = %s, "
+        "concurrent_with = %s WHERE id = %s",
+        [
+            status, records_saved, error_msg,
+            peak_ram_mb, avg_ram_mb,
+            _json.dumps(phase_durations) if phase_durations else None,
+            cooldown_hits, items_attempted, items_skipped, items_failed,
+            concurrent_with or [], run_id,
+        ],
     )
 
 

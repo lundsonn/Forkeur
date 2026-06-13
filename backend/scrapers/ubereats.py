@@ -6,6 +6,7 @@ import re
 from typing import Callable
 from constants import DEFAULT_ADDRESS
 from models import ScraperConfig, ScraperResult
+from scrapers.metrics import RunMetrics
 from scrapers.base import browser_session, new_page, check_cloudflare, noop_log
 from scrapers.promos import classify_promo, extract_min_order, parse_promo_texts
 import db
@@ -37,7 +38,7 @@ LISTING_ZONES = [
     "Rue Royale 100, 1210 Bruxelles",
 ]
 
-async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, run_id: str | None = None) -> ScraperResult:
+async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, run_id: str | None = None, metrics: RunMetrics | None = None) -> ScraperResult:
     log_fn("Starting UberEats scraper")
     records_saved = 0
 
@@ -54,7 +55,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                 # 4-tuple: (restaurant_dict, listing_id, restaurant_id, zone_listing_url)
                 saved_listings: list[tuple[dict, str, str, str]] = []
                 promo_total = 0
-
+                if metrics: metrics.phase_start("phase1")
                 log_fn("Loading ubereats.com...")
                 # Navigate directly to /be to avoid GeoIP redirect to /de (server is in Germany)
                 await page.goto("https://www.ubereats.com/be", wait_until="domcontentloaded", timeout=60000)
@@ -263,6 +264,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                         break
 
                 log_fn(f"Phase 1 done — {records_saved} listings, {promo_total} promotions saved")
+                if metrics: metrics.phase_end("phase1")
 
                 if config.listing_only:
                     return ScraperResult(records_saved=records_saved)
@@ -277,6 +279,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                 # correct zone listing (different zone URLs serve different restaurant sets).
                 menu_items_saved = 0
                 n = len(saved_listings)
+                if metrics: metrics.phase_start("phase2"); metrics.attempt(n)
                 failed_listings: list[tuple[dict, str, str, str]] = []
                 _fail_lock = asyncio.Lock()
                 from scrapers.base import new_sibling_page
@@ -515,11 +518,13 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                     )
 
                 log_fn(f"Phase 2 done — {menu_items_saved} menu items; {len(failed_listings)} queued for retry")
+                if metrics: metrics.phase_end("phase2")
                 if run_id:
                     db.update_run_progress(run_id, records_saved)
 
                 # ── Phase 3: retry pass via listing click (direct goto doesn't trigger getStoreV1)
                 if failed_listings:
+                    if metrics: metrics.phase_start("phase3")
                     log_fn(f"Retry pass: {len(failed_listings)} restaurants missed in Phase 2")
 
                     retry_zone_groups: dict[str, list] = {}
@@ -632,6 +637,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                                 log_fn(f"Retry: {name} — parse/save error: {exc}")
                             await asyncio.sleep(2)
 
+                if failed_listings and metrics: metrics.phase_end("phase3")
                 log_fn(f"Done — {records_saved} listings, {menu_items_saved} menu items saved")
                 return ScraperResult(
                     records_saved=records_saved,

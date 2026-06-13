@@ -595,6 +595,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, m
                 # ~same throughput. Override with TAKEAWAY_MENU_WORKERS.
                 WORKERS = int(os.environ.get("TAKEAWAY_MENU_WORKERS", "5"))
                 n = len(saved)
+                if metrics: metrics.phase_start("phase2"); metrics.attempt(n)
                 slices = [saved[w::WORKERS] for w in range(WORKERS)]
                 log_fn(f"Phase 2: {n} menus across {WORKERS} parallel workers")
 
@@ -644,14 +645,17 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, m
                             if promo_lines:
                                 db.upsert_promotions(lid, parse_promo_texts(promo_lines))
                         except CloudflareBlockedError:
+                            if metrics: metrics.cooldown(); metrics.fail()
                             log_fn(f"  CF blocked — skipping {r['name']}")
                         except Exception as exc:
+                            if metrics: metrics.fail()
                             log_fn(f"  Error: {exc}")
                         finally:
                             await menu_page.close()
                         await asyncio.sleep(1)
 
                 await asyncio.gather(*[_worker(w, s) for w, s in enumerate(slices) if s])
+                if metrics: metrics.phase_end("phase2")
 
                 log_fn(f"Done — {records_saved} listings, {menu_items_saved} menu items saved")
                 return ScraperResult(
