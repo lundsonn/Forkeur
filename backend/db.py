@@ -968,6 +968,8 @@ class _Query:
         self._on_conflict = None
         self._where: list[tuple[str, list]] = []
         self._negate = False
+        self._order_col: str | None = None
+        self._limit_val: int | None = None
 
     # operation selectors ------------------------------------------------
     def select(self, cols: str = "*"):
@@ -1022,6 +1024,14 @@ class _Query:
         ph = ", ".join(["%s"] * len(vals))
         return self._push(f"{c} IN ({ph})", f"{c} NOT IN ({ph})", vals)
 
+    def order(self, col: str, desc: bool = False):
+        self._order_col = f"{_check_ident(col)} {'DESC' if desc else 'ASC'}"
+        return self
+
+    def limit(self, n: int):
+        self._limit_val = int(n)
+        return self
+
     # terminal -----------------------------------------------------------
     def _where_clause(self) -> tuple[str, list]:
         if not self._where:
@@ -1035,9 +1045,12 @@ class _Query:
     def execute(self) -> "_Result":
         if self._op == "select":
             where, params = self._where_clause()
-            rows = pgpool.fetchall(
-                f"SELECT {self._cols} FROM {self._table}{where}", params
-            )
+            sql = f"SELECT {self._cols} FROM {self._table}{where}"
+            if self._order_col:
+                sql += f" ORDER BY {self._order_col}"
+            if self._limit_val is not None:
+                sql += f" LIMIT {self._limit_val}"
+            rows = pgpool.fetchall(sql, params)
             return _Result(rows)
 
         if self._op in ("insert", "upsert"):
