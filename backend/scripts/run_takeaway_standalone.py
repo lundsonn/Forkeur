@@ -39,7 +39,7 @@ async def _main() -> int:
     log_fn(f"[standalone] takeaway run {run_id} starting (detached from backend service)")
     config = ScraperConfig()  # defaults = full run, menus included
     try:
-        result = await takeaway.run(config, log_fn, run_id=run_id)
+        result = await takeaway.run(config, log_fn)
         db.finish_run(run_id, "success", records_saved=result.records_saved)
         log_fn(f"[standalone] done — {result.records_saved} listings saved")
         return 0
