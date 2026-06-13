@@ -57,8 +57,10 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                 promo_total = 0
                 if metrics: metrics.phase_start("phase1")
                 log_fn("Loading ubereats.com...")
-                # Navigate directly to /be to avoid GeoIP redirect to /de (server is in Germany)
-                await page.goto("https://www.ubereats.com/be", wait_until="domcontentloaded", timeout=60000)
+                # Navigate directly to /be to avoid GeoIP redirect to /de (server is in Germany).
+                # Use "load" so React fully hydrates before we probe the address input —
+                # domcontentloaded fires before the SPA bootstraps.
+                await page.goto("https://www.ubereats.com/be", wait_until="load", timeout=60000)
                 check_cloudflare(await page.title())
                 log_fn(f"Page loaded: {page.url}")
 
