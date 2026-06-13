@@ -785,16 +785,6 @@ def _parse_menu_items(store_data: dict) -> list[dict]:
                         "image_url": image_url,
                         "description": description,
                     }
-                    # dietaryInfo.certifications → allergen/dietary labels
-                    dietary = ci.get("dietaryInfo") or {}
-                    certs = dietary.get("certifications") or []
-                    allergens = [
-                        c["name"].lower().replace("_", " ")
-                        for c in certs
-                        if isinstance(c, dict) and c.get("name")
-                    ]
-                    if allergens:
-                        item["allergens"] = allergens
                     items.append(item)
     return items
 

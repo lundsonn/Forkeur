@@ -49,7 +49,7 @@ def test_post_claim_rejects_invalid_url():
 def test_get_claims_returns_list(auth_headers):
     with patch("routers.claims.db") as mock_db:
         mock_db.get_claims.return_value = [
-            {"id": "c1", "restaurant_id": _VALID_UUID, "owner_email": "a@b.com",
+            {"id": _VALID_UUID, "restaurant_id": _VALID_UUID, "owner_email": "a@b.com",
              "direct_order_url": "https://a.com", "verified": False}
         ]
         client = TestClient(_make_app())

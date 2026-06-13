@@ -431,7 +431,7 @@ def get_run(run_id: str) -> dict | None:
 
 
 def get_last_run_per_platform() -> dict[str, dict]:
-    platforms = ("ubereats", "deliveroo", "takeaway", "direct", "direct_menu", "dom_menu", "match")
+    platforms = ("ubereats", "deliveroo", "takeaway", "direct", "direct_menu", "dom_menu", "match", "cleanup")
     rows = pgpool.fetchall(
         "SELECT * FROM scraper_runs WHERE platform = ANY(%s) "
         "ORDER BY started_at DESC LIMIT 140",
@@ -903,7 +903,7 @@ def get_public_deals() -> list[dict]:
         JOIN platform_listings pl ON pl.id = p.listing_id
         JOIN restaurants r ON r.id = pl.restaurant_id
         WHERE p.promo_type NOT IN ('other', 'spend_save')
-          AND pl.last_scraped_at >= now() - interval '72 hours'
+          AND pl.last_scraped_at > now() - interval '72 hours'
         """
     )
 

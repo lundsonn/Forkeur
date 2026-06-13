@@ -19,7 +19,7 @@ def _make_app():
 
 _SAMPLE_RESTAURANTS = [
     {
-        "id": "r1",
+        "id": "00000000-0000-0000-0000-000000000001",
         "name": "Pizza Palace",
         "slug": "pizza-palace",
         "cuisine": "Italian",
@@ -29,8 +29,8 @@ _SAMPLE_RESTAURANTS = [
 
 _SAMPLE_MENU_ITEMS = [
     {
-        "id": "m1",
-        "listing_id": "listing-1",
+        "id": "00000000-0000-0000-0000-000000000002",
+        "listing_id": "00000000-0000-0000-0000-000000000003",
         "title": "Margherita",
         "price": 8.99,
         "catalog_name": "Pizzas",

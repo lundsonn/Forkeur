@@ -19,6 +19,7 @@ def test_match_job_dry_run_writes_nothing():
     with patch("db.load_restaurants_for_match", return_value=rows), \
          patch("db.load_menu_items_for_match", return_value={}), \
          patch("db.load_slugs_for_match", return_value={}), \
+         patch("db.load_listing_addresses_for_match", return_value={}), \
          patch("db.get_stale_queued_decisions", return_value=[]), \
          patch("db.get_queued_decisions", return_value=[]), \
          patch("db.delete_decisions"), \
@@ -38,6 +39,7 @@ def test_match_job_executes_merges_when_not_dry_run():
     with patch("db.load_restaurants_for_match", return_value=rows), \
          patch("db.load_menu_items_for_match", return_value={}), \
          patch("db.load_slugs_for_match", return_value={}), \
+         patch("db.load_listing_addresses_for_match", return_value={}), \
          patch("db.get_stale_queued_decisions", return_value=[]), \
          patch("db.get_queued_decisions", return_value=[]), \
          patch("db.delete_decisions"), \
@@ -56,6 +58,7 @@ def test_match_job_enqueues_names_in_features():
     with patch("db.load_restaurants_for_match", return_value=rows), \
          patch("db.load_menu_items_for_match", return_value={}), \
          patch("db.load_slugs_for_match", return_value={}), \
+         patch("db.load_listing_addresses_for_match", return_value={}), \
          patch("db.get_stale_queued_decisions", return_value=[]), \
          patch("db.get_queued_decisions", return_value=[]), \
          patch("db.delete_decisions"), \

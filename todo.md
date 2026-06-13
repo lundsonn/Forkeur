@@ -19,11 +19,11 @@ Context: batch wall = slowest scraper. A (parallelize ube/del menu loop) = big w
 - [x] **[deliveroo.py] Fix Deliveroo geo** — DONE. `deliveroo_venue` geo source implemented; venue coords extracted via JSON-LD/__NEXT_DATA__ from menu pages.
 - [x] **[matching.py] Add cuisine veto** — DONE. `_cuisine_conflict()` + `cuisine_conflict` in `decide()`.
 - [x] **[matching.py] Add postal code / neighborhood blocking** — DONE. `_location_tokens()` + `location_conflict` in `decide()`.
-- [ ] **[matching.py] Improve phone coverage** — phone sparsely populated; phone match rarely fires. Investigate enriching `restaurants.phone` from scraper data (UberEats/Deliveroo API responses often include contact info).
+- [x] **[matching.py] Improve phone coverage** — phone sparsely populated; phone match rarely fires. Investigate enriching `restaurants.phone` from scraper data (UberEats/Deliveroo API responses often include contact info).
 
 ### Menu matching improvements
 
-- [x] **[all scrapers + models.py] Scrape allergens** — UberEats API already returns per-item allergens in the feed response (field on menu item objects). Add to all scrapers (ubereats/deliveroo/takeaway/direct_menu), persist to `menu_items.allergens` (text[] or jsonb). Use as a matching guard in the fuzzy merge pass in `queries.ts`: two items with disjoint allergen sets are unlikely the same product — veto merge even if JW ≥ 0.88. Strong cross-platform corroboration signal.
+- [x] **[all scrapers + models.py] Scrape allergens** — Deliveroo only (275 items via `dietaryTags`). UberEats BE API has no `dietaryInfo` field (US-only). Takeaway DOM scraper has no dietary selectors. direct_menu APIs (sq-menu/Odoo/piki) have no allergen fields. Matching guard in `queries.ts` lines 403-406 already implemented.
 
 ---
 

@@ -6,7 +6,6 @@ import { jaroWinkler } from '@/lib/fuzzy-title'
 import { backendFetch } from '@/lib/backend'
 export { normalizeTitle }
 
-const STALE_THRESHOLD_MS = 72 * 60 * 60 * 1000
 const EMOJI_RE = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu
 
 export type RestaurantSummary = {
@@ -187,17 +186,11 @@ export async function getRestaurants(): Promise<{
 }> {
   const data = await backendFetch<RawRestaurantRow[]>('/api/public/restaurants', { revalidate: 3600 })
 
-  const threshold = new Date(Date.now() - STALE_THRESHOLD_MS)
-
   const restaurants: RestaurantSummary[] = ((data ?? []) as unknown as RawRestaurantRow[])
     .map((r) => {
       const rawListings = r.platform_listings ?? []
 
-      const freshListings = rawListings.filter((l) =>
-        l.last_scraped_at != null && new Date(l.last_scraped_at) >= threshold
-      )
-
-      const listings = freshListings.map((l) => ({
+      const listings = rawListings.map((l) => ({
         platform: l.platform as Platform,
         delivery_fee_cents: feeCents(l.delivery_fee),
         eta_min: l.eta_min ?? null,
@@ -319,12 +312,9 @@ export const getRestaurantWithListings = cache(async (
   if (!data) return null
 
   const raw = data as unknown as RawRestaurantDetail
-  const threshold = new Date(Date.now() - STALE_THRESHOLD_MS)
-  const freshRaw = (raw.platform_listings ?? []).filter((l) =>
-    l.last_scraped_at != null && new Date(l.last_scraped_at) >= threshold
-  )
+  const rawListings = raw.platform_listings ?? []
 
-  const listings: PlatformListing[] = freshRaw.map((l) => ({
+  const listings: PlatformListing[] = rawListings.map((l) => ({
     id: l.id,
     platform: l.platform as Platform,
     platform_url: l.url ?? null,
@@ -349,7 +339,7 @@ export const getRestaurantWithListings = cache(async (
 
   const itemMap = new Map<string, MenuItemWithPrices>()
 
-  for (const listing of freshRaw) {
+  for (const listing of rawListings) {
     const platform = listing.platform as Platform
     for (const item of listing.menu_items ?? []) {
       const key = normalizeTitle(item.title)
