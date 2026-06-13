@@ -14,6 +14,8 @@ from scrapers.promos import parse_promo_texts
 
 _LISTING_BASE = "https://www.takeaway.com/be-fr/livraison/repas/"
 
+_RUN_TIMEOUT_S = int(os.getenv("TAKEAWAY_RUN_TIMEOUT_S", "7200"))  # 2h; normal run ~25min
+
 # Brussels zones by postal code — each loaded in a fresh browser context to avoid CF re-challenge
 LISTING_ZONES = [
     "bruxelles-1000",   # City center / Pentagone
@@ -450,205 +452,210 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log) -
     menu_items_saved = 0
 
     async with browser_session(lang="fr-BE", headed=True) as browser:
-        # Phase 0: collect listings — one fresh page per zone to avoid CF re-challenge.
-        # All restaurant cards are rendered server-side on the first page load (no infinite scroll /
-        # lazy pagination), so a single load + extract is sufficient per zone.
-        # Zones run concurrently behind a semaphore. Each zone owns its own page in the shared
-        # browser, so RAM cost per concurrent zone is a context (~modest), not a full browser.
-        # Concurrency is conservative (4) to avoid tripping CF rate-limiting with simultaneous
-        # challenges. Override with TAKEAWAY_ZONE_WORKERS.
-        all_by_slug: dict[str, dict] = {}
-        ZONE_WORKERS = int(os.environ.get("TAKEAWAY_ZONE_WORKERS", "4"))
-        zone_sem = asyncio.Semaphore(ZONE_WORKERS)
-        log_fn(f"Phase 0: {len(LISTING_ZONES)} zones, {ZONE_WORKERS} concurrent")
+        try:
+            async with asyncio.timeout(_RUN_TIMEOUT_S):
+                # Phase 0: collect listings — one fresh page per zone to avoid CF re-challenge.
+                # All restaurant cards are rendered server-side on the first page load (no infinite scroll /
+                # lazy pagination), so a single load + extract is sufficient per zone.
+                # Zones run concurrently behind a semaphore. Each zone owns its own page in the shared
+                # browser, so RAM cost per concurrent zone is a context (~modest), not a full browser.
+                # Concurrency is conservative (4) to avoid tripping CF rate-limiting with simultaneous
+                # challenges. Override with TAKEAWAY_ZONE_WORKERS.
+                all_by_slug: dict[str, dict] = {}
+                ZONE_WORKERS = int(os.environ.get("TAKEAWAY_ZONE_WORKERS", "4"))
+                zone_sem = asyncio.Semaphore(ZONE_WORKERS)
+                log_fn(f"Phase 0: {len(LISTING_ZONES)} zones, {ZONE_WORKERS} concurrent")
 
-        async def _scrape_one_zone(zone: str) -> list[dict]:
-            async with zone_sem:
-                url = _LISTING_BASE + zone
-                log_fn(f"Loading zone {zone}")
-                zone_page = await new_page(browser, lang="fr-BE")
-                try:
-                    async def _scrape_zone():
-                        await zone_page.goto(url, wait_until="domcontentloaded", timeout=60000)
-
-                        title = await zone_page.title()
-                        if "just a moment" in title.lower():
-                            log_fn(f"  CF challenge — waiting up to 60s")
-                            cleared = await wait_for_cf_clear(zone_page, timeout_s=60)
-                            if not cleared:
-                                log_fn(f"  CF not cleared — skipping {zone}")
-                                return []
-
-                        # Prefer __NEXT_DATA__ — structured, no DOM parsing, includes lat/lng/fees
-                        raw_rdata = await zone_page.evaluate(_NEXT_DATA_RESTAURANTS_EVAL)
-                        if raw_rdata:
-                            results = [_parse_next_data_restaurant(r) for r in raw_rdata if r.get("uniqueName")]
-                            log_fn(f"  {len(results)} from __NEXT_DATA__ ({zone})")
-                            return results
-
-                        # Fallback: DOM card extraction
+                async def _scrape_one_zone(zone: str) -> list[dict]:
+                    async with zone_sem:
+                        url = _LISTING_BASE + zone
+                        log_fn(f"Loading zone {zone}")
+                        zone_page = await new_page(browser, lang="fr-BE")
                         try:
-                            await zone_page.wait_for_selector('[data-qa="restaurant-card"]', timeout=20000)
-                        except Exception:
-                            log_fn(f"  No cards — skipping {zone}")
-                            return []
+                            async def _scrape_zone():
+                                await zone_page.goto(url, wait_until="domcontentloaded", timeout=60000)
 
-                        await zone_page.wait_for_timeout(1000)
-                        cards = await zone_page.evaluate(_LISTING_EVAL)
-                        log_fn(f"  {len(cards)} cards DOM fallback ({zone})")
-                        return cards
+                                title = await zone_page.title()
+                                if "just a moment" in title.lower():
+                                    log_fn(f"  CF challenge — waiting up to 60s")
+                                    cleared = await wait_for_cf_clear(zone_page, timeout_s=60)
+                                    if not cleared:
+                                        log_fn(f"  CF not cleared — skipping {zone}")
+                                        return []
 
-                    try:
-                        return await asyncio.wait_for(_scrape_zone(), timeout=120)
-                    except asyncio.TimeoutError:
-                        log_fn(f"  ⚠ zone {zone} timed out after 120s, skipping")
-                        return []
-                except Exception as exc:
-                    log_fn(f"  Error ({zone}): {exc}")
-                    return []
-                finally:
-                    await zone_page.close()
+                                # Prefer __NEXT_DATA__ — structured, no DOM parsing, includes lat/lng/fees
+                                raw_rdata = await zone_page.evaluate(_NEXT_DATA_RESTAURANTS_EVAL)
+                                if raw_rdata:
+                                    results = [_parse_next_data_restaurant(r) for r in raw_rdata if r.get("uniqueName")]
+                                    log_fn(f"  {len(results)} from __NEXT_DATA__ ({zone})")
+                                    return results
 
-        zone_results = await asyncio.gather(*[_scrape_one_zone(z) for z in LISTING_ZONES])
-        # Merge sequentially after gather → no race on all_by_slug.
-        for page_restaurants in zone_results:
-            for r in page_restaurants:
-                if r["slug"] not in all_by_slug:
-                    all_by_slug[r["slug"]] = r
+                                # Fallback: DOM card extraction
+                                try:
+                                    await zone_page.wait_for_selector('[data-qa="restaurant-card"]', timeout=20000)
+                                except Exception:
+                                    log_fn(f"  No cards — skipping {zone}")
+                                    return []
 
-        restaurants = list(all_by_slug.values())
-        log_fn(f"Found {len(restaurants)} unique restaurants across all zones")
+                                await zone_page.wait_for_timeout(1000)
+                                cards = await zone_page.evaluate(_LISTING_EVAL)
+                                log_fn(f"  {len(cards)} cards DOM fallback ({zone})")
+                                return cards
 
-        if config.target:
-            restaurants = [r for r in restaurants
-                           if config.target.lower() in r["name"].lower()
-                           or config.target.lower() in r["slug"].lower()]
-
-        if config.max_items:
-            restaurants = restaurants[:config.max_items]
-
-        # Phase 1: upsert listings
-        saved: list[tuple[dict, str]] = []
-        for r in restaurants:
-            try:
-                rest_data: dict = {"name": r["name"], "slug": r["slug"], "image_url": r.get("image_url")}
-                if r.get("lat") is not None:
-                    rest_data["lat"] = r["lat"]
-                    rest_data["lng"] = r["lng"]
-                    rest_data["geo_source"] = "takeaway"
-                if r.get("neighborhood"):
-                    rest_data["neighborhood"] = r["neighborhood"]
-                rid = db.upsert_restaurant(rest_data)
-            except ValueError:
-                continue
-            url = f"https://www.takeaway.com{r['href']}"
-            # Use pre-parsed values from __NEXT_DATA__ (int/float already); fall back to text parsing for DOM cards
-            eta_min = r["eta_min"] if r.get("eta_min") is not None else _parse_eta_min(r.get("eta"))
-            eta_max = r["eta_max"] if r.get("eta_max") is not None else _parse_eta_max(r.get("eta"))
-            delivery_fee = r["delivery_fee"] if r.get("delivery_fee") is not None else parse_menu_price(r.get("feeText"))
-            min_order = r["min_order"] if r.get("min_order") is not None else parse_menu_price(r.get("minOrderText"))
-            lid = db.upsert_listing({
-                "restaurant_id": rid,
-                "platform": "takeaway",
-                "url": url,
-                "rating": _parse_float(r.get("rating")),
-                "discount_label": None,
-                **({"eta_min": eta_min} if eta_min is not None else {}),
-                **({"eta_max": eta_max} if eta_max is not None else {}),
-                **({"delivery_fee": delivery_fee} if delivery_fee is not None else {}),
-                **({"min_order": min_order} if min_order is not None else {}),
-            })
-            # Write address fields from __NEXT_DATA__ to platform_listings
-            addr_patch: dict = {}
-            if r.get("street_address"):
-                addr_patch["street_address"] = r["street_address"]
-            if r.get("postal_code"):
-                addr_patch["postal_code"] = r["postal_code"]
-            if addr_patch:
-                try:
-                    db.patch_listing(lid, addr_patch)
-                except Exception:
-                    pass
-            db.upsert_promotions(lid, parse_promo_texts(r.get("promoLines") or []))
-            records_saved += 1
-            saved.append((r, lid))
-
-        log_fn(f"Phase 1 done — {records_saved} listings saved")
-
-        if config.listing_only:
-            return ScraperResult(records_saved=records_saved)
-
-        # Phase 2: menu per restaurant — N parallel workers, each with its own page.
-        # Takeaway uses CF (headed mode); pages live in the shared browser so each extra
-        # worker adds a context (~modest RAM), not a full browser. MAX 5: at 6, MemAvailable
-        # dipped to ~950 MB on the 8 GB box (below the ~1.8 GB margin); 5 keeps headroom at
-        # ~same throughput. Override with TAKEAWAY_MENU_WORKERS.
-        WORKERS = int(os.environ.get("TAKEAWAY_MENU_WORKERS", "5"))
-        n = len(saved)
-        slices = [saved[w::WORKERS] for w in range(WORKERS)]
-        log_fn(f"Phase 2: {n} menus across {WORKERS} parallel workers")
-
-        async def _worker(wid: int, slice_items: list) -> None:
-            nonlocal menu_items_saved
-            for r, lid in slice_items:
-                url = f"https://www.takeaway.com{r['href']}"
-                log_fn(f"Menu worker {wid}: {r['name']}")
-                menu_page = await new_page(browser, lang="fr-BE")
-                try:
-                    _, items, promo_lines, rinfo = await scrape_menu_page(menu_page, lid, url, r["name"])
-                    if rinfo and (rinfo.get("lat") is not None or rinfo.get("neighborhood") or rinfo.get("cuisine") or rinfo.get("phone")):
-                        enriched: dict = {"name": r["name"], "slug": r["slug"]}
-                        # Only write geo from JSON-LD if __NEXT_DATA__ didn't already supply it in Phase 1
-                        if rinfo.get("lat") is not None and r.get("lat") is None:
-                            enriched["lat"] = rinfo["lat"]
-                            enriched["lng"] = rinfo["lng"]
-                            enriched["geo_source"] = "takeaway"
-                            log_fn(f"  geo (JSON-LD): {rinfo['lat']},{rinfo['lng']}")
-                        if rinfo.get("neighborhood") and not r.get("neighborhood"):
-                            enriched["neighborhood"] = rinfo["neighborhood"]
-                        if rinfo.get("cuisine"):
-                            enriched["cuisine"] = rinfo["cuisine"]
-                        if rinfo.get("phone"):
-                            enriched["phone"] = rinfo["phone"]
-                        # Supplement address from JSON-LD only if __NEXT_DATA__ didn't provide it
-                        addr_patch: dict = {}
-                        if rinfo.get("street_address") and not r.get("street_address"):
-                            addr_patch["street_address"] = rinfo["street_address"]
-                        if rinfo.get("postal_code") and not r.get("postal_code"):
-                            addr_patch["postal_code"] = rinfo["postal_code"]
-                        try:
-                            db.upsert_restaurant(enriched)
-                        except ValueError:
-                            pass
-                        if addr_patch:
                             try:
-                                db.patch_listing(lid, addr_patch)
-                            except Exception:
-                                pass
-                    if items:
-                        count = db.insert_menu_items(lid, items)
-                        menu_items_saved += count
-                        log_fn(f"  {count} items saved")
-                    else:
-                        log_fn(f"  No items found")
-                    if promo_lines:
-                        db.upsert_promotions(lid, parse_promo_texts(promo_lines))
-                except CloudflareBlockedError:
-                    log_fn(f"  CF blocked — skipping {r['name']}")
-                except Exception as exc:
-                    log_fn(f"  Error: {exc}")
-                finally:
-                    await menu_page.close()
-                await asyncio.sleep(1)
+                                return await asyncio.wait_for(_scrape_zone(), timeout=120)
+                            except asyncio.TimeoutError:
+                                log_fn(f"  ⚠ zone {zone} timed out after 120s, skipping")
+                                return []
+                        except Exception as exc:
+                            log_fn(f"  Error ({zone}): {exc}")
+                            return []
+                        finally:
+                            await zone_page.close()
 
-        await asyncio.gather(*[_worker(w, s) for w, s in enumerate(slices) if s])
+                zone_results = await asyncio.gather(*[_scrape_one_zone(z) for z in LISTING_ZONES])
+                # Merge sequentially after gather → no race on all_by_slug.
+                for page_restaurants in zone_results:
+                    for r in page_restaurants:
+                        if r["slug"] not in all_by_slug:
+                            all_by_slug[r["slug"]] = r
 
-        log_fn(f"Done — {records_saved} listings, {menu_items_saved} menu items saved")
-        return ScraperResult(
-            records_saved=records_saved,
-            restaurants=restaurants,
-            menu_items_saved=menu_items_saved,
-        )
+                restaurants = list(all_by_slug.values())
+                log_fn(f"Found {len(restaurants)} unique restaurants across all zones")
+
+                if config.target:
+                    restaurants = [r for r in restaurants
+                                   if config.target.lower() in r["name"].lower()
+                                   or config.target.lower() in r["slug"].lower()]
+
+                if config.max_items:
+                    restaurants = restaurants[:config.max_items]
+
+                # Phase 1: upsert listings
+                saved: list[tuple[dict, str]] = []
+                for r in restaurants:
+                    try:
+                        rest_data: dict = {"name": r["name"], "slug": r["slug"], "image_url": r.get("image_url")}
+                        if r.get("lat") is not None:
+                            rest_data["lat"] = r["lat"]
+                            rest_data["lng"] = r["lng"]
+                            rest_data["geo_source"] = "takeaway"
+                        if r.get("neighborhood"):
+                            rest_data["neighborhood"] = r["neighborhood"]
+                        rid = db.upsert_restaurant(rest_data)
+                    except ValueError:
+                        continue
+                    url = f"https://www.takeaway.com{r['href']}"
+                    # Use pre-parsed values from __NEXT_DATA__ (int/float already); fall back to text parsing for DOM cards
+                    eta_min = r["eta_min"] if r.get("eta_min") is not None else _parse_eta_min(r.get("eta"))
+                    eta_max = r["eta_max"] if r.get("eta_max") is not None else _parse_eta_max(r.get("eta"))
+                    delivery_fee = r["delivery_fee"] if r.get("delivery_fee") is not None else parse_menu_price(r.get("feeText"))
+                    min_order = r["min_order"] if r.get("min_order") is not None else parse_menu_price(r.get("minOrderText"))
+                    lid = db.upsert_listing({
+                        "restaurant_id": rid,
+                        "platform": "takeaway",
+                        "url": url,
+                        "rating": _parse_float(r.get("rating")),
+                        "discount_label": None,
+                        **({"eta_min": eta_min} if eta_min is not None else {}),
+                        **({"eta_max": eta_max} if eta_max is not None else {}),
+                        **({"delivery_fee": delivery_fee} if delivery_fee is not None else {}),
+                        **({"min_order": min_order} if min_order is not None else {}),
+                    })
+                    # Write address fields from __NEXT_DATA__ to platform_listings
+                    addr_patch: dict = {}
+                    if r.get("street_address"):
+                        addr_patch["street_address"] = r["street_address"]
+                    if r.get("postal_code"):
+                        addr_patch["postal_code"] = r["postal_code"]
+                    if addr_patch:
+                        try:
+                            db.patch_listing(lid, addr_patch)
+                        except Exception:
+                            pass
+                    db.upsert_promotions(lid, parse_promo_texts(r.get("promoLines") or []))
+                    records_saved += 1
+                    saved.append((r, lid))
+
+                log_fn(f"Phase 1 done — {records_saved} listings saved")
+
+                if config.listing_only:
+                    return ScraperResult(records_saved=records_saved)
+
+                # Phase 2: menu per restaurant — N parallel workers, each with its own page.
+                # Takeaway uses CF (headed mode); pages live in the shared browser so each extra
+                # worker adds a context (~modest RAM), not a full browser. MAX 5: at 6, MemAvailable
+                # dipped to ~950 MB on the 8 GB box (below the ~1.8 GB margin); 5 keeps headroom at
+                # ~same throughput. Override with TAKEAWAY_MENU_WORKERS.
+                WORKERS = int(os.environ.get("TAKEAWAY_MENU_WORKERS", "5"))
+                n = len(saved)
+                slices = [saved[w::WORKERS] for w in range(WORKERS)]
+                log_fn(f"Phase 2: {n} menus across {WORKERS} parallel workers")
+
+                async def _worker(wid: int, slice_items: list) -> None:
+                    nonlocal menu_items_saved
+                    for r, lid in slice_items:
+                        url = f"https://www.takeaway.com{r['href']}"
+                        log_fn(f"Menu worker {wid}: {r['name']}")
+                        menu_page = await new_page(browser, lang="fr-BE")
+                        try:
+                            _, items, promo_lines, rinfo = await scrape_menu_page(menu_page, lid, url, r["name"])
+                            if rinfo and (rinfo.get("lat") is not None or rinfo.get("neighborhood") or rinfo.get("cuisine") or rinfo.get("phone")):
+                                enriched: dict = {"name": r["name"], "slug": r["slug"]}
+                                # Only write geo from JSON-LD if __NEXT_DATA__ didn't already supply it in Phase 1
+                                if rinfo.get("lat") is not None and r.get("lat") is None:
+                                    enriched["lat"] = rinfo["lat"]
+                                    enriched["lng"] = rinfo["lng"]
+                                    enriched["geo_source"] = "takeaway"
+                                    log_fn(f"  geo (JSON-LD): {rinfo['lat']},{rinfo['lng']}")
+                                if rinfo.get("neighborhood") and not r.get("neighborhood"):
+                                    enriched["neighborhood"] = rinfo["neighborhood"]
+                                if rinfo.get("cuisine"):
+                                    enriched["cuisine"] = rinfo["cuisine"]
+                                if rinfo.get("phone"):
+                                    enriched["phone"] = rinfo["phone"]
+                                # Supplement address from JSON-LD only if __NEXT_DATA__ didn't provide it
+                                addr_patch: dict = {}
+                                if rinfo.get("street_address") and not r.get("street_address"):
+                                    addr_patch["street_address"] = rinfo["street_address"]
+                                if rinfo.get("postal_code") and not r.get("postal_code"):
+                                    addr_patch["postal_code"] = rinfo["postal_code"]
+                                try:
+                                    db.upsert_restaurant(enriched)
+                                except ValueError:
+                                    pass
+                                if addr_patch:
+                                    try:
+                                        db.patch_listing(lid, addr_patch)
+                                    except Exception:
+                                        pass
+                            if items:
+                                count = db.insert_menu_items(lid, items)
+                                menu_items_saved += count
+                                log_fn(f"  {count} items saved")
+                            else:
+                                log_fn(f"  No items found")
+                            if promo_lines:
+                                db.upsert_promotions(lid, parse_promo_texts(promo_lines))
+                        except CloudflareBlockedError:
+                            log_fn(f"  CF blocked — skipping {r['name']}")
+                        except Exception as exc:
+                            log_fn(f"  Error: {exc}")
+                        finally:
+                            await menu_page.close()
+                        await asyncio.sleep(1)
+
+                await asyncio.gather(*[_worker(w, s) for w, s in enumerate(slices) if s])
+
+                log_fn(f"Done — {records_saved} listings, {menu_items_saved} menu items saved")
+                return ScraperResult(
+                    records_saved=records_saved,
+                    restaurants=restaurants,
+                    menu_items_saved=menu_items_saved,
+                )
+        except asyncio.TimeoutError:
+            log_fn(f"Takeaway: run exceeded {_RUN_TIMEOUT_S}s watchdog, returning partial ({records_saved} records)")
+            return ScraperResult(records_saved=records_saved, menu_items_saved=menu_items_saved)
 
 
 def _parse_float(val: str | None) -> float | None:
