@@ -20,8 +20,14 @@
     "pct": "% Remise",
     "free_delivery": "Livraison offerte",
     "free_item": "Article offert",
+    "eur_off": "€ Remise",
     "more": "Plus ›",
     "less": "Moins ‹"
+  },
+  "platform": {
+    "uber_eats": "UberEats",
+    "deliveroo": "Deliveroo",
+    "takeaway": "Takeaway"
   },
   "results": {
     "restaurants": "Restaurants",
@@ -39,7 +45,24 @@
     "min_order": "Min. €{amount}",
     "order_on": "Commander sur {platform} →",
     "compare_and_order": "Comparer & commander sur {platform} →",
-    "search_placeholder": "Rechercher un restaurant"
+    "search_placeholder": "Rechercher un restaurant",
+    "freshness": "vérifié il y a {minutes} min",
+    "freshness_warning": "dernière vérif. il y a {minutes} min",
+    "freshness_stale": "données peut-être obsolètes",
+    "sort_label": "Trier",
+    "sort_best": "Meilleure offre",
+    "sort_saving": "Plus grande remise",
+    "sort_rated": "Mieux noté",
+    "sort_newest": "Plus récent",
+    "savings_pct": "Économisez ~€{amount} sur une commande de €20",
+    "savings_abs": "€{amount} de remise",
+    "savings_free_delivery": "€0 de livraison",
+    "featured_heading": "Les meilleures offres du moment",
+    "empty_filtered": "Aucune promo ne correspond à ces filtres.",
+    "empty_filtered_hint": "{total} promos disponibles — ajustez les filtres.",
+    "empty_total": "Aucune promo en ce moment.",
+    "empty_total_hint": "Nous vérifions toutes les heures — revenez bientôt.",
+    "clear_filters": "Effacer les filtres"
   },
   "basket": {
     "no_menu": "Pas encore de menu disponible.",
@@ -234,5 +257,22 @@
     "retry": "Réessayer",
     "restaurant_title": "Impossible de charger ce restaurant",
     "restaurant_body": "Impossible de charger les prix de ce restaurant pour le moment. Veuillez réessayer dans un instant."
+  },
+  "BasketSimulator": {
+    "tab": {
+      "menu": "Menu",
+      "compare": "Comparer"
+    },
+    "compareFloat": "Comparer ({count})",
+    "searchPlaceholder": "Rechercher dans le menu…",
+    "addItemsFirst": "Ajouter des articles d'abord",
+    "emptyCompare": "Ajoutez des articles depuis l'onglet Menu pour comparer les prix",
+    "bestBadge": "MEILLEUR",
+    "orderOn": "Commander sur {platform}",
+    "missingItems": "Manquant : {items}",
+    "deltaVsBest": "+{amount} vs meilleur",
+    "directSavings": "Économisez {amount} en commandant directement",
+    "directPartialCoverage": "Commander par téléphone — {matched} sur {total} articles au menu",
+    "closeModal": "Fermer"
   }
 }

@@ -20,8 +20,14 @@
     "pct": "% Off",
     "free_delivery": "Free Delivery",
     "free_item": "Free Item",
+    "eur_off": "€ Off",
     "more": "More ›",
     "less": "Less ‹"
+  },
+  "platform": {
+    "uber_eats": "UberEats",
+    "deliveroo": "Deliveroo",
+    "takeaway": "Takeaway"
   },
   "results": {
     "restaurants": "Restaurants",
@@ -39,7 +45,24 @@
     "min_order": "Min. €{amount}",
     "order_on": "Order on {platform} →",
     "compare_and_order": "Compare & order on {platform} →",
-    "search_placeholder": "Search a restaurant"
+    "search_placeholder": "Search a restaurant",
+    "freshness": "checked {minutes} min ago",
+    "freshness_warning": "last checked {minutes} min ago",
+    "freshness_stale": "data may be outdated",
+    "sort_label": "Sort",
+    "sort_best": "Best deal",
+    "sort_saving": "Biggest saving",
+    "sort_rated": "Top rated",
+    "sort_newest": "Newest",
+    "savings_pct": "Save ~€{amount} on a €20 order",
+    "savings_abs": "€{amount} off your order",
+    "savings_free_delivery": "€0 delivery fee",
+    "featured_heading": "Best deals right now",
+    "empty_filtered": "No deals match these filters.",
+    "empty_filtered_hint": "{total} deals available — adjust the filters.",
+    "empty_total": "No deals right now.",
+    "empty_total_hint": "We check every hour — come back soon.",
+    "clear_filters": "Clear filters"
   },
   "basket": {
     "no_menu": "No menu data available yet.",
@@ -234,5 +257,22 @@
     "retry": "Try again",
     "restaurant_title": "Couldn't load this restaurant",
     "restaurant_body": "We couldn't load this restaurant's prices right now. Please try again in a moment."
+  },
+  "BasketSimulator": {
+    "tab": {
+      "menu": "Menu",
+      "compare": "Compare"
+    },
+    "compareFloat": "Compare ({count})",
+    "searchPlaceholder": "Search menu…",
+    "addItemsFirst": "Add items first",
+    "emptyCompare": "Add items from the Menu tab to compare prices",
+    "bestBadge": "BEST",
+    "orderOn": "Order on {platform}",
+    "missingItems": "Missing: {items}",
+    "deltaVsBest": "+{amount} vs best",
+    "directSavings": "Save {amount} ordering direct",
+    "directPartialCoverage": "Order by phone — {matched} of {total} items on menu",
+    "closeModal": "Close"
   }
 }

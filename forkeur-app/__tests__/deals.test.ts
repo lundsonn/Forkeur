@@ -1,147 +1,136 @@
 import { describe, it, expect } from 'vitest'
-import {
-  matchesFilter,
-  matchesPill,
-  filterCounts,
-  dealBand,
-  sortDeals,
-  badgeText,
-  qualityScore,
-  type DealItem,
-  type DealFilter,
-} from '@/lib/deals'
+import { savingsEstimate, sortDeals, matchesFilter, filterCounts, qualityScore } from '@/lib/deals'
+import type { DealItem, SortMode, ActiveType, ActivePlatform } from '@/lib/deals'
 
-type ActiveSet = Set<Exclude<DealFilter, 'all'>>
-const s = (...keys: Exclude<DealFilter, 'all'>[]): ActiveSet => new Set(keys)
-
-function deal(overrides: Partial<DealItem>): DealItem {
-  return {
-    id: Math.random().toString(36).slice(2),
-    restaurant_id: 'r',
-    restaurant_name: 'Test',
-    platform: 'uber_eats',
-    platform_url: null,
-    cuisine: [],
-    area: null,
-    rating: null,
-    review_count: null,
-    promo_type: 'bogo',
-    label: '',
-    value: null,
-    min_order: null,
-    opening_hours: null,
-    is_available: true,
-    scraped_at: new Date(0).toISOString(),
-    ...overrides,
-  }
+const baseDeal: DealItem = {
+  id: '1',
+  restaurant_id: 'r1',
+  restaurant_name: 'A',
+  platform: 'uber_eats',
+  platform_url: null,
+  cuisine: [],
+  area: null,
+  rating: 4.0,
+  review_count: 100,
+  promo_type: 'pct_discount',
+  label: '20% off',
+  value: 20,
+  min_order: null,
+  opening_hours: null,
+  is_available: true,
+  scraped_at: '2026-06-13T10:00:00Z',
 }
 
-describe('matchesPill', () => {
-  it('pct folds in abs_discount', () => {
-    expect(matchesPill(deal({ promo_type: 'pct_discount' }), 'pct')).toBe(true)
-    expect(matchesPill(deal({ promo_type: 'abs_discount' }), 'pct')).toBe(true)
-    expect(matchesPill(deal({ promo_type: 'free_delivery' }), 'pct')).toBe(false)
+describe('savingsEstimate', () => {
+  it('pct_discount: returns save string', () => {
+    expect(savingsEstimate({ ...baseDeal, promo_type: 'pct_discount', value: 20 }))
+      .toBe('Save ~€4.00 on a €20 order')
   })
-})
-
-describe('matchesFilter', () => {
-  it('empty set matches everything', () => {
-    expect(matchesFilter(deal({ promo_type: 'free_item' }), s())).toBe(true)
+  it('abs_discount: returns off string', () => {
+    expect(savingsEstimate({ ...baseDeal, promo_type: 'abs_discount', value: 3 }))
+      .toBe('€3.00 off your order')
   })
-  it('single filter', () => {
-    expect(matchesFilter(deal({ promo_type: 'bogo' }), s('bogo'))).toBe(true)
-    expect(matchesFilter(deal({ promo_type: 'free_delivery' }), s('bogo'))).toBe(false)
+  it('free_delivery: returns fee string', () => {
+    expect(savingsEstimate({ ...baseDeal, promo_type: 'free_delivery', value: null }))
+      .toBe('€0 delivery fee')
   })
-  it('multi-filter: OR logic', () => {
-    const d = deal({ promo_type: 'free_delivery' })
-    expect(matchesFilter(d, s('bogo', 'free_delivery'))).toBe(true)
-    expect(matchesFilter(d, s('bogo', 'pct'))).toBe(false)
+  it('bogo: returns null', () => {
+    expect(savingsEstimate({ ...baseDeal, promo_type: 'bogo', value: null })).toBeNull()
   })
-})
-
-describe('filterCounts', () => {
-  it('counts pct as pct_discount + abs_discount', () => {
-    const counts = filterCounts([
-      deal({ promo_type: 'pct_discount' }),
-      deal({ promo_type: 'abs_discount' }),
-      deal({ promo_type: 'bogo' }),
-      deal({ promo_type: 'free_delivery' }),
-    ])
-    expect(counts.all).toBe(4)
-    expect(counts.pct).toBe(2)
-    expect(counts.bogo).toBe(1)
-    expect(counts.free_delivery).toBe(1)
-    expect(counts.free_item).toBe(0)
-  })
-})
-
-describe('dealBand', () => {
-  it('bogo and pct>=30 share top band', () => {
-    expect(dealBand(deal({ promo_type: 'bogo' }))).toBe(0)
-    expect(dealBand(deal({ promo_type: 'pct_discount', value: 30 }))).toBe(0)
-    expect(dealBand(deal({ promo_type: 'pct_discount', value: 40 }))).toBe(0)
-  })
-  it('orders remaining bands', () => {
-    expect(dealBand(deal({ promo_type: 'pct_discount', value: 20 }))).toBe(1)
-    expect(dealBand(deal({ promo_type: 'free_delivery' }))).toBe(2)
-    expect(dealBand(deal({ promo_type: 'free_item' }))).toBe(3)
-    expect(dealBand(deal({ promo_type: 'abs_discount', value: 5 }))).toBe(4)
-  })
-})
-
-describe('qualityScore', () => {
-  it('weights rating by log review volume; nulls = 0', () => {
-    expect(qualityScore(deal({ rating: null, review_count: null }))).toBe(0)
-    const hi = qualityScore(deal({ rating: 4.8, review_count: 1000 }))
-    const lo = qualityScore(deal({ rating: 4.8, review_count: 5 }))
-    expect(hi).toBeGreaterThan(lo)
+  it('free_item: returns null', () => {
+    expect(savingsEstimate({ ...baseDeal, promo_type: 'free_item', value: null })).toBeNull()
   })
 })
 
 describe('sortDeals', () => {
-  it('single pct: discount value desc, quality tiebreak', () => {
-    const a = deal({ promo_type: 'pct_discount', value: 20, rating: 5, review_count: 999 })
-    const b = deal({ promo_type: 'pct_discount', value: 50, rating: 3, review_count: 1 })
-    const c = deal({ promo_type: 'pct_discount', value: 50, rating: 5, review_count: 999 })
-    const out = sortDeals([a, b, c], s('pct'))
-    expect(out.map((d) => d.value)).toEqual([50, 50, 20])
-    expect(out[0]).toBe(c)
-  })
+  const a: DealItem = { ...baseDeal, id: 'a', rating: 4.5, value: 10, scraped_at: '2026-06-13T08:00:00Z' }
+  const b: DealItem = { ...baseDeal, id: 'b', rating: 3.0, value: 30, scraped_at: '2026-06-13T12:00:00Z' }
 
-  it('single quality-only filter: quality desc', () => {
-    const weak = deal({ promo_type: 'bogo', rating: 3, review_count: 2 })
-    const strong = deal({ promo_type: 'bogo', rating: 4.9, review_count: 500 })
-    expect(sortDeals([weak, strong], s('bogo'))[0]).toBe(strong)
+  it('newest: sorts by scraped_at desc', () => {
+    const sorted = sortDeals([a, b], 'newest')
+    expect(sorted[0].id).toBe('b')
   })
-
-  it('empty set (all): band asc then quality desc', () => {
-    const absDeal = deal({ promo_type: 'abs_discount', value: 5, rating: 5, review_count: 999 })
-    const bogoDeal = deal({ promo_type: 'bogo', rating: 1, review_count: 1 })
-    const out = sortDeals([absDeal, bogoDeal], s())
-    expect(out[0]).toBe(bogoDeal)
+  it('rated: sorts by rating desc', () => {
+    const sorted = sortDeals([a, b], 'rated')
+    expect(sorted[0].id).toBe('a')
   })
-
-  it('multi-select: band asc then quality desc', () => {
-    const fd = deal({ promo_type: 'free_delivery', rating: 5, review_count: 999 })
-    const bogo = deal({ promo_type: 'bogo', rating: 1, review_count: 1 })
-    const out = sortDeals([fd, bogo], s('bogo', 'free_delivery'))
-    expect(out[0]).toBe(bogo) // band 0 beats band 2 despite worse quality
+  it('saving: sorts by value desc for pct_discount', () => {
+    const sorted = sortDeals([a, b], 'saving')
+    expect(sorted[0].id).toBe('b')
   })
-
+  it('best: uses qualityScore', () => {
+    const hiScore: DealItem = { ...baseDeal, id: 'hi', promo_type: 'bogo', value: null, rating: 4.0 }
+    const loScore: DealItem = { ...baseDeal, id: 'lo', promo_type: 'free_delivery', value: null, rating: 1.0 }
+    const sorted = sortDeals([loScore, hiScore], 'best')
+    expect(sorted[0].id).toBe('hi')
+  })
   it('is pure (does not mutate input)', () => {
-    const input = [deal({ value: 10 }), deal({ value: 20 })]
+    const input = [a, b]
     const snapshot = [...input]
-    sortDeals(input, s('pct'))
-    expect(input).toEqual(snapshot)
+    sortDeals(input, 'newest')
+    expect(input[0].id).toBe(snapshot[0].id)
   })
 })
 
-describe('badgeText', () => {
-  it('renders per type', () => {
-    expect(badgeText(deal({ promo_type: 'bogo' }))).toBe('2-for-1')
-    expect(badgeText(deal({ promo_type: 'pct_discount', value: 30 }))).toBe('30% off')
-    expect(badgeText(deal({ promo_type: 'abs_discount', value: 4.7 }))).toBe('€4.70 off')
-    expect(badgeText(deal({ promo_type: 'free_delivery' }))).toBe('Free delivery')
-    expect(badgeText(deal({ promo_type: 'free_item', label: 'Kostenloser Artikel (Zahle 20 €)' }))).toBe('Free item')
+describe('matchesFilter', () => {
+  it('all/all: matches everything', () => {
+    expect(matchesFilter(baseDeal, 'all', 'all')).toBe(true)
+  })
+  it('type filter excludes non-matching promo', () => {
+    expect(matchesFilter({ ...baseDeal, promo_type: 'free_delivery' }, 'pct', 'all')).toBe(false)
+    expect(matchesFilter({ ...baseDeal, promo_type: 'pct_discount' }, 'pct', 'all')).toBe(true)
+  })
+  it('platform filter excludes non-matching platform', () => {
+    expect(matchesFilter({ ...baseDeal, platform: 'deliveroo' }, 'all', 'uber_eats')).toBe(false)
+    expect(matchesFilter({ ...baseDeal, platform: 'uber_eats' }, 'all', 'uber_eats')).toBe(true)
+  })
+  it('both filters combined', () => {
+    const d: DealItem = { ...baseDeal, promo_type: 'bogo', platform: 'deliveroo' }
+    expect(matchesFilter(d, 'bogo', 'deliveroo')).toBe(true)
+    expect(matchesFilter(d, 'bogo', 'uber_eats')).toBe(false)
+    expect(matchesFilter(d, 'pct', 'deliveroo')).toBe(false)
+  })
+})
+
+describe('filterCounts', () => {
+  const deals: DealItem[] = [
+    { ...baseDeal, id: '1', promo_type: 'pct_discount', platform: 'uber_eats' },
+    { ...baseDeal, id: '2', promo_type: 'abs_discount', platform: 'deliveroo' },
+    { ...baseDeal, id: '3', promo_type: 'bogo', platform: 'uber_eats' },
+    { ...baseDeal, id: '4', promo_type: 'free_delivery', platform: 'takeaway' },
+    { ...baseDeal, id: '5', promo_type: 'free_item', platform: 'deliveroo' },
+  ]
+
+  it('all: counts all deals', () => {
+    const counts = filterCounts(deals, 'all')
+    expect(counts.all).toBe(5)
+    expect(counts.pct).toBe(1)
+    expect(counts.abs).toBe(1)
+    expect(counts.bogo).toBe(1)
+    expect(counts.free_delivery).toBe(1)
+    expect(counts.free_item).toBe(1)
+  })
+
+  it('platform filter narrows counts', () => {
+    const counts = filterCounts(deals, 'uber_eats')
+    expect(counts.all).toBe(2)
+    expect(counts.pct).toBe(1)
+    expect(counts.bogo).toBe(1)
+    expect(counts.free_delivery).toBe(0)
+  })
+})
+
+describe('qualityScore', () => {
+  it('bogo scores 30 base + rating bonus', () => {
+    const score = qualityScore({ ...baseDeal, promo_type: 'bogo', value: null, rating: 4.0 })
+    expect(score).toBe(30 + 4.0 * 2)
+  })
+  it('pct_discount: value*2 + rating*2', () => {
+    const score = qualityScore({ ...baseDeal, promo_type: 'pct_discount', value: 20, rating: 4.0 })
+    expect(score).toBe(20 * 2 + 4.0 * 2)
+  })
+  it('nulls score 0 for that component', () => {
+    const score = qualityScore({ ...baseDeal, promo_type: 'free_delivery', value: null, rating: null })
+    expect(score).toBe(15)
   })
 })

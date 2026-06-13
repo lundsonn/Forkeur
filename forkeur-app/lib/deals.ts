@@ -1,11 +1,6 @@
 import type { Platform } from './basket'
 
-export type DealType =
-  | 'free_delivery'
-  | 'bogo'
-  | 'pct_discount'
-  | 'abs_discount'
-  | 'free_item'
+export type DealType = 'free_delivery' | 'bogo' | 'pct_discount' | 'abs_discount' | 'free_item'
 
 export type DealItem = {
   id: string
@@ -26,112 +21,107 @@ export type DealItem = {
   scraped_at: string
 }
 
-/** Active filter pills. `pct` covers both pct_discount and abs_discount. */
-export type DealFilter = 'all' | 'bogo' | 'pct' | 'free_delivery' | 'free_item'
+export type ActiveType = 'all' | 'free_delivery' | 'pct' | 'bogo' | 'abs' | 'free_item'
+export type ActivePlatform = 'all' | 'uber_eats' | 'deliveroo' | 'takeaway'
+export type SortMode = 'best' | 'saving' | 'rated' | 'newest'
 
-export const DEAL_FILTERS: { key: DealFilter }[] = [
-  { key: 'all' },
-  { key: 'bogo' },
-  { key: 'pct' },
-  { key: 'free_delivery' },
-  { key: 'free_item' },
-]
-
-/** Does a deal match a single pill key? */
-export function matchesPill(d: DealItem, key: Exclude<DealFilter, 'all'>): boolean {
-  if (key === 'pct') return d.promo_type === 'pct_discount' || d.promo_type === 'abs_discount'
-  return d.promo_type === key
+export function qualityScore(d: DealItem): number {
+  let score = 0
+  if (d.promo_type === 'pct_discount' && d.value) score += d.value * 2
+  if (d.promo_type === 'abs_discount' && d.value) score += d.value * 10
+  if (d.promo_type === 'free_delivery') score += 15
+  if (d.promo_type === 'bogo') score += 30
+  if (d.promo_type === 'free_item') score += 20
+  if (d.rating) score += d.rating * 2
+  return score
 }
 
-/**
- * Does a deal pass the active selection?
- * Empty set or 'all' = show everything.
- */
-export function matchesFilter(d: DealItem, active: Set<Exclude<DealFilter, 'all'>>): boolean {
-  if (active.size === 0) return true
-  return [...active].some((key) => matchesPill(d, key))
+export function savingsEstimate(deal: DealItem): string | null {
+  switch (deal.promo_type) {
+    case 'pct_discount': {
+      if (deal.value == null) return null
+      const saved = (deal.value * 20) / 100
+      return `Save ~€${saved.toFixed(2)} on a €20 order`
+    }
+    case 'abs_discount': {
+      if (deal.value == null) return null
+      return `€${deal.value.toFixed(2)} off your order`
+    }
+    case 'free_delivery':
+      return '€0 delivery fee'
+    default:
+      return null
+  }
 }
 
-/** Live counts per filter pill (always against full dataset, not current selection). */
-export function filterCounts(deals: DealItem[]): Record<DealFilter, number> {
-  const counts: Record<DealFilter, number> = {
-    all: deals.length,
-    bogo: 0,
-    pct: 0,
+function promoTypeForActiveType(active: ActiveType): DealType | null {
+  switch (active) {
+    case 'pct': return 'pct_discount'
+    case 'abs': return 'abs_discount'
+    case 'free_delivery': return 'free_delivery'
+    case 'bogo': return 'bogo'
+    case 'free_item': return 'free_item'
+    default: return null
+  }
+}
+
+export function matchesFilter(
+  d: DealItem,
+  activeType: ActiveType,
+  activePlatform: ActivePlatform,
+): boolean {
+  if (activeType !== 'all') {
+    const expected = promoTypeForActiveType(activeType)
+    if (expected && d.promo_type !== expected) return false
+  }
+  if (activePlatform !== 'all' && d.platform !== activePlatform) return false
+  return true
+}
+
+export function filterCounts(
+  deals: DealItem[],
+  activePlatform: ActivePlatform,
+): Record<ActiveType, number> {
+  const platformDeals = activePlatform === 'all'
+    ? deals
+    : deals.filter(d => d.platform === activePlatform)
+
+  const counts: Record<ActiveType, number> = {
+    all: platformDeals.length,
     free_delivery: 0,
+    pct: 0,
+    bogo: 0,
+    abs: 0,
     free_item: 0,
   }
-  for (const d of deals) {
-    if (matchesPill(d, 'bogo')) counts.bogo++
-    if (matchesPill(d, 'pct')) counts.pct++
-    if (matchesPill(d, 'free_delivery')) counts.free_delivery++
-    if (matchesPill(d, 'free_item')) counts.free_item++
+  for (const d of platformDeals) {
+    if (d.promo_type === 'free_delivery') counts.free_delivery++
+    if (d.promo_type === 'pct_discount') counts.pct++
+    if (d.promo_type === 'bogo') counts.bogo++
+    if (d.promo_type === 'abs_discount') counts.abs++
+    if (d.promo_type === 'free_item') counts.free_item++
   }
   return counts
 }
 
-/** Restaurant-quality tiebreaker: rating weighted by review volume. */
-export function qualityScore(d: DealItem): number {
-  const rating = d.rating ?? 0
-  const reviews = d.review_count ?? 0
-  return rating * Math.log(reviews + 1)
-}
-
-/**
- * Coarse band for the "All" view. Lower = ranked higher.
- *  0: 2-for-1 + big % off (>= 30%)
- *  1: smaller % off (< 30%)
- *  2: free delivery
- *  3: free item
- *  4: absolute € off
- */
-export function dealBand(d: DealItem): number {
-  if (d.promo_type === 'bogo') return 0
-  if (d.promo_type === 'pct_discount') return (d.value ?? 0) >= 30 ? 0 : 1
-  if (d.promo_type === 'free_delivery') return 2
-  if (d.promo_type === 'free_item') return 3
-  if (d.promo_type === 'abs_discount') return 4
-  return 5
-}
-
-/**
- * Sort deals for display given the active selection.
- *  - exactly {pct}: discount value desc, quality tiebreak
- *  - exactly {bogo|free_delivery|free_item}: quality desc
- *  - empty (all) or multiple: band asc, then quality desc
- * Pure: returns a new array.
- */
-export function sortDeals(deals: DealItem[], active: Set<Exclude<DealFilter, 'all'>>): DealItem[] {
-  const out = [...deals]
-  if (active.size === 1) {
-    const [only] = active
-    if (only === 'pct') {
-      out.sort((a, b) => (b.value ?? 0) - (a.value ?? 0) || qualityScore(b) - qualityScore(a))
-    } else {
-      out.sort((a, b) => qualityScore(b) - qualityScore(a))
-    }
-  } else {
-    out.sort((a, b) => dealBand(a) - dealBand(b) || qualityScore(b) - qualityScore(a))
-  }
-  return out
-}
-
-/** Green badge text per deal type. */
-export function badgeText(d: DealItem): string {
-  switch (d.promo_type) {
-    case 'bogo':
-      return '2-for-1'
-    case 'pct_discount':
-      return d.value != null ? `${Math.round(d.value)}% off` : '% off'
-    case 'abs_discount':
-      return d.value != null ? `€${d.value.toFixed(2)} off` : '€ off'
-    case 'free_delivery':
-      return 'Free delivery'
-    case 'free_item':
-      // Scraper labels are generic spend-threshold phrases (often DE/FR), not item
-      // names — the Min. €X line conveys the threshold, so keep the badge clean.
-      return 'Free item'
+export function sortDeals(deals: DealItem[], mode: SortMode): DealItem[] {
+  const copy = [...deals]
+  switch (mode) {
+    case 'newest':
+      return copy.sort((a, b) => b.scraped_at.localeCompare(a.scraped_at))
+    case 'rated':
+      return copy.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
+    case 'saving':
+      return copy.sort((a, b) => {
+        const aVal = (a.promo_type === 'pct_discount' || a.promo_type === 'abs_discount')
+          ? (a.value ?? 0) : 0
+        const bVal = (b.promo_type === 'pct_discount' || b.promo_type === 'abs_discount')
+          ? (b.value ?? 0) : 0
+        if (bVal !== aVal) return bVal - aVal
+        return qualityScore(b) - qualityScore(a)
+      })
+    case 'best':
     default:
-      return d.label
+      return copy.sort((a, b) => qualityScore(b) - qualityScore(a))
   }
 }

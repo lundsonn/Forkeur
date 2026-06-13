@@ -20,8 +20,14 @@
     "pct": "% Korting",
     "free_delivery": "Gratis bezorging",
     "free_item": "Gratis artikel",
+    "eur_off": "€ Korting",
     "more": "Meer ›",
     "less": "Minder ‹"
+  },
+  "platform": {
+    "uber_eats": "UberEats",
+    "deliveroo": "Deliveroo",
+    "takeaway": "Takeaway"
   },
   "results": {
     "restaurants": "Restaurants",
@@ -39,7 +45,24 @@
     "min_order": "Min. €{amount}",
     "order_on": "Bestellen bij {platform} →",
     "compare_and_order": "Vergelijk & bestel bij {platform} →",
-    "search_placeholder": "Zoek een restaurant"
+    "search_placeholder": "Zoek een restaurant",
+    "freshness": "{minutes} min geleden gecontroleerd",
+    "freshness_warning": "voor het laatst {minutes} min geleden gecontroleerd",
+    "freshness_stale": "gegevens mogelijk verouderd",
+    "sort_label": "Sorteren",
+    "sort_best": "Beste aanbieding",
+    "sort_saving": "Grootste korting",
+    "sort_rated": "Hoogst beoordeeld",
+    "sort_newest": "Nieuwste",
+    "savings_pct": "Bespaar ~€{amount} op een bestelling van €20",
+    "savings_abs": "€{amount} korting op je bestelling",
+    "savings_free_delivery": "€0 bezorgkosten",
+    "featured_heading": "Beste aanbiedingen nu",
+    "empty_filtered": "Geen aanbiedingen gevonden voor deze filters.",
+    "empty_filtered_hint": "{total} aanbiedingen beschikbaar — pas de filters aan.",
+    "empty_total": "Momenteel geen aanbiedingen.",
+    "empty_total_hint": "We controleren elk uur — kom binnenkort terug.",
+    "clear_filters": "Filters wissen"
   },
   "basket": {
     "no_menu": "Nog geen menugegevens beschikbaar.",
@@ -234,5 +257,22 @@
     "retry": "Opnieuw proberen",
     "restaurant_title": "Kon dit restaurant niet laden",
     "restaurant_body": "We konden de prijzen van dit restaurant nu niet laden. Probeer het zo meteen opnieuw."
+  },
+  "BasketSimulator": {
+    "tab": {
+      "menu": "Menu",
+      "compare": "Vergelijken"
+    },
+    "compareFloat": "Vergelijken ({count})",
+    "searchPlaceholder": "Menu doorzoeken…",
+    "addItemsFirst": "Voeg eerst items toe",
+    "emptyCompare": "Voeg items toe via het Menu-tabblad om prijzen te vergelijken",
+    "bestBadge": "BEST",
+    "orderOn": "Bestellen via {platform}",
+    "missingItems": "Ontbreekt: {items}",
+    "deltaVsBest": "+{amount} vs beste",
+    "directSavings": "Bespaar {amount} door direct te bestellen",
+    "directPartialCoverage": "Bestellen per telefoon — {matched} van {total} items in het menu",
+    "closeModal": "Sluiten"
   }
 }
