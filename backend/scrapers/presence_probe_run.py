@@ -197,6 +197,11 @@ async def _run_group(plat: str, checks: list[dict], client: httpx.AsyncClient, s
                 cands, is_blocked, reason = await _run_search(browser, check, pin)
             except Exception as exc:  # noqa: BLE001 — never let one check kill the group
                 cands, is_blocked, reason = [], True, f"error:{type(exc).__name__}"
+            # A non-blocked search that returned ZERO cards is a failed search, not
+            # a proven negative: even when our venue is absent the area still lists
+            # other restaurants. Treat empty as uncertain, never absent.
+            if not is_blocked and not cands:
+                is_blocked, reason = True, "no_candidates"
             result = classify_presence(
                 lat=check["lat"], lng=check["lng"], cuisine=check.get("cuisine"),
                 name=check["name"], candidates=cands, missing_platform=plat,
@@ -209,7 +214,8 @@ async def _run_group(plat: str, checks: list[dict], client: httpx.AsyncClient, s
             if is_blocked:
                 blocked += 1
                 stats["blocked"] += 1
-            log(f"[{plat}] {done}/{len(checks)} {check['name'][:32]!r} -> {result.outcome}"
+            log(f"[{plat}] {done}/{len(checks)} {check['name'][:32]!r} "
+                f"cards={len(cands)} -> {result.outcome}"
                 + (f" ({result.block_reason})" if result.block_reason else "")
                 + (f" {result.candidate_distance_m:.0f}m" if result.candidate_distance_m else ""))
 

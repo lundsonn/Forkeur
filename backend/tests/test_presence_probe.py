@@ -168,6 +168,16 @@ def test_decimal_restaurant_coords_do_not_crash_haversine():
     assert res.outcome == "present"
 
 
+def test_restaurant_without_coords_falls_back_to_name_only():
+    # 12/928 restaurants have no lat/lng; must not crash and must name-match.
+    res = classify_presence(
+        lat=None, lng=None, cuisine=None, name="Pizza Roma",
+        candidates=[_cand("Pizza Roma", metres=80)], missing_platform="uber_eats",
+    )
+    assert res.outcome == "present"
+    assert res.candidate_distance_m is None  # distance unknowable without restaurant coords
+
+
 def test_proximity_only_without_corroboration_is_uncertain():
     # ~100 m away, name unrelated and no cuisine -> proximity alone is not enough.
     res = classify_presence(

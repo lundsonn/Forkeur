@@ -98,21 +98,25 @@ def classify_presence(
         return ProbeResult("uncertain", None, None, None, block_reason or "blocked")
 
     # Restaurant coords come from Postgres as decimal.Decimal; candidate coords
-    # from platform JSON are float. Coerce so haversine never mixes the two.
-    lat = float(lat)
-    lng = float(lng)
+    # from platform JSON are float. Coerce so haversine never mixes the two. When
+    # the restaurant itself has no coords, no candidate can be matched by distance
+    # -> every candidate falls back to the name-only path.
+    have_coords = lat is not None and lng is not None
+    if have_coords:
+        lat = float(lat)
+        lng = float(lng)
 
     deliveroo = missing_platform == "deliveroo"
     present_m = PRESENT_M_DELIV if deliveroo else PRESENT_M
     max_m = UNCERTAIN_MAX_DELIV if deliveroo else UNCERTAIN_MAX_M
 
-    # 2. Build the eligible candidate set. Candidates without coordinates can only
-    #    corroborate by name (distance treated as infinite). A coords-bearing
-    #    candidate that is both too far AND not strongly named is not a
-    #    corroborator at all and is dropped.
+    # 2. Build the eligible candidate set. A candidate with no usable distance
+    #    (either side missing coords) can only corroborate by name (distance
+    #    treated as infinite). A coords-bearing candidate that is both too far AND
+    #    not strongly named is not a corroborator at all and is dropped.
     eligible: list[tuple[float, Candidate]] = []
     for c in candidates:
-        if c.lat is None or c.lng is None:
+        if not have_coords or c.lat is None or c.lng is None:
             if _name_sim(name, c.name) >= WEAK_NAME_SIM:
                 eligible.append((float("inf"), c))
             continue
