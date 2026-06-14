@@ -12,6 +12,13 @@ import db
 router = APIRouter(prefix="/public", tags=["public"])
 
 
+@router.get("/near-me")
+async def public_near_me(commune: str = ""):
+    if commune:
+        return await asyncio.to_thread(db.get_public_near_me, commune)
+    return await asyncio.to_thread(db.get_public_all)
+
+
 @router.get("/restaurants")
 async def public_restaurants():
     return await asyncio.to_thread(db.get_public_restaurants)
@@ -27,11 +34,6 @@ async def public_restaurant_detail(restaurant_id: str):
     if row is None:
         raise HTTPException(status_code=404, detail="Not found")
     return row
-
-
-@router.get("/near-me")
-async def public_near_me(commune: str = "bruxelles"):
-    return await asyncio.to_thread(db.get_public_near_me, commune)
 
 
 @router.get("/deals")

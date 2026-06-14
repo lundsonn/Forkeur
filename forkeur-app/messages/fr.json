@@ -347,7 +347,10 @@
     "claim_cta": "Revendiquer {name} →"
   },
   "discovery": {
-    "commune_label": "Près de",
+    "commune_label": "Zone",
+    "commune_all": "Tout Bruxelles",
+    "footer_all": "{count} restaurants comparés sur Bruxelles",
+    "footer_near": "{count} restaurants comparés près de {commune}",
     "decide_btn": "Choisir pour moi",
     "decide_not_feeling": "Pas convaincu ?",
     "decide_exhausted": "C'est le meilleur près de chez vous ce soir",

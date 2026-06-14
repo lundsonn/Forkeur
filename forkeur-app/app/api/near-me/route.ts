@@ -4,7 +4,7 @@ import { getNearMe } from '@/lib/queries'
 export const revalidate = 0
 
 export async function GET(req: NextRequest) {
-  const commune = req.nextUrl.searchParams.get('commune') ?? 'bruxelles'
+  const commune = req.nextUrl.searchParams.get('commune') ?? ''
   try {
     const restaurants = await getNearMe(commune)
     return NextResponse.json(restaurants)

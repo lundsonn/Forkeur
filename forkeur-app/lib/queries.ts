@@ -305,7 +305,8 @@ export async function getRestaurants(): Promise<{
 }
 
 export async function getNearMe(commune: string): Promise<RestaurantSummary[]> {
-  const data = await backendFetch<RawRestaurantRow[]>(`/api/public/near-me?commune=${encodeURIComponent(commune)}`, { revalidate: 300 })
+  const url = commune ? `/api/public/near-me?commune=${encodeURIComponent(commune)}` : '/api/public/near-me'
+  const data = await backendFetch<RawRestaurantRow[]>(url, { revalidate: 300 })
 
   return ((data ?? []) as unknown as RawRestaurantRow[]).map((r) => {
     const rawListings = (r.platform_listings ?? []) as (RawListingShort & { promotions?: RawPromoItemRow[] })[]

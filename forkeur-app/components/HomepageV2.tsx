@@ -266,6 +266,7 @@ export default function HomepageV2({ initialRestaurants, initialCommune }: Props
             onChange={(e) => handleCommuneChange(e.target.value as CommuneSlug)}
             className="text-sm font-semibold text-stone-900 bg-stone-50 border border-stone-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-orange-400"
           >
+            <option value="">{t('commune_all')}</option>
             {COMMUNE_SLUGS.map((s) => (
               <option key={s} value={s}>
                 {communeName(s)}
@@ -647,7 +648,9 @@ export default function HomepageV2({ initialRestaurants, initialCommune }: Props
         {!isThin && (
           <div className="pt-4 border-t border-stone-100 text-center">
             <p className="text-sm text-stone-400">
-              {restaurants.length} restaurants compared near {communeName(commune)}
+              {commune
+                ? t('footer_near', { count: restaurants.length, commune: communeName(commune) })
+                : t('footer_all', { count: restaurants.length })}
             </p>
           </div>
         )}

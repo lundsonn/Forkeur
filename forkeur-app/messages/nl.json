@@ -347,7 +347,10 @@
     "claim_cta": "{name} claimen →"
   },
   "discovery": {
-    "commune_label": "Dichtbij",
+    "commune_label": "Zone",
+    "commune_all": "Heel Brussel",
+    "footer_all": "{count} restaurants vergeleken in Brussel",
+    "footer_near": "{count} restaurants vergeleken dichtbij {commune}",
     "decide_btn": "Kies voor mij",
     "decide_not_feeling": "Toch niet?",
     "decide_exhausted": "Dit is het beste bij jou in de buurt vanavond",

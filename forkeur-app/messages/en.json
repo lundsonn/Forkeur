@@ -347,7 +347,10 @@
     "claim_cta": "Claim {name} →"
   },
   "discovery": {
-    "commune_label": "Near",
+    "commune_label": "Area",
+    "commune_all": "All of Brussels",
+    "footer_all": "{count} restaurants compared across Brussels",
+    "footer_near": "{count} restaurants compared near {commune}",
     "decide_btn": "Decide for me",
     "decide_not_feeling": "Not feeling it?",
     "decide_exhausted": "That's tonight's best near you",
