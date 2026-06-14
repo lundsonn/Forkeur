@@ -242,7 +242,6 @@ export default function CompareDecision({
                 <span>{t('feeTotal')}</span>
                 <span>{centsToEuro(winnerTotal)}</span>
               </div>
-              <p className="text-stone-400 italic pt-1">{t('feeServiceNote')}</p>
             </div>
             <p className="text-xs text-stone-500 mt-2">
               {t('whyWinner', { platform: PLATFORM_LABELS[winner] })}

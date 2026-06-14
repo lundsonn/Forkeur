@@ -8,7 +8,7 @@
   "hero": {
     "heading_line1": "Stop de payer trop cher",
     "heading_line2": "pour le même repas.",
-    "subtitle": "Un restaurant peut coûter <b>20–40% plus cher</b> selon l'appli. Forkeur compare Uber Eats, Deliveroo, Takeaway &amp; la commande directe — frais inclus — pour toujours choisir le moins cher.",
+    "subtitle": "Un restaurant peut coûter <b>20–40% plus cher</b> selon l'appli. Forkeur compare Uber Eats, Deliveroo, Takeaway &amp; la commande directe — frais de livraison inclus — pour toujours choisir le moins cher.",
     "live_badge": "En direct à Bruxelles",
     "credibility": "Comparaison des vrais prix sur UberEats, Deliveroo, Takeaway & commande directe",
     "rightNow": "En ce moment près de chez vous :",
@@ -148,7 +148,7 @@
     "compare_all": "Comparer les {count} plateformes",
     "cheapest_badge": "LE MOINS CHER",
     "min_order": "min. {amount}",
-    "delivery_service_fees": "livraison + frais de service",
+    "delivery_service_fees": "frais de livraison",
     "direct_fees": "frais {fee}",
     "save": "Économie {amount}",
     "pct_cheaper": "{pct}% moins cher",
@@ -167,7 +167,7 @@
   "detail": {
     "platform_fees": "Frais de livraison",
     "cheapest_signal": "{platform} est €{amount} moins cher que {other}",
-    "fees_included": "Frais inclus",
+    "fees_included": "Frais de livraison inclus",
     "fees_info": "Prix vérifiés plusieurs fois par jour",
     "price_compare": "Différences de prix menu",
     "cheaper_on": "{pct}% moins cher sur {platform}",
@@ -188,7 +188,7 @@
     "order_from_restaurant": "commande au restaurant",
     "menu_prices_eyebrow": "Prix du menu",
     "build_order_eyebrow": "Composez votre commande",
-    "build_order_sub": "Ajoutez ce que vous voulez — on vous montre la plateforme la moins chère, frais inclus.",
+    "build_order_sub": "Ajoutez ce que vous voulez — on vous montre la plateforme la moins chère, frais de livraison inclus.",
     "phone_unverified": "Non vérifié — nous n'avons pas pu confirmer ce numéro",
     "order_covered_platform": "Cet établissement ne prend les commandes que via les apps comparées ci-dessus.",
     "last_updated": "Mis à jour {ago}"
@@ -254,12 +254,12 @@
     "step1_title": "Rechercher",
     "step1_body": "N'importe quel restaurant",
     "step2_title": "Comparer",
-    "step2_body": "Toutes les plateformes, frais inclus",
+    "step2_body": "Toutes les plateformes, frais de livraison inclus",
     "step3_title": "Commander",
     "step3_body": "Choisissez le moins cher"
   },
   "footer": {
-    "disclaimer": "Les prix affichés sont les <b>frais de livraison + service</b> de chaque plateforme, mis à jour en direct. <b>Vert</b> = le moins cher. Les prix du menu sont aussi comparés une fois votre commande constituée."
+    "disclaimer": "Les prix affichés incluent les <b>frais de livraison</b> de chaque plateforme, mis à jour en direct. <b>Vert</b> = le moins cher. Les prix du menu sont aussi comparés une fois votre commande constituée."
   },
   "error": {
     "title": "Une erreur est survenue",
@@ -296,7 +296,6 @@
     "feeItems": "Articles",
     "feeDelivery": "Livraison",
     "feeTotal": "Total",
-    "feeServiceNote": "Frais de service non encore affichés — à venir",
     "whyWinner": "Pourquoi {platform} ? Total le moins cher pour votre panier — et le plus rapide.",
     "coverageComplete": "tous les articles correspondants sur chaque plateforme",
     "coveragePartialShort": "{matched} sur {total} correspondants",

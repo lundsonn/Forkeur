@@ -8,7 +8,7 @@
   "hero": {
     "heading_line1": "Stop overpaying for",
     "heading_line2": "the same meal.",
-    "subtitle": "A restaurant can cost <b>20–40% more</b> depending on the app. Forkeur compares Uber Eats, Deliveroo, Takeaway &amp; ordering direct — fees in — so you always pick the cheapest.",
+    "subtitle": "A restaurant can cost <b>20–40% more</b> depending on the app. Forkeur compares Uber Eats, Deliveroo, Takeaway &amp; ordering direct — delivery fees in — so you always pick the cheapest.",
     "live_badge": "Live across Brussels",
     "credibility": "Comparing real prices across UberEats, Deliveroo, Takeaway & direct ordering",
     "rightNow": "Right now near you:",
@@ -148,7 +148,7 @@
     "compare_all": "Compare all {count} platforms",
     "cheapest_badge": "CHEAPEST",
     "min_order": "min. {amount}",
-    "delivery_service_fees": "delivery + service fees",
+    "delivery_service_fees": "delivery fees",
     "direct_fees": "{fee} fees",
     "save": "Save {amount}",
     "pct_cheaper": "{pct}% cheaper",
@@ -167,7 +167,7 @@
   "detail": {
     "platform_fees": "Delivery fees",
     "cheapest_signal": "{platform} is €{amount} cheaper than {other}",
-    "fees_included": "Fees included",
+    "fees_included": "Delivery fees included",
     "fees_info": "Prices checked multiple times daily",
     "price_compare": "Menu price differences",
     "cheaper_on": "{pct}% cheaper on {platform}",
@@ -188,7 +188,7 @@
     "order_from_restaurant": "order from restaurant",
     "menu_prices_eyebrow": "Menu prices",
     "build_order_eyebrow": "Build your exact order",
-    "build_order_sub": "Add what you want — we'll show the cheapest platform for your basket, all fees in.",
+    "build_order_sub": "Add what you want — we'll show the cheapest platform for your basket, delivery fees in.",
     "phone_unverified": "Unverified — we couldn't corroborate this number",
     "order_covered_platform": "This venue only takes orders through the apps compared above.",
     "last_updated": "Updated {ago}"
@@ -254,12 +254,12 @@
     "step1_title": "Search",
     "step1_body": "Any Brussels restaurant",
     "step2_title": "Compare",
-    "step2_body": "Every platform, fees in",
+    "step2_body": "Every platform, delivery fees in",
     "step3_title": "Order",
     "step3_body": "Tap the cheapest"
   },
   "footer": {
-    "disclaimer": "Prices shown are each platform's <b>delivery + service fees</b>, updated live. <b>Green</b> is the cheapest. Menu prices are compared too once you build your order."
+    "disclaimer": "Prices shown include each platform's <b>delivery fees</b>, updated live. <b>Green</b> is the cheapest. Menu prices are compared too once you build your order."
   },
   "error": {
     "title": "Something went wrong",
@@ -296,7 +296,6 @@
     "feeItems": "Items",
     "feeDelivery": "Delivery",
     "feeTotal": "Total",
-    "feeServiceNote": "Service fees not yet shown — coming soon",
     "whyWinner": "Why {platform}? Lowest total for your basket — and fastest right now.",
     "coverageComplete": "all items matched on every platform",
     "coveragePartialShort": "Matched {matched} of {total}",

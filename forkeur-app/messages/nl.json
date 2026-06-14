@@ -8,7 +8,7 @@
   "hero": {
     "heading_line1": "Stop met te veel betalen",
     "heading_line2": "voor hetzelfde gerecht.",
-    "subtitle": "Een restaurant kan <b>20–40% duurder</b> zijn afhankelijk van de app. Forkeur vergelijkt Uber Eats, Deliveroo, Takeaway &amp; rechtstreeks bestellen — kosten inbegrepen — zodat u altijd de goedkoopste kiest.",
+    "subtitle": "Een restaurant kan <b>20–40% duurder</b> zijn afhankelijk van de app. Forkeur vergelijkt Uber Eats, Deliveroo, Takeaway &amp; rechtstreeks bestellen — bezorgkosten inbegrepen — zodat u altijd de goedkoopste kiest.",
     "live_badge": "Live in Brussel",
     "credibility": "Echte prijzen vergelijken op UberEats, Deliveroo, Takeaway & rechtstreeks bestellen",
     "rightNow": "Op dit moment bij jou in de buurt:",
@@ -148,7 +148,7 @@
     "compare_all": "Vergelijk alle {count} platforms",
     "cheapest_badge": "GOEDKOOPST",
     "min_order": "min. {amount}",
-    "delivery_service_fees": "bezorging + servicekosten",
+    "delivery_service_fees": "bezorgkosten",
     "direct_fees": "{fee} kosten",
     "save": "Bespaar {amount}",
     "pct_cheaper": "{pct}% goedkoper",
@@ -167,7 +167,7 @@
   "detail": {
     "platform_fees": "Bezorgkosten",
     "cheapest_signal": "{platform} is €{amount} goedkoper dan {other}",
-    "fees_included": "Kosten inbegrepen",
+    "fees_included": "Bezorgkosten inbegrepen",
     "fees_info": "Prijzen meerdere keren per dag gecontroleerd",
     "price_compare": "Menuprijsverschillen",
     "cheaper_on": "{pct}% goedkoper op {platform}",
@@ -188,7 +188,7 @@
     "order_from_restaurant": "bestel bij het restaurant",
     "menu_prices_eyebrow": "Menuprijzen",
     "build_order_eyebrow": "Stel je bestelling samen",
-    "build_order_sub": "Voeg toe wat je wilt — wij tonen het goedkoopste platform, kosten inbegrepen.",
+    "build_order_sub": "Voeg toe wat je wilt — wij tonen het goedkoopste platform, bezorgkosten inbegrepen.",
     "phone_unverified": "Niet geverifieerd — we konden dit nummer niet bevestigen",
     "order_covered_platform": "Deze zaak neemt alleen bestellingen aan via de apps die hierboven worden vergeleken.",
     "last_updated": "Bijgewerkt {ago}"
@@ -254,12 +254,12 @@
     "step1_title": "Zoeken",
     "step1_body": "Elk Brussels restaurant",
     "step2_title": "Vergelijken",
-    "step2_body": "Elk platform, kosten inbegrepen",
+    "step2_body": "Elk platform, bezorgkosten inbegrepen",
     "step3_title": "Bestellen",
     "step3_body": "Kies de goedkoopste"
   },
   "footer": {
-    "disclaimer": "Getoonde prijzen zijn de <b>bezorg- + servicekosten</b> per platform, live bijgewerkt. <b>Groen</b> is de goedkoopste. Menuprijzen worden ook vergeleken zodra u uw bestelling samenstelt."
+    "disclaimer": "Getoonde prijzen bevatten de <b>bezorgkosten</b> per platform, live bijgewerkt. <b>Groen</b> is de goedkoopste. Menuprijzen worden ook vergeleken zodra u uw bestelling samenstelt."
   },
   "error": {
     "title": "Er ging iets mis",
@@ -296,7 +296,6 @@
     "feeItems": "Artikelen",
     "feeDelivery": "Bezorging",
     "feeTotal": "Totaal",
-    "feeServiceNote": "Servicekosten nog niet weergegeven — binnenkort beschikbaar",
     "whyWinner": "Waarom {platform}? Laagste totaal voor uw mandje — en snelst beschikbaar.",
     "coverageComplete": "alle artikelen gevonden op elk platform",
     "coveragePartialShort": "{matched} van {total} gevonden",

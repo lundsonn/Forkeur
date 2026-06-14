@@ -43,7 +43,7 @@ def _build_insert(table: str, data: dict, on_conflict: str | None = None,
 # Deliberately excludes is_available/discount_label/url/opening_hours/url_type/
 # street_address/postal_code — those must hard-update on every upsert.
 _PRESERVE_ON_NULL = {
-    "delivery_fee", "eta_min", "eta_max", "service_fee",
+    "delivery_fee", "eta_min", "eta_max",
     "min_order", "rating", "review_count",
 }
 
