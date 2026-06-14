@@ -406,10 +406,10 @@ def run_exists(run_id: str) -> bool:
     return row is not None
 
 
-def create_run(platform: str) -> str:
+def create_run(platform: str, triggered_by: str = "manual") -> str:
     row = pgpool.fetchone(
-        "INSERT INTO scraper_runs (platform, status) VALUES (%s, 'running') RETURNING id",
-        [platform],
+        "INSERT INTO scraper_runs (platform, status, triggered_by) VALUES (%s, 'running', %s) RETURNING id",
+        [platform, triggered_by],
     )
     return str(row["id"])
 
@@ -598,6 +598,14 @@ def patch_restaurant_phone(restaurant_id: str, phone: str) -> None:
         )
 
 
+def patch_restaurant_exclude_reason(restaurant_id: str, reason: str) -> None:
+    """Set exclude_reason only if not already set (first classification wins)."""
+    pgpool.execute(
+        "UPDATE restaurants SET exclude_reason = %s WHERE id = %s AND exclude_reason IS NULL",
+        [reason, restaurant_id],
+    )
+
+
 def mark_restaurant_searched(restaurant_id: str) -> None:
     pgpool.execute(
         "UPDATE restaurants SET website_searched_at = now() WHERE id = %s",
@@ -632,10 +640,18 @@ def get_claims(verified: bool | None = None) -> list[dict]:
     return pgpool.fetchall(base + " ORDER BY c.claimed_at DESC")
 
 
+_PLATFORM_URL_RE = re.compile(
+    r'ubereats\.com|deliveroo\.|takeaway\.com|just-eat\.|thuisbezorgd\.',
+    re.IGNORECASE,
+)
+
+
 def _validate_order_url(url: str) -> None:
-    """Raise ValueError if the URL looks unsafe to publish (delegated to ssrf module)."""
+    """Raise ValueError if the URL looks unsafe or is a delivery platform."""
     from ssrf_guard import validate_public_url
     validate_public_url(url)
+    if _PLATFORM_URL_RE.search(url):
+        raise ValueError(f"Rejected platform aggregator URL: {url[:80]}")
 
 
 def approve_claim(claim_id: str) -> None:
@@ -872,6 +888,7 @@ def get_public_restaurants() -> list[dict]:
         LEFT JOIN platform_listings pl ON pl.restaurant_id = r.id
           AND pl.last_scraped_at > now() - interval '72 hours'
         WHERE r.merged_into IS NULL
+          AND r.exclude_reason IS NULL
         GROUP BY r.id
         """
     )
@@ -933,6 +950,7 @@ def get_public_deals() -> list[dict]:
         JOIN restaurants r ON r.id = pl.restaurant_id
         WHERE p.promo_type NOT IN ('other', 'spend_save')
           AND pl.last_scraped_at > now() - interval '72 hours'
+          AND r.exclude_reason IS NULL
         """
     )
 

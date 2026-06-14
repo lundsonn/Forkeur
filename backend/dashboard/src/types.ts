@@ -10,6 +10,15 @@ export interface ScraperRun {
   finished_at: string | null
   records_saved: number
   error_msg: string | null
+  triggered_by: 'manual' | 'cron' | null
+  peak_ram_mb: number | null
+  avg_ram_mb: number | null
+  phase_durations: Record<string, number> | null
+  cooldown_hits: number
+  items_attempted: number
+  items_skipped: number
+  items_failed: number
+  concurrent_with: string[]
 }
 
 export interface ScraperStatus {

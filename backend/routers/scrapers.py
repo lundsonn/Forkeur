@@ -97,7 +97,7 @@ async def trigger_run(platform: str, body: RunTriggerIn | None = None):
         _running.add(platform)
         concurrent_with = sorted(_running - {platform})
     try:
-        run_id = db.create_run(platform)
+        run_id = db.create_run(platform, triggered_by="manual")
     except Exception:
         async with _state_lock:
             _running.discard(platform)

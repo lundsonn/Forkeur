@@ -56,6 +56,7 @@ class ScraperRunOut(BaseModel):
     items_skipped: int = 0
     items_failed: int = 0
     concurrent_with: list[str] = []
+    triggered_by: str | None = None
 
 
 class ScraperStatusOut(BaseModel):

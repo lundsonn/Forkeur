@@ -61,7 +61,7 @@ async def _run_scraper(platform: str) -> None:
             return
 
         if platform == "direct_menu":
-            run_id = db.create_run(platform)
+            run_id = db.create_run(platform, triggered_by="cron")
             sampler = RamSampler()
             try:
                 result = await direct_menu.run()
@@ -96,7 +96,7 @@ async def _run_scraper(platform: str) -> None:
 
         # No semaphore — all scrapers share one Chromium via base.browser_session();
         # their asyncio waits interleave so concurrent runs are safe.
-        run_id = db.create_run(platform)
+        run_id = db.create_run(platform, triggered_by="cron")
         scraper_fn = SCRAPERS[platform]
         metrics = RunMetrics()
         sampler = RamSampler()
@@ -269,7 +269,7 @@ async def _run_batch_all() -> None:
 
 async def _run_match() -> None:
     from scrapers import match as _match
-    run_id = db.create_run("match")
+    run_id = db.create_run("match", triggered_by="cron")
     sampler = RamSampler()
     try:
         result = await asyncio.to_thread(_match.run_sync, dry_run=False, log_fn=_noop)
@@ -284,7 +284,7 @@ async def _run_match() -> None:
 
 
 async def _run_daily_cleanup() -> None:
-    run_id = db.create_run("cleanup")
+    run_id = db.create_run("cleanup", triggered_by="cron")
     sampler = RamSampler()
     try:
         deleted = await asyncio.to_thread(db.delete_stale_listings, days=30)
