@@ -35,9 +35,10 @@ function promoBadgeText(tBadge: any, promo: PromoItem): string {
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ slug: string }>
+  params: Promise<{ slug: string[] }>
 }): Promise<Metadata> {
-  const { slug } = await params
+  const { slug: slugParts } = await params
+  const slug = slugParts.join('/')
   const data = await getRestaurantWithListings(slug)
   if (!data) return { title: 'Restaurant — Forkeur' }
 
@@ -76,9 +77,10 @@ export async function generateMetadata({
 export default async function Page({
   params,
 }: {
-  params: Promise<{ slug: string }>
+  params: Promise<{ slug: string[] }>
 }) {
-  const { slug } = await params
+  const { slug: slugParts } = await params
+  const slug = slugParts.join('/')
   const [data, tDirect, tCard, tDetail, tBadge, tOwners, tCompare, tDeals] = await Promise.all([
     getRestaurantWithListings(slug),
     getTranslations('direct'),
