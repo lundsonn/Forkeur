@@ -1,29 +1,29 @@
 import { describe, it, expect } from 'vitest'
-import { effectiveTotal, savingsVsNext, findBestSavingExample } from '@/lib/savings'
+import { effectiveTotal, platformSavingsSelector, findBestSavingExample } from '@/lib/savings'
 import type { RestaurantSummary } from '@/lib/queries'
 import type { Platform } from '@/lib/basket'
 
 // --- effectiveTotal ---
 
 describe('effectiveTotal', () => {
-  it('returns null when delivery_fee_cents is null', () => {
-    expect(effectiveTotal({ delivery_fee_cents: null, min_order_cents: null })).toBeNull()
+  it('returns fee alone when no min_order and null subtotal', () => {
+    expect(effectiveTotal(null, 0, 199)).toBe(199)
   })
 
-  it('returns fee alone when min_order is null', () => {
-    expect(effectiveTotal({ delivery_fee_cents: 199, min_order_cents: null })).toBe(199)
+  it('adds min_order when it exceeds subtotal', () => {
+    expect(effectiveTotal(null, 1000, 199)).toBe(1199)
   })
 
-  it('returns fee + min_order when both present', () => {
-    expect(effectiveTotal({ delivery_fee_cents: 199, min_order_cents: 1000 })).toBe(1199)
+  it('uses real subtotal when it exceeds min_order', () => {
+    expect(effectiveTotal(1500, 1000, 199)).toBe(1699)
   })
 
   it('returns fee alone when min_order is 0', () => {
-    expect(effectiveTotal({ delivery_fee_cents: 0, min_order_cents: 0 })).toBe(0)
+    expect(effectiveTotal(null, 0, 0)).toBe(0)
   })
 })
 
-// --- savingsVsNext ---
+// --- platformSavingsSelector ---
 
 type ListingStub = { platform: Platform; delivery_fee_cents: number | null; min_order_cents: number | null }
 
@@ -31,25 +31,40 @@ const ue: ListingStub = { platform: 'uber_eats', delivery_fee_cents: 199, min_or
 const dl: ListingStub = { platform: 'deliveroo', delivery_fee_cents: 299, min_order_cents: 0 }
 const tw: ListingStub = { platform: 'takeaway', delivery_fee_cents: null, min_order_cents: null }
 
-describe('savingsVsNext', () => {
-  it('returns null when fewer than 2 non-null listings', () => {
-    expect(savingsVsNext([ue, tw])).toBeNull()
+describe('platformSavingsSelector', () => {
+  it('returns null when no listings have fee data', () => {
+    expect(platformSavingsSelector([tw])).toBeNull()
   })
 
-  it('returns delta and vs-platform when 2 non-null listings', () => {
-    const result = savingsVsNext([ue, dl])
-    expect(result).toEqual({ cents: 100, vs: 'deliveroo' })
+  it('returns canShowSavings=false when only one non-null listing', () => {
+    const result = platformSavingsSelector([ue, tw])
+    expect(result?.canShowSavings).toBe(false)
+    expect(result?.savingCents).toBe(0)
   })
 
-  it('returns null when effectiveTotals are equal', () => {
-    const same = { platform: 'deliveroo' as Platform, delivery_fee_cents: 199, min_order_cents: 0 }
-    expect(savingsVsNext([ue, same])).toBeNull()
+  it('returns correct winner and savingCents for two listings', () => {
+    const result = platformSavingsSelector([ue, dl])
+    expect(result?.winner).toBe('uber_eats')
+    expect(result?.savingCents).toBe(100)
+    expect(result?.canShowSavings).toBe(true)
+  })
+
+  it('returns canShowSavings=false when effective totals are equal', () => {
+    const same: ListingStub = { platform: 'deliveroo', delivery_fee_cents: 199, min_order_cents: 0 }
+    const result = platformSavingsSelector([ue, same])
+    expect(result?.canShowSavings).toBe(false)
   })
 
   it('picks cheapest as winner regardless of input order', () => {
-    // dl is more expensive; ue should be the cheapest regardless of order
-    const result = savingsVsNext([dl, ue])
-    expect(result).toEqual({ cents: 100, vs: 'deliveroo' })
+    const result = platformSavingsSelector([dl, ue])
+    expect(result?.winner).toBe('uber_eats')
+    expect(result?.savingCents).toBe(100)
+  })
+
+  it('populates overpayDeltas for losers', () => {
+    const result = platformSavingsSelector([ue, dl])
+    expect(result?.overpayDeltas.get('deliveroo')).toBe(100)
+    expect(result?.overpayDeltas.has('uber_eats')).toBe(false)
   })
 })
 
@@ -57,8 +72,9 @@ describe('savingsVsNext', () => {
 
 function makeRestaurant(overrides: Partial<RestaurantSummary> = {}): RestaurantSummary {
   return {
-    id: '1', name: 'Test', neighborhood: 'Ixelles', cuisine: [], lat: null, lng: null,
+    id: '1', name: 'Test', slug: null, neighborhood: 'Ixelles', cuisine: [], lat: null, lng: null,
     order_url: null, image_url: null, rating: null, direct_url_type: null, is_chain: false,
+    platform_count: 2, has_comparison: true,
     listings: [
       { platform: 'uber_eats', delivery_fee_cents: 199, min_order_cents: 0, eta_min: 30, is_available: true, opening_hours: null },
       { platform: 'deliveroo', delivery_fee_cents: 299, min_order_cents: 0, eta_min: 35, is_available: true, opening_hours: null },

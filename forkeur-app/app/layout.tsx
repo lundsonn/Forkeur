@@ -18,6 +18,7 @@ export async function generateMetadata(): Promise<Metadata> {
       template: '%s | Forkeur',
     },
     description,
+    alternates: { canonical: 'https://forkeur.be' },
     openGraph: {
       siteName: 'Forkeur',
       title,

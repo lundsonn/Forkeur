@@ -99,16 +99,11 @@ export default function HomepageClient({
       .map(([name, count]) => ({ name, count }))
   }, [restaurants])
 
-  const metrics = useMemo(() => {
-    const map = new Map<string, { minFee: number | null; minEta: number | null; platformCount: number; maxFee: number | null }>()
+  const etaMap = useMemo(() => {
+    const map = new Map<string, number | null>()
     for (const r of restaurants) {
-      const available = r.listings.filter((l) => l.delivery_fee_cents !== null)
-      const fees = available.map((l) => l.delivery_fee_cents!)
       const etas = r.listings.map((l) => l.eta_min).filter((e): e is number => e !== null)
-      const minFee = fees.length > 0 ? Math.min(...fees) : null
-      const maxFee = fees.length > 1 ? Math.max(...fees) : null
-      const minEta = etas.length > 0 ? Math.min(...etas) : null
-      map.set(r.id, { minFee, minEta, platformCount: available.length, maxFee })
+      map.set(r.id, etas.length > 0 ? Math.min(...etas) : null)
     }
     return map
   }, [restaurants])
@@ -126,12 +121,12 @@ export default function HomepageClient({
         return (b.cheapest?.savings_cents ?? 0) - (a.cheapest?.savings_cents ?? 0)
       }
       // fastest
-      const ma = metrics.get(a.id)!
-      const mb = metrics.get(b.id)!
-      if (ma.minEta === null && mb.minEta === null) return 0
-      if (ma.minEta === null) return 1
-      if (mb.minEta === null) return -1
-      return ma.minEta - mb.minEta
+      const ma = etaMap.get(a.id) ?? null
+      const mb = etaMap.get(b.id) ?? null
+      if (ma === null && mb === null) return 0
+      if (ma === null) return 1
+      if (mb === null) return -1
+      return ma - mb
     })
 
     // Open first; within closed group sort by next opening time soonest first
@@ -143,7 +138,7 @@ export default function HomepageClient({
       if (ca.isClosed && cb.isClosed) return ca.opensAtKey - cb.opensAtKey
       return 0
     })
-  }, [restaurants, search, selectedNeighborhood, selectedCuisine, sortBy, metrics])
+  }, [restaurants, search, selectedNeighborhood, selectedCuisine, sortBy, etaMap])
 
   const hasFilter = !!(search || selectedNeighborhood)
 
@@ -276,14 +271,12 @@ export default function HomepageClient({
               </p>
               <div className="mb-6">
                 {nearYou.map((r, i) => {
-                  const m = metrics.get(r.id)
                   return (
                     <RestaurantCard
                       key={r.id}
                       restaurant={r}
                       href={`/restaurant/${r.id}`}
                       isLast={i === nearYou.length - 1}
-                      maxFee={m?.maxFee}
                       priority={false}
                       directBadge={
                         r.direct_url_type === 'ordering'
@@ -311,14 +304,12 @@ export default function HomepageClient({
           {/* Restaurant list */}
           <div>
             {filtered.slice(0, visibleCount).map((r, i) => {
-              const m = metrics.get(r.id)
               return (
                 <RestaurantCard
                   key={r.id}
                   restaurant={r}
                   href={`/restaurant/${r.id}`}
                   isLast={i === Math.min(visibleCount, filtered.length) - 1}
-                  maxFee={m?.maxFee}
                   priority={i < 3}
                   directBadge={
                     r.direct_url_type === 'ordering'

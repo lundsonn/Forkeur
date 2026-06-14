@@ -1,21 +1,24 @@
 import type { MetadataRoute } from 'next'
 import { backendFetch } from '@/lib/backend'
+import { restaurantCanonical, pageCanonical } from '@/lib/canonical'
 
-const BASE_URL = 'https://forkeur.be'
+type RestaurantSitemapRow = { id: string; has_comparison: boolean; platform_count: number }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const restaurants = await backendFetch<{ id: string }[]>('/api/public/restaurants', { revalidate: 3600 }).catch(() => [] as { id: string }[])
+  const restaurants = await backendFetch<RestaurantSitemapRow[]>('/api/public/restaurants', { revalidate: 3600 }).catch(() => [] as RestaurantSitemapRow[])
 
-  const restaurantUrls: MetadataRoute.Sitemap = restaurants.map((r) => ({
-    url: `${BASE_URL}/restaurant/${r.id}`,
-    changeFrequency: 'daily',
-    priority: 0.7,
-  }))
+  const restaurantUrls: MetadataRoute.Sitemap = restaurants
+    .filter((r) => r.has_comparison)
+    .map((r) => ({
+      url: restaurantCanonical(r.id),
+      changeFrequency: 'daily' as const,
+      priority: r.platform_count >= 3 ? 0.9 : 0.8,
+    }))
 
   return [
-    { url: BASE_URL, changeFrequency: 'daily', priority: 1.0 },
-    { url: `${BASE_URL}/deals`, changeFrequency: 'daily', priority: 0.8 },
-    { url: `${BASE_URL}/owners`, changeFrequency: 'monthly', priority: 0.4 },
+    { url: pageCanonical(''), changeFrequency: 'daily', priority: 1.0 },
+    { url: pageCanonical('/deals'), changeFrequency: 'daily', priority: 0.8 },
+    { url: pageCanonical('/owners'), changeFrequency: 'monthly', priority: 0.4 },
     ...restaurantUrls,
   ]
 }

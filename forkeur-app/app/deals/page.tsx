@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { getTranslations } from 'next-intl/server'
 import { getDeals } from '@/lib/queries'
 import DealsClient from '@/components/DealsClient'
+import { pageCanonical } from '@/lib/canonical'
 
 export const revalidate = 3600
 
@@ -12,6 +13,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title,
     description,
+    alternates: { canonical: pageCanonical('/deals') },
     openGraph: { title, description },
     twitter: { card: 'summary', title, description },
   }

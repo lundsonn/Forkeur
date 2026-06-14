@@ -4,6 +4,7 @@ import type { DealItem, DealType } from '@/lib/deals'
 import { normalizeTitle, normalizeForFuzzy } from '@/lib/normalize-title'
 import { jaroWinkler } from '@/lib/fuzzy-title'
 import { backendFetch } from '@/lib/backend'
+import { effectiveTotal } from '@/lib/savings'
 export { normalizeTitle }
 
 const EMOJI_RE = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu
@@ -11,6 +12,7 @@ const EMOJI_RE = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu
 export type RestaurantSummary = {
   id: string
   name: string
+  slug: string | null
   neighborhood: string | null
   cuisine: string[]
   lat: number | null
@@ -20,6 +22,8 @@ export type RestaurantSummary = {
   rating: number | null
   direct_url_type: string | null
   is_chain: boolean
+  platform_count: number
+  has_comparison: boolean
   listings: { platform: Platform; delivery_fee_cents: number | null; min_order_cents: number | null; eta_min: number | null; is_available: boolean; opening_hours: OpeningHours | null }[]
   cheapest: {
     platform: Platform
@@ -99,6 +103,7 @@ type RawListingShort = {
 type RawRestaurantRow = {
   id: string
   name: string
+  slug: string | null
   cuisine: string | null
   neighborhood: string | null
   lat: number | null
@@ -106,6 +111,8 @@ type RawRestaurantRow = {
   order_url: string | null
   image_url: string | null
   is_chain: boolean
+  platform_count: number
+  has_comparison: boolean
   platform_listings: RawListingShort[]
 }
 
@@ -217,6 +224,7 @@ export async function getRestaurants(): Promise<{
         return {
           id: r.id,
           name: r.name,
+          slug: r.slug ?? null,
           neighborhood,
           cuisine: r.cuisine ? [r.cuisine] : [],
           lat,
@@ -226,22 +234,24 @@ export async function getRestaurants(): Promise<{
           rating: null,
           direct_url_type,
           is_chain: r.is_chain ?? false,
+          platform_count: r.platform_count ?? 0,
+          has_comparison: r.has_comparison ?? false,
           listings,
           cheapest: null,
         }
       }
 
-      const sorted = [...available].sort(
-        (a, b) =>
-          (a.delivery_fee_cents ?? 0) -
-          (b.delivery_fee_cents ?? 0)
-      )
-      const cheapest = sorted[0]
-      const mostExpensive = sorted[sorted.length - 1]
+      const withEff = available.map((l) => ({
+        ...l,
+        eff: effectiveTotal(null, l.min_order_cents ?? 0, l.delivery_fee_cents ?? 0),
+      })).sort((a, b) => a.eff - b.eff)
+      const cheapest = withEff[0]
+      const nextCheapest = withEff[1] ?? null
 
       return {
         id: r.id,
         name: r.name,
+        slug: r.slug ?? null,
         neighborhood,
         cuisine: r.cuisine ? [r.cuisine] : [],
         lat,
@@ -251,13 +261,13 @@ export async function getRestaurants(): Promise<{
         rating: null,
         direct_url_type,
         is_chain: r.is_chain ?? false,
+        platform_count: r.platform_count ?? 0,
+        has_comparison: r.has_comparison ?? false,
         listings,
         cheapest: {
           platform: cheapest.platform,
           fee_label: feeLabel(cheapest.delivery_fee_cents !== null ? cheapest.delivery_fee_cents / 100 : null) ?? '?',
-          savings_cents:
-            (mostExpensive.delivery_fee_cents ?? 0) -
-            (cheapest.delivery_fee_cents ?? 0),
+          savings_cents: nextCheapest !== null ? nextCheapest.eff - cheapest.eff : 0,
           delivery_fee_cents: cheapest.delivery_fee_cents,
           min_order_cents: cheapest.min_order_cents,
         },

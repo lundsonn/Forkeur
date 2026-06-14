@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { getTranslations } from 'next-intl/server'
 import { ExternalLink, List, Globe, Phone, Utensils, ArrowRight } from 'lucide-react'
 import { getRestaurantWithListings, type PromoItem } from '@/lib/queries'
+import { restaurantCanonical } from '@/lib/canonical'
 import { PLATFORM_LABELS, centsToEuro } from '@/lib/basket'
 import { computeFeeRows, computeDirectSavingsCents } from '@/lib/where-to-order'
 import BasketSimulator from '@/components/BasketSimulator'
@@ -43,9 +44,19 @@ export async function generateMetadata({
   const description = t('meta_description', { name: data.name, cuisine: cuisine || 'Brussels' })
   const title = `${data.name} — Forkeur`
 
+  const recentCutoff = Date.now() - 72 * 60 * 60 * 1000
+  const recentDeliveryListings = data.listings.filter(
+    (l) => l.platform !== 'direct' && l.last_scraped_at && new Date(l.last_scraped_at).getTime() > recentCutoff
+  )
+  const hasComparison = recentDeliveryListings.length >= 2 && data.menuItems.length > 0
+
+  const canonical = restaurantCanonical(id)
+
   return {
     title,
     description,
+    alternates: { canonical },
+    robots: { index: hasComparison, follow: true },
     openGraph: {
       title,
       description,
@@ -111,8 +122,30 @@ export default async function Page({
 
   const allStale = data.listings.length === 0
 
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Restaurant',
+    '@id': restaurantCanonical(id),
+    name: data.name,
+    url: restaurantCanonical(id),
+    ...(data.image_url ? { image: data.image_url } : {}),
+    ...((data.cuisine ?? []).length > 0 ? { servesCuisine: data.cuisine } : {}),
+    address: {
+      '@type': 'PostalAddress',
+      addressLocality: 'Brussels',
+      addressCountry: 'BE',
+    },
+    ...(data.phone && (data.phone_confidence === 'high' || data.phone_confidence === 'medium')
+      ? { telephone: data.phone }
+      : {}),
+  }
+
   return (
     <div className="w-full max-w-md mx-auto">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* Nav */}
       <div className="flex items-center px-5 pt-5 pb-3">
         <Link href="/" className="text-stone-500 hover:text-stone-800 text-lg mr-auto min-w-[44px] min-h-[44px] flex items-center">‹</Link>

@@ -5,7 +5,7 @@ import { ChevronUp, ChevronDown } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import type { RestaurantSummary } from '@/lib/queries'
 import { centsToEuro, PLATFORM_LABELS, type Platform } from '@/lib/basket'
-import { savingsVsNext, effectiveTotal } from '@/lib/savings'
+import { platformSavingsSelector } from '@/lib/savings'
 import PlatformLogo from './ui/PlatformLogo'
 import OpenStatusBadge from './OpenStatusBadge'
 import { getOpenStatus } from '@/lib/hours'
@@ -15,7 +15,6 @@ type Props = {
   href: string
   isLast?: boolean
   directBadge: string
-  maxFee?: number | null
   priority?: boolean
 }
 
@@ -38,6 +37,7 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge, 
     const fb = b.delivery_fee_cents ?? 0
     return fa - fb
   })
+  const sel = platformSavingsSelector(tiles)
 
   const cheapestFeeCents = cheapest?.delivery_fee_cents ?? null
 
@@ -91,25 +91,8 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge, 
         <div className="relative z-10 pointer-events-none space-y-1.5 mb-3">
           {sortedTiles.map((l) => {
             const isCheapest = l.platform === cheapest?.platform
-
-            // Winner savings label
-            const winnerSavings = isCheapest && cheapest
-              ? savingsVsNext(listings as Parameters<typeof savingsVsNext>[0])
-              : null
-
-            // Loser overpay amount
-            const winnerListing = cheapest
-              ? listings.find(x => x.platform === cheapest.platform) ?? null
-              : null
-            const loserDelta = !isCheapest && winnerListing !== null
-              ? (() => {
-                  const tileEff = effectiveTotal(l as Parameters<typeof effectiveTotal>[0])
-                  const winnerEff = effectiveTotal(winnerListing as Parameters<typeof effectiveTotal>[0])
-                  if (tileEff === null || winnerEff === null) return null
-                  const diff = tileEff - winnerEff
-                  return diff > 0 ? diff : null
-                })()
-              : null
+            const winnerSavings = isCheapest && sel?.canShowSavings ? sel.savingCents : null
+            const loserDelta = !isCheapest ? (sel?.overpayDeltas.get(l.platform) ?? null) : null
 
             return (
               <div
@@ -139,7 +122,7 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge, 
                     </span>
                     {winnerSavings !== null && (
                       <span className="text-[10px] text-green-600 tabular-nums font-medium">
-                        {`+€${(winnerSavings.cents / 100).toFixed(2)} cheaper`}
+                        {`+€${(winnerSavings / 100).toFixed(2)} cheaper`}
                       </span>
                     )}
                   </div>

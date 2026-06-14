@@ -16,6 +16,7 @@ function renderCard(props: Omit<React.ComponentProps<typeof RestaurantCard>, 'hr
 const threeListings: RestaurantSummary = {
   id: '1',
   name: "McDonald's",
+  slug: null,
   neighborhood: null,
   cuisine: ['Burgers'],
   lat: null,
@@ -25,6 +26,8 @@ const threeListings: RestaurantSummary = {
   rating: null,
   direct_url_type: null,
   is_chain: false,
+  platform_count: 3,
+  has_comparison: true,
   listings: [
     { platform: 'uber_eats', delivery_fee_cents: 49, min_order_cents: null, eta_min: null, is_available: true, opening_hours: null },
     { platform: 'deliveroo', delivery_fee_cents: 149, min_order_cents: null, eta_min: null, is_available: true, opening_hours: null },
@@ -36,6 +39,7 @@ const threeListings: RestaurantSummary = {
 const nullFees: RestaurantSummary = {
   id: '3',
   name: 'Sushi Place',
+  slug: null,
   neighborhood: null,
   cuisine: ['Asian'],
   lat: null,
@@ -45,6 +49,8 @@ const nullFees: RestaurantSummary = {
   rating: null,
   direct_url_type: null,
   is_chain: false,
+  platform_count: 1,
+  has_comparison: false,
   listings: [
     { platform: 'uber_eats', delivery_fee_cents: null, min_order_cents: null, eta_min: null, is_available: true, opening_hours: null },
     { platform: 'deliveroo', delivery_fee_cents: 299, min_order_cents: null, eta_min: null, is_available: true, opening_hours: null },
@@ -55,6 +61,7 @@ const nullFees: RestaurantSummary = {
 const freeListing: RestaurantSummary = {
   id: '4',
   name: 'Burger King',
+  slug: null,
   neighborhood: null,
   cuisine: ['Fast food'],
   lat: null,
@@ -64,6 +71,8 @@ const freeListing: RestaurantSummary = {
   rating: null,
   direct_url_type: null,
   is_chain: false,
+  platform_count: 3,
+  has_comparison: true,
   listings: [
     { platform: 'uber_eats', delivery_fee_cents: 0, min_order_cents: null, eta_min: null, is_available: true, opening_hours: null },
     { platform: 'deliveroo', delivery_fee_cents: 99, min_order_cents: null, eta_min: null, is_available: true, opening_hours: null },
@@ -75,6 +84,7 @@ const freeListing: RestaurantSummary = {
 const withDirectOrdering: RestaurantSummary = {
   id: '5',
   name: 'Burger Direct',
+  slug: null,
   cuisine: ['Burgers'],
   neighborhood: null,
   lat: null,
@@ -84,6 +94,8 @@ const withDirectOrdering: RestaurantSummary = {
   rating: null,
   direct_url_type: 'ordering',
   is_chain: false,
+  platform_count: 2,
+  has_comparison: true,
   listings: [
     { platform: 'uber_eats', delivery_fee_cents: 299, min_order_cents: null, eta_min: null, is_available: true, opening_hours: null },
     { platform: 'deliveroo', delivery_fee_cents: 199, min_order_cents: null, eta_min: null, is_available: true, opening_hours: null },
@@ -94,6 +106,7 @@ const withDirectOrdering: RestaurantSummary = {
 const withDirectMenu: RestaurantSummary = {
   id: '6',
   name: 'Pizza Direct',
+  slug: null,
   cuisine: ['Pizza'],
   neighborhood: null,
   lat: null,
@@ -103,6 +116,8 @@ const withDirectMenu: RestaurantSummary = {
   rating: null,
   direct_url_type: 'menu',
   is_chain: false,
+  platform_count: 1,
+  has_comparison: false,
   listings: [
     { platform: 'uber_eats', delivery_fee_cents: 299, min_order_cents: null, eta_min: null, is_available: true, opening_hours: null },
   ],
@@ -112,6 +127,7 @@ const withDirectMenu: RestaurantSummary = {
 const withNullUrlType: RestaurantSummary = {
   id: '8',
   name: 'Mystery Direct',
+  slug: null,
   cuisine: ['Other'],
   neighborhood: null,
   lat: null,
@@ -121,6 +137,8 @@ const withNullUrlType: RestaurantSummary = {
   rating: null,
   direct_url_type: null,
   is_chain: false,
+  platform_count: 1,
+  has_comparison: false,
   listings: [
     { platform: 'uber_eats', delivery_fee_cents: 199, min_order_cents: null, eta_min: null, is_available: true, opening_hours: null },
   ],

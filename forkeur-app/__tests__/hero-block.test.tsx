@@ -12,6 +12,7 @@ const emptyRestaurants: RestaurantSummary[] = []
 const noSavingsRestaurant: RestaurantSummary = {
   id: '1',
   name: 'Pizza Place',
+  slug: null,
   neighborhood: null,
   cuisine: ['Italian'],
   lat: null,
@@ -21,6 +22,8 @@ const noSavingsRestaurant: RestaurantSummary = {
   rating: null,
   direct_url_type: null,
   is_chain: false,
+  platform_count: 1,
+  has_comparison: false,
   listings: [
     { platform: 'uber_eats', delivery_fee_cents: 149, min_order_cents: null, eta_min: null, is_available: true, opening_hours: null },
   ],
@@ -31,6 +34,7 @@ const noSavingsRestaurant: RestaurantSummary = {
 const withSavingsRestaurant: RestaurantSummary = {
   id: '2',
   name: 'Burger Joint',
+  slug: null,
   neighborhood: null,
   cuisine: ['Burgers'],
   lat: null,
@@ -40,6 +44,8 @@ const withSavingsRestaurant: RestaurantSummary = {
   rating: null,
   direct_url_type: null,
   is_chain: false,
+  platform_count: 2,
+  has_comparison: true,
   listings: [
     { platform: 'uber_eats', delivery_fee_cents: 49, min_order_cents: null, eta_min: null, is_available: true, opening_hours: null },
     { platform: 'deliveroo', delivery_fee_cents: 249, min_order_cents: null, eta_min: null, is_available: true, opening_hours: null },

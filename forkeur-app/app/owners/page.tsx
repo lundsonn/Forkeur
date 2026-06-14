@@ -3,10 +3,15 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import { getTranslations } from 'next-intl/server'
 import OwnerContactForm from '@/components/OwnerContactForm'
+import { pageCanonical } from '@/lib/canonical'
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('meta')
-  return { title: t('owners_title'), description: t('owners_description') }
+  return {
+    title: t('owners_title'),
+    description: t('owners_description'),
+    alternates: { canonical: pageCanonical('/owners') },
+  }
 }
 
 export default async function OwnersPage() {

@@ -3,23 +3,51 @@ import type { Platform } from '@/lib/basket'
 
 type ListingLike = { platform: Platform; delivery_fee_cents: number | null; min_order_cents: number | null }
 
-export function effectiveTotal(listing: Pick<ListingLike, 'delivery_fee_cents' | 'min_order_cents'>): number | null {
-  if (listing.delivery_fee_cents === null) return null
-  return listing.delivery_fee_cents
+/** max(subtotal ?? 0, minOrder) + deliveryFee */
+export function effectiveTotal(
+  subtotal: number | null,
+  minOrderCents: number,
+  deliveryFeeCents: number,
+): number {
+  return Math.max(subtotal ?? 0, minOrderCents) + deliveryFeeCents
 }
 
-export function savingsVsNext(
-  listings: ListingLike[],
-): { cents: number; vs: Platform } | null {
+export type SavingsSelection = {
+  winner: Platform
+  winnerTotal: number
+  savingCents: number
+  canShowSavings: boolean
+  overpayDeltas: Map<Platform, number>
+}
+
+/** Null-subtotal selector for cards/homepage. Returns null when no listings have fee data. */
+export function platformSavingsSelector(listings: ListingLike[]): SavingsSelection | null {
   const withTotal = listings
-    .map(l => ({ ...l, total: effectiveTotal(l) }))
-    .filter((l): l is typeof l & { total: number } => l.total !== null)
+    .filter((l): l is ListingLike & { delivery_fee_cents: number } => l.delivery_fee_cents !== null)
+    .map((l) => ({
+      ...l,
+      total: effectiveTotal(null, l.min_order_cents ?? 0, l.delivery_fee_cents),
+    }))
     .sort((a, b) => a.total - b.total)
 
-  if (withTotal.length < 2) return null
-  const delta = withTotal[1].total - withTotal[0].total
-  if (delta <= 0) return null
-  return { cents: delta, vs: withTotal[1].platform }
+  if (withTotal.length === 0) return null
+
+  const [winner, ...rest] = withTotal
+  const savingCents = rest.length > 0 ? rest[0].total - winner.total : 0
+
+  const overpayDeltas = new Map<Platform, number>()
+  for (const l of rest) {
+    const delta = l.total - winner.total
+    if (delta > 0) overpayDeltas.set(l.platform, delta)
+  }
+
+  return {
+    winner: winner.platform,
+    winnerTotal: winner.total,
+    savingCents,
+    canShowSavings: savingCents > 0,
+    overpayDeltas,
+  }
 }
 
 export type BestSavingExample = {
@@ -37,23 +65,28 @@ export function findBestSavingExample(restaurants: RestaurantSummary[]): BestSav
   for (const r of restaurants) {
     if (!r.cheapest || r.cheapest.savings_cents <= 0 || r.listings.length < 2) continue
 
-    const withTotal = r.listings
-      .map(l => ({ ...l, total: effectiveTotal(l) }))
-      .filter((l): l is typeof l & { total: number } => l.total !== null)
-      .sort((a, b) => a.total - b.total)
+    const sel = platformSavingsSelector(r.listings)
+    if (!sel || !sel.canShowSavings) continue
 
-    if (withTotal.length < 2) continue
+    if (!best || sel.savingCents > best.savingsCents) {
+      const winnerListing = r.listings.find((l) => l.platform === sel.winner)
+      if (!winnerListing) continue
+      const loserEntry = r.listings
+        .filter((l) => l.platform !== sel.winner && l.delivery_fee_cents !== null)
+        .map((l) => ({
+          ...l,
+          total: effectiveTotal(null, l.min_order_cents ?? 0, l.delivery_fee_cents!),
+        }))
+        .sort((a, b) => a.total - b.total)[0]
+      if (!loserEntry) continue
 
-    const savingsCents = withTotal[1].total - withTotal[0].total
-    if (savingsCents <= 0) continue
-    if (!best || savingsCents > best.savingsCents) {
       best = {
         restaurant: r,
-        winner: withTotal[0],
-        loser: withTotal[1],
-        winnerTotal: withTotal[0].total,
-        loserTotal: withTotal[1].total,
-        savingsCents,
+        winner: winnerListing,
+        loser: loserEntry,
+        winnerTotal: sel.winnerTotal,
+        loserTotal: loserEntry.total,
+        savingsCents: sel.savingCents,
       }
     }
   }
