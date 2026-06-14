@@ -34,8 +34,8 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge, 
   const sortedTiles = [...tiles].sort((a, b) => {
     if (a.platform === 'direct') return -1
     if (b.platform === 'direct') return 1
-    const fa = (a.delivery_fee_cents ?? 0) + (a.min_order_cents ?? 0)
-    const fb = (b.delivery_fee_cents ?? 0) + (b.min_order_cents ?? 0)
+    const fa = a.delivery_fee_cents ?? 0
+    const fb = b.delivery_fee_cents ?? 0
     return fa - fb
   })
 

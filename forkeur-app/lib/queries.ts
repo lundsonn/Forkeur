@@ -233,8 +233,8 @@ export async function getRestaurants(): Promise<{
 
       const sorted = [...available].sort(
         (a, b) =>
-          ((a.delivery_fee_cents ?? 0) + (a.min_order_cents ?? 0)) -
-          ((b.delivery_fee_cents ?? 0) + (b.min_order_cents ?? 0))
+          (a.delivery_fee_cents ?? 0) -
+          (b.delivery_fee_cents ?? 0)
       )
       const cheapest = sorted[0]
       const mostExpensive = sorted[sorted.length - 1]
@@ -256,8 +256,8 @@ export async function getRestaurants(): Promise<{
           platform: cheapest.platform,
           fee_label: feeLabel(cheapest.delivery_fee_cents !== null ? cheapest.delivery_fee_cents / 100 : null) ?? '?',
           savings_cents:
-            ((mostExpensive.delivery_fee_cents ?? 0) + (mostExpensive.min_order_cents ?? 0)) -
-            ((cheapest.delivery_fee_cents ?? 0) + (cheapest.min_order_cents ?? 0)),
+            (mostExpensive.delivery_fee_cents ?? 0) -
+            (cheapest.delivery_fee_cents ?? 0),
           delivery_fee_cents: cheapest.delivery_fee_cents,
           min_order_cents: cheapest.min_order_cents,
         },

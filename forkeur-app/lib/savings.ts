@@ -5,7 +5,7 @@ type ListingLike = { platform: Platform; delivery_fee_cents: number | null; min_
 
 export function effectiveTotal(listing: Pick<ListingLike, 'delivery_fee_cents' | 'min_order_cents'>): number | null {
   if (listing.delivery_fee_cents === null) return null
-  return listing.delivery_fee_cents + (listing.min_order_cents ?? 0)
+  return listing.delivery_fee_cents
 }
 
 export function savingsVsNext(
