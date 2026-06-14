@@ -100,6 +100,8 @@ _JSONLD_EVAL = """
             neighborhood: d.address ? d.address.addressLocality : null,
             cuisine: (d.servesCuisine || []).filter(Boolean).join(', ') || null,
             phone: d.telephone || null,
+            opening_hours_spec: d.openingHoursSpecification || null,
+            opening_hours_text: d.openingHours || null,
         };
     } catch(e) { return null; }
 }
@@ -446,6 +448,61 @@ async def scrape_menu_page(page, listing_id: str, url: str, name: str = "") -> t
         return (listing_id, [], [], None)
 
 
+_SCHEMA_ORG_DAY = {
+    "monday": "mon", "tuesday": "tue", "wednesday": "wed",
+    "thursday": "thu", "friday": "fri", "saturday": "sat", "sunday": "sun",
+}
+_SHORT_DAY_ORDER = ["mo", "tu", "we", "th", "fr", "sa", "su"]
+_SHORT_DAY_KEYS  = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+
+
+def _parse_schema_hours(rinfo: dict) -> dict | None:
+    specs = rinfo.get("opening_hours_spec")
+    if specs and isinstance(specs, list):
+        result: dict[str, list[list[str]]] = {}
+        for spec in specs:
+            if not isinstance(spec, dict):
+                continue
+            opens = spec.get("opens", "")
+            closes = spec.get("closes", "")
+            if not opens or not closes:
+                continue
+            days_raw = spec.get("dayOfWeek", [])
+            if isinstance(days_raw, str):
+                days_raw = [days_raw]
+            for day_url in days_raw:
+                day = _SCHEMA_ORG_DAY.get(day_url.split("/")[-1].lower())
+                if day:
+                    result.setdefault(day, []).append([opens[:5], closes[:5]])
+        if result:
+            return result
+    hours_text = rinfo.get("opening_hours_text")
+    if hours_text:
+        if isinstance(hours_text, str):
+            hours_text = [hours_text]
+        result = {}
+        short_map = dict(zip(_SHORT_DAY_ORDER, _SHORT_DAY_KEYS))
+        for entry in hours_text:
+            m = re.match(
+                r"([A-Za-z]{2})(?:-([A-Za-z]{2}))?\s+(\d{2}:\d{2})-(\d{2}:\d{2})",
+                entry.strip(),
+            )
+            if not m:
+                continue
+            sa = m.group(1).lower()
+            ea = m.group(2).lower() if m.group(2) else sa
+            if sa not in short_map or ea not in short_map:
+                continue
+            si = _SHORT_DAY_ORDER.index(sa)
+            ei = _SHORT_DAY_ORDER.index(ea)
+            idxs = range(si, ei + 1) if ei >= si else list(range(si, 7)) + list(range(0, ei + 1))
+            for i in idxs:
+                result.setdefault(_SHORT_DAY_KEYS[i], []).append([m.group(3), m.group(4)])
+        if result:
+            return result
+    return None
+
+
 async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, metrics: RunMetrics | None = None) -> ScraperResult:
     log_fn("Starting Takeaway scraper (Playwright DOM)")
     # headed=True required — CF passes on datacenter IP only with headed Chromium
@@ -640,6 +697,15 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, m
                                 if addr_patch:
                                     try:
                                         db.patch_listing(lid, addr_patch)
+                                    except Exception:
+                                        pass
+                            if rinfo:
+                                hours = _parse_schema_hours(rinfo)
+                                if hours:
+                                    try:
+                                        import json as _json
+                                        db.patch_listing(lid, {"opening_hours": _json.dumps(hours)})
+                                        log_fn(f"  Opening hours: {list(hours.keys())}")
                                     except Exception:
                                         pass
                             if items:

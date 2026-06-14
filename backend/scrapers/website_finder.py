@@ -304,6 +304,9 @@ async def _worker(
                         async with lock:
                             counters["orders_found"] += 1
 
+                from scrapers.direct_classify import is_junk_url as _is_junk
+                if order_url and _is_junk(order_url):
+                    order_url = None
                 db.patch_restaurant_website(rid, website, order_url)
                 async with lock:
                     counters["processed"] += 1

@@ -35,6 +35,28 @@ LISTING_ZONES = [
     "Rue Rogier 1, 1210 Bruxelles",            # Saint-Josse
 ]
 
+_NON_FOOD_RE: list[tuple[re.Pattern, str]] = [
+    (re.compile(r"carrefour|intermarch[eé]|intermarche", re.I), "non_food:grocery"),
+    (re.compile(r"(proxy|express).{0,6}delhaize|delhaize.{0,6}(proxy|express)", re.I), "non_food:grocery"),
+    (re.compile(r"night[\s\-]?shop|day[\s\-]?night[\s\-]?soner|easy[\s\-]?day[\s\-]?shop|easy[\s\-]?market[\s\-]?shop|king[\s\-']?s[\s\-]?shop|fazi[\s\-]?shop|pardesi[\s\-]?night|shine[\s\-]?ronny", re.I), "non_food:convenience"),
+    (re.compile(r"librairie|press[\s\-]?shop|glory[\s\-]?press", re.I), "non_food:press"),
+    (re.compile(r"tom\s*&\s*co\b|une\s+vie\s+de\s+chien", re.I), "non_food:pet"),
+    (re.compile(r"wines?\s*[&+]\s*spirits?|wines?\s+and\s+spirits?", re.I), "non_food:wine"),
+    (re.compile(r"candy.{0,10}(go|shop)|(go|shop).{0,10}candy|neuhaus", re.I), "non_food:candy"),
+    (re.compile(r"flowers?\s*forever", re.I), "non_food:florist"),
+    (re.compile(r"vid[eé]o[\s\-]?box", re.I), "non_food:video"),
+]
+
+
+def _classify_non_food(name: str, slug: str) -> str | None:
+    """Return exclude_reason string if name/slug matches a known non-food pattern."""
+    text = f"{name} {slug}"
+    for pattern, reason in _NON_FOOD_RE:
+        if pattern.search(text):
+            return reason
+    return None
+
+
 _GH_BASE32 = "0123456789bcdefghjkmnpqrstuvwxyz"
 
 
@@ -83,14 +105,15 @@ async def _venue_coords_from_page(page) -> dict | None:
     """
     try:
         result = await page.evaluate("""() => {
-            let lat = null, lng = null, street = null, postal = null, tel = null;
+            let lat = null, lng = null, street = null, postal = null, tel = null, hours = null;
 
             // Strategy 1: __NEXT_DATA__ menuPage — carries the real venue address.
             // Deliveroo serves NO Restaurant JSON-LD on .be menu pages, so this is
             // the primary (and only) source of street_address + postal_code.
             // Note: no venue lat/lng here — only customerLocation (zone centroid).
             try {
-                const root = window.__NEXT_DATA__?.props?.initialState?.menuPage?.menu?.metas?.root;
+                const metas = window.__NEXT_DATA__?.props?.initialState?.menuPage?.menu?.metas;
+                const root = metas?.root;
                 if (root) {
                     const a = root.restaurant?.location?.address;
                     if (a) {
@@ -110,6 +133,55 @@ async def _venue_coords_from_page(page) -> dict | None:
                     if (cl && cl.lat != null && cl.lon != null) {
                         const la = parseFloat(cl.lat), lo = parseFloat(cl.lon);
                         if (!isNaN(la) && !isNaN(lo)) { lat = la; lng = lo; }
+                    }
+                    // Opening hours — try known paths on restaurant and metas level
+                    const rest = root.restaurant || {};
+                    hours = rest.openingHours || rest.openingTimes || rest.availabilities
+                         || rest.opening_hours || rest.schedules || rest.regularHours
+                         || rest.businessHours || rest.tradingHours || null;
+                    if (!hours && metas) {
+                        hours = metas.openingTimes || metas.openingHours || metas.schedules
+                             || metas.availabilities || null;
+                    }
+                    // Also check root-level fields
+                    if (!hours) {
+                        hours = root.openingTimes || root.openingHours || root.schedules || null;
+                    }
+                    // DEBUG: recursively search __NEXT_DATA__ for hours-related paths
+                    if (!hours) {
+                        try {
+                            const found = [];
+                            function searchKeys(obj, path, depth) {
+                                if (depth > 10 || !obj || typeof obj !== 'object') return;
+                                const entries = Array.isArray(obj)
+                                    ? obj.slice(0, 2).map((v, i) => [i, v])
+                                    : Object.entries(obj);
+                                for (const [k, v] of entries) {
+                                    if (!Array.isArray(obj) && /open|hour|schedul|trading|availab|time/i.test(k)) {
+                                        found.push(path + '.' + k + '=' + JSON.stringify(v).substring(0, 300));
+                                    }
+                                    if (v && typeof v === 'object') {
+                                        searchKeys(v, path + '.' + k, depth + 1);
+                                    }
+                                }
+                            }
+                            searchKeys(window.__NEXT_DATA__?.props?.initialState, 'is', 0);
+                            // Dump restaurant object keys + full restrictions + appliedParams
+                            const restKeys = Object.keys(root.restaurant || {}).join(',');
+                            const restrictions = JSON.stringify(root.restrictions || {}).substring(0, 800);
+                            const appliedParams = JSON.stringify(root.appliedParams || {}).substring(0, 400);
+                            const restFull = JSON.stringify(root.restaurant || {}).substring(0, 1200);
+                            const extra = 'rest_keys=' + restKeys
+                                + '|||restrictions=' + restrictions
+                                + '|||appliedParams=' + appliedParams
+                                + '|||rest_full=' + restFull;
+                            window.__DLV_DEBUG_REST_SAMPLE = (found.join('|||').substring(0, 1800) || 'NO_MATCH') + '|||' + extra;
+                            window.__DLV_DEBUG_REST_KEYS = Object.keys(window.__NEXT_DATA__?.props?.initialState || {}).join(',');
+                            window.__DLV_DEBUG_METAS_KEYS = Object.keys(metas || {}).join(',');
+                            window.__DLV_DEBUG_ROOT_KEYS = Object.keys(root).join(',');
+                        } catch(e) {
+                            window.__DLV_DEBUG_REST_SAMPLE = 'ERR:' + e.message;
+                        }
                     }
                 }
             } catch {}
@@ -162,14 +234,33 @@ async def _venue_coords_from_page(page) -> dict | None:
                 } catch {}
             }
 
-            return { lat, lng, street_address: street, postal_code: postal, telephone: tel };
+            return { lat, lng, street_address: street, postal_code: postal, telephone: tel, opening_hours: hours,
+                     _dbg_rest: window.__DLV_DEBUG_REST_KEYS || null,
+                     _dbg_metas: window.__DLV_DEBUG_METAS_KEYS || null,
+                     _dbg_root: window.__DLV_DEBUG_ROOT_KEYS || null,
+                     _dbg_rest_sample: window.__DLV_DEBUG_REST_SAMPLE || null };
         }""")
         if not result:
             return None
         street = result.get("street_address")
         postal = result.get("postal_code")
         tel = result.get("telephone")
-        out: dict = {"street_address": street, "postal_code": postal, "telephone": tel}
+        hours = result.get("opening_hours")
+        if not hours:
+            import sys as _sys, json as _json2, pathlib as _pl
+            print(f"[DBG] is_keys={result.get('_dbg_rest')} root_keys={result.get('_dbg_root')}", file=_sys.stderr)
+            if result.get('_dbg_rest_sample'):
+                print(f"[DBG] hours_paths={result.get('_dbg_rest_sample')[:800]}", file=_sys.stderr)
+            try:
+                _pl.Path("/tmp/dlv_debug.json").write_text(_json2.dumps({
+                    "rest_keys": result.get("_dbg_rest"),
+                    "metas_keys": result.get("_dbg_metas"),
+                    "root_keys": result.get("_dbg_root"),
+                    "rest_sample": result.get("_dbg_rest_sample"),
+                }))
+            except Exception:
+                pass
+        out: dict = {"street_address": street, "postal_code": postal, "telephone": tel, "opening_hours": hours}
         # Coords only kept when inside the Brussels box (customerLocation can be
         # a far-off zone centroid; reject out-of-area values).
         if result.get("lat") is not None and result.get("lng") is not None:
@@ -178,7 +269,7 @@ async def _venue_coords_from_page(page) -> dict | None:
                 out["lat"] = lat
                 out["lng"] = lng
         # Return only if we got SOMETHING useful (address or coords).
-        if out.get("street_address") or out.get("postal_code") or out.get("lat") is not None:
+        if out.get("street_address") or out.get("postal_code") or out.get("lat") is not None or out.get("opening_hours") is not None:
             return out
     except Exception:
         pass
@@ -189,16 +280,16 @@ async def _phone_from_page(page) -> str | None:
     """Extract venue phone from a Deliveroo restaurant page.
 
     The phone is NOT in JSON-LD or initial __NEXT_DATA__ (``"phone":""``). It is
-    lazy-rendered behind the "Informations" button as a ``tel:`` link
+    lazy-rendered behind the "Info" button as a ``tel:`` link
     (e.g. ``<a href="tel:+32483641918">Appeler X au +32483641918</a>``).
-    Strategy: click the Informations button (matched by leading text, since the
+    Strategy: click the Info button (matched by leading text, since the
     Deliveroo CSS classes are build-hashed and unstable), wait for the tel link,
     then strip the ``tel:`` prefix. Returns None if no phone is exposed.
     """
     try:
         clicked = await page.evaluate("""() => {
             const b = [...document.querySelectorAll('button')]
-                .find(x => /^Informations/i.test((x.innerText || '').trim()));
+                .find(x => /^Info/i.test((x.innerText || '').trim()));
             if (b) { b.click(); return true; }
             return false;
         }""")
@@ -510,6 +601,10 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, m
                 })
             except ValueError:
                 continue  # junk entry filtered by db._is_junk
+            reason = _classify_non_food(r["name"], r["slug"])
+            if reason:
+                db.patch_restaurant_exclude_reason(rid, reason)
+                log_fn(f"  Non-food excluded: {r['name']} → {reason}")
             lid = db.upsert_listing({
                 "restaurant_id": rid,
                 "platform": "deliveroo",
@@ -570,10 +665,15 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, m
                     if any(addr_patch.values()):
                         db.patch_listing(lid, addr_patch)
                         log_fn(f"  Venue address: {addr_patch}")
+                    hours = venue.get("opening_hours")
+                    if hours is not None:
+                        import json as _json
+                        db.patch_listing(lid, {"opening_hours": _json.dumps(hours)})
+                        log_fn(f"  Opening hours: {str(hours)[:80]}")
                     tel = venue.get("telephone")
                     if not tel:
                         # JSON-LD never carries telephone on Deliveroo; fall back to
-                        # the "Informations" panel which exposes a tel: link.
+                        # the "Info" panel which exposes a tel: link.
                         tel = await _phone_from_page(page)
                     if tel:
                         db.patch_restaurant_phone(rid, tel)
@@ -589,20 +689,43 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, m
                 except Exception:
                     pass
 
-                # Expand collapsed accordion sections (Deliveroo lazy-renders category sections).
+                # JS helper: click all collapsed accordion/section toggle buttons visible in the DOM.
+                # Returns number of buttons clicked. Called before scroll AND inside the scroll loop
+                # because Deliveroo virtualises category sections — newly-scrolled-in sections mount
+                # in a collapsed state and need a second expand pass after they appear.
+                _EXPAND_JS = """() => {
+                    const seen = new Set();
+                    const selectors = [
+                        'button[aria-expanded="false"]',
+                        '[role="button"][aria-expanded="false"]',
+                        'button[data-testid*="expand"]',
+                        'button[data-testid*="accordion"]',
+                        'button[data-testid*="section"]',
+                    ];
+                    for (const sel of selectors) {
+                        for (const btn of document.querySelectorAll(sel)) {
+                            if (!seen.has(btn)) {
+                                seen.add(btn);
+                                try { btn.click(); } catch {}
+                            }
+                        }
+                    }
+                    return seen.size;
+                }"""
+
+                # Initial expand pass before scroll.
                 try:
-                    expanded = await page.evaluate("""() => {
-                        const btns = Array.from(document.querySelectorAll('button[aria-expanded="false"]'));
-                        btns.forEach(b => { try { b.click(); } catch {} });
-                        return btns.length;
-                    }""")
+                    expanded = await page.evaluate(_EXPAND_JS)
                     if expanded:
                         await page.wait_for_timeout(600)
+                        log_fn(f"  Pre-scroll: expanded {expanded} section(s)")
                 except Exception:
                     pass
 
                 # Unified scroll: stable when BOTH height AND item count unchanged for 2 consecutive ticks.
+                # Expand pass runs after each scroll so newly-mounted virtualised sections get opened.
                 prev_h, prev_count, stale = 0, 0, 0
+                total_expanded = 0
                 for _ in range(40):
                     result = await page.evaluate(
                         "()=>({h:document.body.scrollHeight,"
@@ -611,6 +734,14 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, m
                     h, count = result["h"], result["c"]
                     await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                     await page.wait_for_timeout(600)
+                    # Expand any collapsed sections that scrolled into view.
+                    try:
+                        n_exp = await page.evaluate(_EXPAND_JS)
+                        if n_exp:
+                            total_expanded += n_exp
+                            await page.wait_for_timeout(400)
+                    except Exception:
+                        pass
                     if h == prev_h and count == prev_count:
                         stale += 1
                         if stale >= 3:
@@ -619,7 +750,7 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, m
                         stale = 0
                     prev_h, prev_count = h, count
                 await page.evaluate("window.scrollTo(0, 0)")
-                log_fn(f"  Scroll done: {prev_count} notranslate divs, url={page.url[:80]}")
+                log_fn(f"  Scroll done: {prev_count} notranslate divs, {total_expanded} section expansions, url={page.url[:80]}")
 
                 # Multi-strategy extraction — ordered by selector stability.
                 items: list[dict] = await page.evaluate("""() => {

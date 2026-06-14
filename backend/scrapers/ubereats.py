@@ -154,23 +154,47 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, r
                     log_fn(f"Typed address: {zone_addr}")
                     await asyncio.sleep(3)
 
-                    # Wait for suggestions dropdown to appear
+                    # Wait for suggestions dropdown to appear, then click the first suggestion.
+                    # Explicit .click() is preferred over ArrowDown+Enter — the 2026-06 redesign
+                    # uses a listbox that may not respond reliably to keyboard navigation.
+                    suggestion_sel = '[role="option"], li[role="option"], [data-testid*="suggestion"]'
+                    suggestion_clicked = False
+                    dropdown_appeared = False
                     try:
-                        await page.wait_for_selector('[role="option"], li[role="option"], .uber-cache, [data-testid*="suggestion"]', timeout=5000)
+                        await page.wait_for_selector(suggestion_sel, timeout=5000)
+                        dropdown_appeared = True
                         log_fn("Suggestions dropdown appeared")
                     except Exception:
-                        log_fn("No suggestions dropdown, trying direct Enter")
+                        log_fn("No suggestions dropdown within 5s, falling back to ArrowDown+Enter")
 
-                    await page.keyboard.press("ArrowDown")
-                    await asyncio.sleep(0.5)
-                    await page.keyboard.press("Enter")
-                    log_fn(f"Pressed ArrowDown+Enter, page URL: {page.url}")
+                    if dropdown_appeared:
+                        try:
+                            first_suggestion = await page.query_selector(suggestion_sel)
+                            if first_suggestion:
+                                await first_suggestion.click()
+                                suggestion_clicked = True
+                                log_fn("Clicked first suggestion element")
+                        except Exception as e:
+                            log_fn(f"Suggestion click failed ({e}), falling back to ArrowDown+Enter")
 
-                    # Wait for URL to change or navigation to complete
+                    if not suggestion_clicked:
+                        await page.keyboard.press("ArrowDown")
+                        await asyncio.sleep(0.5)
+                        await page.keyboard.press("Enter")
+                        log_fn(f"Pressed ArrowDown+Enter, page URL: {page.url}")
+
+                    # Wait for URL to leave /be/delivery-details (or change to /be/feed* or similar).
+                    # Belgium UberEats navigates to /be/feed?... after address selection — NOT /restaurants.
+                    # We can't use a positive pattern for the exact post-selection path because Uber
+                    # A/B-tests it, so we detect departure from the delivery-details page instead.
                     try:
-                        await page.wait_for_url("**/restaurants**", timeout=10000)
-                    except Exception:
-                        log_fn("URL didn't change to /restaurants, may still work")
+                        await page.wait_for_url(
+                            lambda url: "ubereats.com/be/" in url and "delivery-details" not in url,
+                            timeout=10000,
+                        )
+                        log_fn(f"URL changed after address selection: {page.url}")
+                    except Exception as e:
+                        log_fn(f"URL did not leave delivery-details within 10s (url={page.url!r}): {e}")
 
                     await asyncio.sleep(2)
 

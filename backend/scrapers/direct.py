@@ -261,15 +261,15 @@ async def _enrich_existing(browser, log: Callable) -> int:
                 await asyncio.to_thread(db.patch_restaurant_phone, r['id'], analysis['phone'])
 
             order_url = analysis['order_url'] or r['website']
-            if is_junk_url(order_url):
-                # Stale listing with now-junk URL: remove it
+            if is_junk_url(order_url) or _AGGREGATOR_RE.search(order_url):
+                # Stale listing with now-junk URL (or platform URL): remove it
                 if r['id'] in listing_by_rid:
                     await asyncio.to_thread(
                         pgpool.execute,
                         "DELETE FROM platform_listings WHERE id = %s",
                         [listing_by_rid[r['id']]['id']],
                     )
-                    log(f"  ✗ removed junk URL for {r['name']}: {order_url[:60]}")
+                    log(f"  ✗ removed platform/junk URL for {r['name']}: {order_url[:60]}")
                 return 0
 
             url_type = classify_url(order_url, analysis['phone'])
@@ -426,7 +426,8 @@ async def _discover_maps(page, log: Callable) -> int:
             )
 
             website_url = stub.get('website')
-            if is_junk_url(website_url) or not _validate_order_url(website_url):
+            if is_junk_url(website_url) or not _validate_order_url(website_url) \
+                    or (website_url and _AGGREGATOR_RE.search(website_url)):
                 continue
             row = {
                 'restaurant_id': rest_id,

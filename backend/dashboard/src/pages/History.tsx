@@ -38,7 +38,7 @@ function RunRow({ run }: { run: ScraperRun }) {
 
   const hasPhases = run.phase_durations && Object.keys(run.phase_durations).length > 0
   const hasItems = run.items_attempted > 0
-  const hasRam = run.peak_ram_mb != null
+  const hasRam = run.peak_ram_mb != null && run.peak_ram_mb > 0
 
   return (
     <>

@@ -1,4 +1,13 @@
-export type Platform = 'ubereats' | 'deliveroo' | 'takeaway'
+export type Platform =
+  | 'ubereats'
+  | 'deliveroo'
+  | 'takeaway'
+  | 'direct'
+  | 'direct_menu'
+  | 'dom_menu'
+  | 'match'
+  | 'enrich'
+  | 'website_finder'
 
 export type RunStatus = 'running' | 'success' | 'failed' | 'blocked' | 'partial' | 'idle'
 

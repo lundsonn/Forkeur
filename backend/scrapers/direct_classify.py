@@ -29,7 +29,13 @@ _MENU_PATHS = re.compile(
 )
 
 _JUNK_RE = re.compile(
-    r'google\.com/searchviewer'
+    # Delivery platform aggregators — never a "direct" ordering URL
+    r'ubereats\.com'
+    r'|deliveroo\.'
+    r'|takeaway\.com'
+    r'|just-eat\.'
+    r'|thuisbezorgd\.'
+    r'|google\.com/searchviewer'
     r'|zenchef\.com'
     r'|tablebooker\.com'
     r'|reservations?\.'
