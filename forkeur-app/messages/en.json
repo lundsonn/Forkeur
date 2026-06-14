@@ -9,10 +9,14 @@
     "heading_line1": "Stop overpaying for",
     "heading_line2": "the same meal.",
     "subtitle": "A restaurant can cost <b>20–40% more</b> depending on the app. Forkeur compares Uber Eats, Deliveroo, Takeaway &amp; ordering direct — fees in — so you always pick the cheapest.",
-    "live_badge": "Live across Brussels"
+    "live_badge": "Live across Brussels",
+    "credibility": "Comparing real prices across UberEats, Deliveroo, Takeaway & direct ordering",
+    "rightNow": "Right now near you:",
+    "neutrality": "No commissions. No sponsored results. Just the facts."
   },
   "search": {
-    "placeholder": "Search a restaurant"
+    "placeholder": "Search a restaurant",
+    "hint": "Try \"burger\", \"pizza\", \"sushi\"…"
   },
   "filters": {
     "all": "All",
@@ -36,7 +40,10 @@
     "load_more": "Show {next, plural, one {# more restaurant} other {# more restaurants}} ({remaining} total remaining)",
     "none_query": "No restaurants found for \"{query}\"",
     "clear_search": "Clear search",
-    "popular": "Popular near you"
+    "popular": "Popular near you",
+    "biggestSavings": "Biggest savings",
+    "cheapest": "Cheapest",
+    "fastest": "Fastest"
   },
   "deals": {
     "heading": "Best deals",
@@ -144,7 +151,10 @@
     "delivery_service_fees": "delivery + service fees",
     "direct_fees": "{fee} fees",
     "save": "Save {amount}",
-    "pct_cheaper": "{pct}% cheaper"
+    "pct_cheaper": "{pct}% cheaper",
+    "cheapestOn": "Cheapest on {platform}",
+    "saveVs": "Save €{amount} vs {platform}",
+    "overpay": "+€{amount} more here"
   },
   "sort": {
     "best": "Best match",
@@ -292,5 +302,11 @@
     "coveragePartialShort": "Matched {matched} of {total}",
     "coveragePartialFull": "Matched {matched} of {total} — {missing} we couldn't compare",
     "feesOnlyFallback": "Comparing delivery fees — add items to compare basket totals"
+  },
+  "feed": {
+    "savingsNear": "Save up to €{amount} near {neighborhood}",
+    "savingsNearAll": "Save up to €{amount} across Brussels",
+    "allBrussels": "All of Brussels",
+    "coverageFooter": "Prices updated daily · {count} restaurants compared"
   }
 }

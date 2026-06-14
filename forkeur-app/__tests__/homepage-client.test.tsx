@@ -13,6 +13,24 @@ vi.mock('../components/LangToggle', () => ({
   default: () => <div />,
 }))
 
+vi.mock('../components/HeroBlock', () => ({
+  default: () => <div data-testid="hero-block" />,
+}))
+
+vi.mock('../components/FeedHeader', () => ({
+  default: ({ sortBy, onSortChange, onNeighborhoodClick }: {
+    sortBy: string
+    onSortChange: (s: string) => void
+    onNeighborhoodClick: () => void
+  }) => (
+    <div data-testid="feed-header">
+      <button onClick={() => onSortChange('cheapest')} aria-pressed={sortBy === 'cheapest'}>Cheapest</button>
+      <button onClick={() => onSortChange('fastest')} aria-pressed={sortBy === 'fastest'}>Fastest</button>
+      <button onClick={onNeighborhoodClick}>neighborhood</button>
+    </div>
+  ),
+}))
+
 function renderWithIntl(ui: React.ReactElement) {
   return render(
     <NextIntlClientProvider locale="en" messages={en}>
@@ -129,5 +147,26 @@ describe('HomepageClient', () => {
     fireEvent.click(screen.getByText('List'))
     expect(screen.getByText('Pizza Palace')).toBeInTheDocument()
     expect(screen.queryByTestId('map-view')).toBeNull()
+  })
+
+  it('renders HeroBlock', () => {
+    renderWithIntl(<HomepageClient restaurants={restaurants} cuisines={cuisines} />)
+    expect(screen.getByTestId('hero-block')).toBeInTheDocument()
+  })
+
+  it('renders FeedHeader', () => {
+    renderWithIntl(<HomepageClient restaurants={restaurants} cuisines={cuisines} />)
+    expect(screen.getByTestId('feed-header')).toBeInTheDocument()
+  })
+
+  it('renders coverage footer with restaurant count', () => {
+    renderWithIntl(<HomepageClient restaurants={restaurants} cuisines={cuisines} />)
+    expect(screen.getByText(/3 restaurants compared/)).toBeInTheDocument()
+  })
+
+  it('default sort is cheapest (FeedHeader cheapest button is pressed)', () => {
+    renderWithIntl(<HomepageClient restaurants={restaurants} cuisines={cuisines} />)
+    const cheapestBtn = screen.getByRole('button', { name: 'Cheapest' })
+    expect(cheapestBtn).toHaveAttribute('aria-pressed', 'true')
   })
 })

@@ -7,13 +7,13 @@ import RestaurantCard from './RestaurantCard'
 import { useTranslations } from 'next-intl'
 import LangToggle from './LangToggle'
 import { getOpenStatus } from '@/lib/hours'
+import HeroBlock from './HeroBlock'
+import FeedHeader, { type SortBy } from './FeedHeader'
 
 const MapView = dynamic(() => import('./MapView'), {
   ssr: false,
   loading: () => <div className="rounded-xl border border-stone-200 bg-stone-50 animate-pulse h-[calc(100vh-240px)]" />,
 })
-
-type SortBy = 'best' | 'cheapest' | 'fastest'
 
 function opensAtToSortKey(opensAt: string | null): number {
   if (opensAt === null) return Infinity
@@ -60,7 +60,7 @@ export default function HomepageClient({
   const [selectedCuisine, setSelectedCuisine] = useState<string | null>(null)
   const [selectedNeighborhood, setSelectedNeighborhood] = useState<string | null>(null)
   const [neighborhoodSheetOpen, setNeighborhoodSheetOpen] = useState(false)
-  const [sortBy, setSortBy] = useState<SortBy>('best')
+  const [sortBy, setSortBy] = useState<SortBy>('cheapest')
   const [view, setView] = useState<'list' | 'map'>('list')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
 
@@ -77,7 +77,6 @@ export default function HomepageClient({
   }
 
   const tNav = useTranslations('nav')
-  const tHero = useTranslations('hero')
   const tSearch = useTranslations('search')
   const tFilters = useTranslations('filters')
   const tResults = useTranslations('results')
@@ -85,8 +84,8 @@ export default function HomepageClient({
   const tCard = useTranslations('card')
   const tSort = useTranslations('sort')
   const tOwners = useTranslations('owners')
-  const tHowItWorks = useTranslations('howItWorks')
   const tFooter = useTranslations('footer')
+  const tFeed = useTranslations('feed')
 
   const neighborhoods = useMemo(() => {
     const counts = new Map<string, number>()
@@ -101,7 +100,7 @@ export default function HomepageClient({
   }, [restaurants])
 
   const metrics = useMemo(() => {
-    const map = new Map<string, { minFee: number | null; minEta: number | null; platformCount: number; savings: number; maxFee: number | null }>()
+    const map = new Map<string, { minFee: number | null; minEta: number | null; platformCount: number; maxFee: number | null }>()
     for (const r of restaurants) {
       const available = r.listings.filter((l) => l.delivery_fee_cents !== null)
       const fees = available.map((l) => l.delivery_fee_cents!)
@@ -109,8 +108,7 @@ export default function HomepageClient({
       const minFee = fees.length > 0 ? Math.min(...fees) : null
       const maxFee = fees.length > 1 ? Math.max(...fees) : null
       const minEta = etas.length > 0 ? Math.min(...etas) : null
-      const savings = maxFee !== null && minFee !== null ? maxFee - minFee : 0
-      map.set(r.id, { minFee, minEta, platformCount: available.length, savings, maxFee })
+      map.set(r.id, { minFee, minEta, platformCount: available.length, maxFee })
     }
     return map
   }, [restaurants])
@@ -123,24 +121,18 @@ export default function HomepageClient({
       return matchSearch && matchNeighborhood && matchCuisine
     })
 
-    let result = base
-    if (sortBy !== 'best') {
-      result = [...base].sort((a, b) => {
-        const ma = metrics.get(a.id)!
-        const mb = metrics.get(b.id)!
-        if (sortBy === 'cheapest') {
-          if (ma.minFee === null && mb.minFee === null) return 0
-          if (ma.minFee === null) return 1
-          if (mb.minFee === null) return -1
-          return ma.minFee - mb.minFee
-        }
-        // fastest
-        if (ma.minEta === null && mb.minEta === null) return 0
-        if (ma.minEta === null) return 1
-        if (mb.minEta === null) return -1
-        return ma.minEta - mb.minEta
-      })
-    }
+    const result = [...base].sort((a, b) => {
+      if (sortBy === 'cheapest') {
+        return (b.cheapest?.savings_cents ?? 0) - (a.cheapest?.savings_cents ?? 0)
+      }
+      // fastest
+      const ma = metrics.get(a.id)!
+      const mb = metrics.get(b.id)!
+      if (ma.minEta === null && mb.minEta === null) return 0
+      if (ma.minEta === null) return 1
+      if (mb.minEta === null) return -1
+      return ma.minEta - mb.minEta
+    })
 
     // Open first; within closed group sort by next opening time soonest first
     const now = new Date()
@@ -161,6 +153,8 @@ export default function HomepageClient({
     return restaurants
       .filter((r): r is typeof r & { lat: number; lng: number } => r.lat !== null && r.lng !== null)
       .sort((a, b) => haversineKm(ulat, ulng, a.lat, a.lng) - haversineKm(ulat, ulng, b.lat, b.lng))
+      .slice(0, 20)
+      .sort((a, b) => (b.cheapest?.savings_cents ?? 0) - (a.cheapest?.savings_cents ?? 0))
       .slice(0, 3)
   }, [userCoords, hasFilter, restaurants])
 
@@ -214,17 +208,7 @@ export default function HomepageClient({
       </div>
 
       {/* Hero */}
-      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-3 py-1 mb-3">
-        <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0" />
-        {tHero('live_badge')}
-      </span>
-      <h1 className="text-[1.65rem] font-bold text-stone-900 leading-tight mb-2">
-        {tHero('heading_line1')}<br />{tHero('heading_line2')}
-      </h1>
-      <p
-        className="text-sm text-stone-500 mb-5 leading-relaxed"
-        dangerouslySetInnerHTML={{ __html: tHero.raw('subtitle') }}
-      />
+      <HeroBlock restaurants={restaurants} neighborhood={selectedNeighborhood} />
 
       {/* Search */}
       <div className="flex items-center gap-2.5 border border-stone-200 rounded-xl px-4 py-3 mb-5">
@@ -267,75 +251,13 @@ export default function HomepageClient({
         </div>
       )}
 
-      {/* How it works */}
-      <div className="overflow-hidden flex items-start gap-0 mb-6">
-        {([
-          { num: 1, title: tHowItWorks('step1_title'), body: tHowItWorks('step1_body') },
-          { num: 2, title: tHowItWorks('step2_title'), body: tHowItWorks('step2_body') },
-          { num: 3, title: tHowItWorks('step3_title'), body: tHowItWorks('step3_body') },
-        ] as const).map(({ num, title, body }, i, arr) => (
-          <div key={num} className="flex-1 flex flex-col items-center text-center relative">
-            <div className="w-7 h-7 rounded-full bg-stone-900 text-white text-xs font-bold flex items-center justify-center mb-1.5 z-10">
-              {num}
-            </div>
-            {i < arr.length - 1 && (
-              <div className="absolute top-3.5 left-1/2 w-full h-px bg-stone-200" />
-            )}
-            <p className="text-xs font-semibold text-stone-800">{title}</p>
-            <p className="text-[11px] text-stone-400 mt-0.5 leading-tight">{body}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Toolbar: area filter + sort */}
-      <div className="flex items-center justify-between py-2 mb-1">
-        <div className="flex items-center">
-          {selectedNeighborhood ? (
-            <>
-              <button
-                type="button"
-                onClick={() => setNeighborhoodSheetOpen(true)}
-                className="flex items-center rounded-l-full border border-r-0 border-[#1A1A1A] bg-white px-3 min-h-[44px] text-xs font-medium text-[#1A1A1A]"
-              >
-                {selectedNeighborhood}
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedNeighborhood(null)}
-                className="flex items-center rounded-r-full border border-[#1A1A1A] bg-white px-2 min-h-[44px] text-xs text-[#888780]"
-              >
-                ✕
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setNeighborhoodSheetOpen(true)}
-              className="flex items-center gap-1 rounded-full bg-[#EDEDEA] px-3 min-h-[44px] text-xs font-medium text-[#888780]"
-            >
-              {tSort('all_areas')}
-            </button>
-          )}
-        </div>
-
-        {/* Sort pills */}
-        <div className="flex gap-3">
-          {(['best', 'cheapest', 'fastest'] as SortBy[]).map((s) => (
-            <button
-              type="button"
-              key={s}
-              onClick={() => resetAndSet(setSortBy)(s)}
-              className={`min-[360px]:text-sm text-xs min-h-[44px] inline-flex items-end pb-1 transition-colors ${
-                sortBy === s
-                  ? 'font-medium text-[#1A1A1A] border-b-2 border-[#1A1A1A]'
-                  : 'text-[#888780]'
-              }`}
-            >
-              {tSort(s)}
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Feed header: neighborhood filter + sort */}
+      <FeedHeader
+        neighborhood={selectedNeighborhood}
+        sortBy={sortBy}
+        onSortChange={resetAndSet(setSortBy)}
+        onNeighborhoodClick={() => setNeighborhoodSheetOpen(true)}
+      />
 
       {view === 'map' ? (
         <Suspense fallback={<div className="rounded-xl border border-stone-200 bg-stone-50 animate-pulse h-[calc(100vh-240px)]" />}>
@@ -441,6 +363,11 @@ export default function HomepageClient({
               </button>
             )}
           </div>
+
+          {/* Coverage footer */}
+          <p className="text-xs text-stone-400 text-center py-4">
+            {tFeed('coverageFooter', { count: restaurants.length })}
+          </p>
 
           {/* Footer disclaimer */}
           <p

@@ -187,4 +187,45 @@ describe('RestaurantCard', () => {
     renderCard({ restaurant: withNullUrlType, directBadge: "Should not appear" })
     expect(screen.queryByRole('link', { name: 'Should not appear' })).toBeNull()
   })
+
+  // --- Task 6 new tests ---
+
+  it('root element has data-testid="restaurant-card" and data-id attribute', () => {
+    renderCard({ restaurant: threeListings, directBadge: "Order" })
+    const card = screen.getByTestId('restaurant-card')
+    expect(card).toBeInTheDocument()
+    expect(card).toHaveAttribute('data-id', threeListings.id)
+  })
+
+  it('CHEAPEST badge has bg-green-500 class (not bg-orange-500)', () => {
+    renderCard({ restaurant: threeListings, directBadge: "Order" })
+    // Find the cheapest badge by its text content (translation key cheapest_badge = "CHEAPEST")
+    const badge = screen.getByText('CHEAPEST')
+    expect(badge).toHaveClass('bg-green-500')
+    expect(badge).not.toHaveClass('bg-orange-500')
+  })
+
+  it('winner listing shows green savings text with "cheaper"', () => {
+    // threeListings: uber_eats=49, deliveroo=149 → savings = 100 cents = €1.00
+    renderCard({ restaurant: threeListings, directBadge: "Order" })
+    const cheaperText = screen.getByText(/\+€1\.00 cheaper/)
+    expect(cheaperText).toBeInTheDocument()
+    expect(cheaperText).toHaveClass('text-green-600')
+  })
+
+  it('loser listing shows red overpay text "+€X more here"', () => {
+    // threeListings: deliveroo=149, uber_eats(winner)=49 → overpay = 100 cents = €1.00
+    renderCard({ restaurant: threeListings, directBadge: "Order" })
+    // deliveroo overpay: 149 - 49 = 100 cents = €1.00
+    const overpayDeliveroo = screen.getByText(/\+€1\.00 more here/)
+    expect(overpayDeliveroo).toBeInTheDocument()
+    expect(overpayDeliveroo).toHaveClass('text-red-600')
+  })
+
+  it('loser listings all show correct red overpay amounts', () => {
+    // threeListings: uber_eats=49(winner), deliveroo=149(+1.00), takeaway=199(+1.50)
+    renderCard({ restaurant: threeListings, directBadge: "Order" })
+    expect(screen.getByText(/\+€1\.00 more here/)).toBeInTheDocument()
+    expect(screen.getByText(/\+€1\.50 more here/)).toBeInTheDocument()
+  })
 })

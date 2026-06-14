@@ -9,10 +9,14 @@
     "heading_line1": "Stop de payer trop cher",
     "heading_line2": "pour le même repas.",
     "subtitle": "Un restaurant peut coûter <b>20–40% plus cher</b> selon l'appli. Forkeur compare Uber Eats, Deliveroo, Takeaway &amp; la commande directe — frais inclus — pour toujours choisir le moins cher.",
-    "live_badge": "En direct à Bruxelles"
+    "live_badge": "En direct à Bruxelles",
+    "credibility": "Comparaison des vrais prix sur UberEats, Deliveroo, Takeaway & commande directe",
+    "rightNow": "En ce moment près de chez vous :",
+    "neutrality": "Sans commissions. Sans résultats sponsorisés. Juste les faits."
   },
   "search": {
-    "placeholder": "Rechercher un restaurant"
+    "placeholder": "Rechercher un restaurant",
+    "hint": "Essayez \"burger\", \"pizza\", \"sushi\"…"
   },
   "filters": {
     "all": "Tout",
@@ -36,7 +40,10 @@
     "load_more": "Afficher {next, plural, one {# restaurant de plus} other {# restaurants de plus}} ({remaining} au total)",
     "none_query": "Aucun restaurant trouvé pour \"{query}\"",
     "clear_search": "Effacer la recherche",
-    "popular": "Populaires près de vous"
+    "popular": "Populaires près de vous",
+    "biggestSavings": "Plus grandes économies",
+    "cheapest": "Moins cher",
+    "fastest": "Plus rapide"
   },
   "deals": {
     "heading": "Meilleures promos",
@@ -144,7 +151,10 @@
     "delivery_service_fees": "livraison + frais de service",
     "direct_fees": "frais {fee}",
     "save": "Économie {amount}",
-    "pct_cheaper": "{pct}% moins cher"
+    "pct_cheaper": "{pct}% moins cher",
+    "cheapestOn": "Moins cher sur {platform}",
+    "saveVs": "Économisez €{amount} vs {platform}",
+    "overpay": "+€{amount} de plus ici"
   },
   "sort": {
     "best": "Meilleur match",
@@ -292,5 +302,11 @@
     "coveragePartialShort": "{matched} sur {total} correspondants",
     "coveragePartialFull": "{matched} sur {total} correspondants — {missing} non comparables",
     "feesOnlyFallback": "Comparaison des frais de livraison — ajoutez des articles pour comparer les totaux"
+  },
+  "feed": {
+    "savingsNear": "Économisez jusqu'à €{amount} près de {neighborhood}",
+    "savingsNearAll": "Économisez jusqu'à €{amount} dans tout Bruxelles",
+    "allBrussels": "Tout Bruxelles",
+    "coverageFooter": "Prix mis à jour quotidiennement · {count} restaurants comparés"
   }
 }

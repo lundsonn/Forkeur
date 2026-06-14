@@ -5,6 +5,7 @@ import { ChevronUp, ChevronDown } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import type { RestaurantSummary } from '@/lib/queries'
 import { centsToEuro, PLATFORM_LABELS, type Platform } from '@/lib/basket'
+import { savingsVsNext, effectiveTotal } from '@/lib/savings'
 import PlatformLogo from './ui/PlatformLogo'
 import OpenStatusBadge from './OpenStatusBadge'
 import { getOpenStatus } from '@/lib/hours'
@@ -42,6 +43,8 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge, 
 
   return (
     <div
+      data-testid="restaurant-card"
+      data-id={restaurant.id}
       className={`relative py-4 cursor-pointer select-none ${!isLast ? 'border-b border-stone-100' : ''} ${isClosed ? 'opacity-60' : ''}`}
     >
       {/* Stretched link overlay — sibling, not parent, so nested CTA anchors stay valid HTML */}
@@ -88,14 +91,26 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge, 
         <div className="relative z-10 pointer-events-none space-y-1.5 mb-3">
           {sortedTiles.map((l) => {
             const isCheapest = l.platform === cheapest?.platform
-            const cheapestTotal = cheapest
-              ? (cheapest.delivery_fee_cents ?? 0) + (cheapest.min_order_cents ?? 0)
+
+            // Winner savings label
+            const winnerSavings = isCheapest && cheapest
+              ? savingsVsNext(listings as Parameters<typeof savingsVsNext>[0])
               : null
-            const tileTotal = (l.delivery_fee_cents ?? 0) + (l.min_order_cents ?? 0)
-            const delta =
-              !isCheapest && cheapestTotal !== null
-                ? tileTotal - cheapestTotal
-                : null
+
+            // Loser overpay amount
+            const winnerListing = cheapest
+              ? listings.find(x => x.platform === cheapest.platform) ?? null
+              : null
+            const loserDelta = !isCheapest && winnerListing !== null
+              ? (() => {
+                  const tileEff = effectiveTotal(l as Parameters<typeof effectiveTotal>[0])
+                  const winnerEff = effectiveTotal(winnerListing as Parameters<typeof effectiveTotal>[0])
+                  if (tileEff === null || winnerEff === null) return null
+                  const diff = tileEff - winnerEff
+                  return diff > 0 ? diff : null
+                })()
+              : null
+
             return (
               <div
                 key={l.platform}
@@ -118,11 +133,20 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge, 
                   )}
                 </span>
                 {isCheapest ? (
-                  <span className="text-[10px] font-bold bg-orange-500 text-white rounded-full px-1.5 py-0.5 leading-none">
-                    {tCard('cheapest_badge')}
+                  <div className="flex flex-col items-end gap-0.5">
+                    <span className="text-[10px] font-bold bg-green-500 text-white rounded-full px-1.5 py-0.5 leading-none">
+                      {tCard('cheapest_badge')}
+                    </span>
+                    {winnerSavings !== null && (
+                      <span className="text-[10px] text-green-600 tabular-nums font-medium">
+                        {`+€${(winnerSavings.cents / 100).toFixed(2)} cheaper`}
+                      </span>
+                    )}
+                  </div>
+                ) : loserDelta !== null ? (
+                  <span className="text-[10px] text-red-600 tabular-nums font-medium">
+                    {`+€${(loserDelta / 100).toFixed(2)} more here`}
                   </span>
-                ) : delta !== null && delta > 0 ? (
-                  <span className="text-[10px] text-stone-500 tabular-nums">+{centsToEuro(delta)}</span>
                 ) : null}
               </div>
             )

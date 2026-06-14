@@ -9,10 +9,14 @@
     "heading_line1": "Stop met te veel betalen",
     "heading_line2": "voor hetzelfde gerecht.",
     "subtitle": "Een restaurant kan <b>20–40% duurder</b> zijn afhankelijk van de app. Forkeur vergelijkt Uber Eats, Deliveroo, Takeaway &amp; rechtstreeks bestellen — kosten inbegrepen — zodat u altijd de goedkoopste kiest.",
-    "live_badge": "Live in Brussel"
+    "live_badge": "Live in Brussel",
+    "credibility": "Echte prijzen vergelijken op UberEats, Deliveroo, Takeaway & rechtstreeks bestellen",
+    "rightNow": "Op dit moment bij jou in de buurt:",
+    "neutrality": "Geen commissies. Geen gesponsorde resultaten. Gewoon de feiten."
   },
   "search": {
-    "placeholder": "Zoek een restaurant"
+    "placeholder": "Zoek een restaurant",
+    "hint": "Probeer \"burger\", \"pizza\", \"sushi\"…"
   },
   "filters": {
     "all": "Alles",
@@ -36,7 +40,10 @@
     "load_more": "Toon {next, plural, one {# restaurant meer} other {# restaurants meer}} ({remaining} totaal resterend)",
     "none_query": "Geen restaurants gevonden voor \"{query}\"",
     "clear_search": "Zoekopdracht wissen",
-    "popular": "Populair bij u in de buurt"
+    "popular": "Populair bij u in de buurt",
+    "biggestSavings": "Grootste besparing",
+    "cheapest": "Goedkoopst",
+    "fastest": "Snelst"
   },
   "deals": {
     "heading": "Beste aanbiedingen",
@@ -144,7 +151,10 @@
     "delivery_service_fees": "bezorging + servicekosten",
     "direct_fees": "{fee} kosten",
     "save": "Bespaar {amount}",
-    "pct_cheaper": "{pct}% goedkoper"
+    "pct_cheaper": "{pct}% goedkoper",
+    "cheapestOn": "Goedkoopst op {platform}",
+    "saveVs": "Bespaar €{amount} t.o.v. {platform}",
+    "overpay": "+€{amount} meer hier"
   },
   "sort": {
     "best": "Beste match",
@@ -292,5 +302,11 @@
     "coveragePartialShort": "{matched} van {total} gevonden",
     "coveragePartialFull": "{matched} van {total} gevonden — {missing} konden we niet vergelijken",
     "feesOnlyFallback": "Bezorgkosten vergelijken — voeg artikelen toe om mand totalen te vergelijken"
+  },
+  "feed": {
+    "savingsNear": "Bespaar tot €{amount} in de buurt van {neighborhood}",
+    "savingsNearAll": "Bespaar tot €{amount} door heel Brussel",
+    "allBrussels": "Heel Brussel",
+    "coverageFooter": "Prijzen dagelijks bijgewerkt · {count} restaurants vergeleken"
   }
 }
