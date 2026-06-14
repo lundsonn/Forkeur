@@ -8,6 +8,7 @@ import { platformSavingsSelector } from '@/lib/savings'
 import { COMMUNE_SLUGS, communeDisplayName, THIN_THRESHOLD, type CommuneSlug } from '@/lib/communes'
 import LangToggle from './LangToggle'
 import RestaurantCard from './RestaurantCard'
+import HeroBlock from './HeroBlock'
 import type { Platform } from '@/lib/basket'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -184,7 +185,8 @@ export default function HomepageV2({ initialRestaurants, initialCommune }: Props
     <div className="min-h-screen bg-white">
       {/* NAV */}
       <nav className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-stone-100 px-4 py-3 flex items-center gap-3">
-        <Link href="/" className="font-bold text-xl text-stone-900 tracking-tight">
+        <Link href="/" className="flex items-center gap-1.5 font-bold text-base tracking-tight text-stone-900">
+          <span className="text-stone-700 text-base">⑂</span>
           fork<span className="text-orange-500">eur</span>
         </Link>
         <div className="flex-1" />
@@ -198,6 +200,9 @@ export default function HomepageV2({ initialRestaurants, initialCommune }: Props
       </nav>
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-8">
+
+        {/* HERO */}
+        <HeroBlock restaurants={restaurants} neighborhood={null} />
 
         {/* COMMUNE SELECTOR + SEARCH */}
         <div className="space-y-3">
