@@ -26,17 +26,22 @@ class RamSampler:
         self._proc = psutil.Process(os.getpid()) if _HAS_PSUTIL else None
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
+        # Take one immediate sample so sub-interval runs still record RAM.
+        self._sample()
+
+    def _sample(self) -> None:
+        if self._proc:
+            try:
+                mb = self._proc.memory_info().rss // (1024 * 1024)
+                self._peak_mb = max(self._peak_mb, mb)
+                self._total_mb += mb
+                self._samples += 1
+            except Exception:
+                pass
 
     def _run(self) -> None:
         while not self._stop.wait(timeout=self._interval):
-            if self._proc:
-                try:
-                    mb = self._proc.memory_info().rss // (1024 * 1024)
-                    self._peak_mb = max(self._peak_mb, mb)
-                    self._total_mb += mb
-                    self._samples += 1
-                except Exception:
-                    pass
+            self._sample()
 
     def stop(self) -> tuple[int, int]:
         """Signal stop and return (peak_mb, avg_mb). Safe to call multiple times."""
