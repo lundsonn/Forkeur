@@ -111,12 +111,12 @@ export default function BasketSimulator({
       return
     }
     if (basket.length === 0) {
-      router.replace(window.location.pathname)
+      router.replace(window.location.pathname, { scroll: false })
     } else {
       const encoded = basket
         .map((b) => encodeURIComponent(b.name) + ':' + b.qty)
         .join(',')
-      router.replace(window.location.pathname + '?basket=' + encoded)
+      router.replace(window.location.pathname + '?basket=' + encoded, { scroll: false })
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [basket])

@@ -131,7 +131,7 @@ export default function RestaurantCard({ restaurant, href, isLast, directBadge, 
       )}
 
       {/* Direct CTA — website/phone belong on the detail page */}
-      {order_url && (direct_url_type === 'ordering' || direct_url_type === 'menu') && (
+      {order_url && (direct_url_type === 'ordering' || direct_url_type === 'menu' || direct_url_type === 'website') && (
         <a
           href={order_url}
           target="_blank"

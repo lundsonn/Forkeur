@@ -6,6 +6,7 @@ import type { RestaurantSummary } from '@/lib/queries'
 import RestaurantCard from './RestaurantCard'
 import { useTranslations } from 'next-intl'
 import LangToggle from './LangToggle'
+import { getOpenStatus } from '@/lib/hours'
 
 const MapView = dynamic(() => import('./MapView'), {
   ssr: false,
@@ -13,6 +14,27 @@ const MapView = dynamic(() => import('./MapView'), {
 })
 
 type SortBy = 'best' | 'cheapest' | 'fastest'
+
+function opensAtToSortKey(opensAt: string | null): number {
+  if (opensAt === null) return Infinity
+  if (opensAt.startsWith('tomorrow ')) {
+    const time = opensAt.slice('tomorrow '.length)
+    const [h, m] = time.split(':').map(Number)
+    return 1440 + h * 60 + m
+  }
+  const [h, m] = opensAt.split(':').map(Number)
+  return h * 60 + m
+}
+
+function getClosedSortKey(r: RestaurantSummary, now: Date): { isClosed: boolean; opensAtKey: number } {
+  const bestListing = r.listings.find((l) => l.opening_hours != null) ?? r.listings[0] ?? null
+  const openingHours = bestListing?.opening_hours ?? null
+  const isAvailable = r.listings.some((l) => l.is_available)
+  const status = getOpenStatus(openingHours, now)
+  const isClosed = !isAvailable || status.status === 'closed'
+  const opensAtKey = isClosed && status.status === 'closed' ? opensAtToSortKey(status.opensAt) : 0
+  return { isClosed, opensAtKey }
+}
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371
@@ -101,22 +123,33 @@ export default function HomepageClient({
       return matchSearch && matchNeighborhood && matchCuisine
     })
 
-    if (sortBy === 'best') return base
+    let result = base
+    if (sortBy !== 'best') {
+      result = [...base].sort((a, b) => {
+        const ma = metrics.get(a.id)!
+        const mb = metrics.get(b.id)!
+        if (sortBy === 'cheapest') {
+          if (ma.minFee === null && mb.minFee === null) return 0
+          if (ma.minFee === null) return 1
+          if (mb.minFee === null) return -1
+          return ma.minFee - mb.minFee
+        }
+        // fastest
+        if (ma.minEta === null && mb.minEta === null) return 0
+        if (ma.minEta === null) return 1
+        if (mb.minEta === null) return -1
+        return ma.minEta - mb.minEta
+      })
+    }
 
-    return [...base].sort((a, b) => {
-      const ma = metrics.get(a.id)!
-      const mb = metrics.get(b.id)!
-      if (sortBy === 'cheapest') {
-        if (ma.minFee === null && mb.minFee === null) return 0
-        if (ma.minFee === null) return 1
-        if (mb.minFee === null) return -1
-        return ma.minFee - mb.minFee
-      }
-      // fastest
-      if (ma.minEta === null && mb.minEta === null) return 0
-      if (ma.minEta === null) return 1
-      if (mb.minEta === null) return -1
-      return ma.minEta - mb.minEta
+    // Open first; within closed group sort by next opening time soonest first
+    const now = new Date()
+    return [...result].sort((a, b) => {
+      const ca = getClosedSortKey(a, now)
+      const cb = getClosedSortKey(b, now)
+      if (ca.isClosed !== cb.isClosed) return ca.isClosed ? 1 : -1
+      if (ca.isClosed && cb.isClosed) return ca.opensAtKey - cb.opensAtKey
+      return 0
     })
   }, [restaurants, search, selectedNeighborhood, selectedCuisine, sortBy, metrics])
 
