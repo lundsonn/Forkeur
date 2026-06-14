@@ -202,7 +202,7 @@ async def _check_website(page, url: str, log: Callable) -> dict:
     return out
 
 
-async def _enrich_existing(browser, log: Callable) -> int:
+async def _enrich_existing(browser, log: Callable, max_items: int | None = None) -> int:
     """Check DB restaurants with websites.
 
     Two passes:
@@ -237,6 +237,9 @@ async def _enrich_existing(browser, log: Callable) -> int:
         r for r in all_restaurants
         if r['id'] not in listing_by_rid or r['id'] in stale_rids
     ]
+
+    if max_items:
+        to_process = to_process[:max_items]
 
     new_count = sum(1 for r in to_process if r['id'] not in listing_by_rid)
     stale_count = len(to_process) - new_count
@@ -504,14 +507,17 @@ async def _enrich_neighborhoods(log: Callable) -> None:
 
 async def run(config=None, log: Callable = noop_log) -> ScraperResult:
     """Run all three phases: enrich existing, discover new, geocode neighborhoods."""
+    max_items = config.max_items if config else None
     saved = 0
     async with browser_session(headed=False) as browser:
-        saved += await _enrich_existing(browser, log)
-        page = await new_page(browser)
-        saved += await _discover_maps(page, log)
-        await page.close()
+        saved += await _enrich_existing(browser, log, max_items=max_items)
+        if not max_items:
+            page = await new_page(browser)
+            saved += await _discover_maps(page, log)
+            await page.close()
 
-    await _enrich_neighborhoods(log)
+    if not max_items:
+        await _enrich_neighborhoods(log)
 
     log(f"\nDone — {saved} new direct listings saved")
     return ScraperResult(records_saved=saved)
