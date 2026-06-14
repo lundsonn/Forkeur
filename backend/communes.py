@@ -25,6 +25,29 @@ COMMUNES: dict[str, tuple[str, str, list[int], list[str]]] = {
     "woluwe-saint-pierre": ("Woluwe-Saint-Pierre", "Sint-Pieters-Woluwe", [1150], ["woluwe-saint-pierre", "sint-pieters-woluwe"]),
 }
 
+# slug → (lat, lng) centroid of each commune
+COMMUNE_CENTROIDS: dict[str, tuple[float, float]] = {
+    "anderlecht": (50.6619, 4.3059),
+    "auderghem": (50.8131, 4.4326),
+    "berchem-sainte-agathe": (50.8681, 4.2992),
+    "bruxelles": (50.8503, 4.3517),
+    "etterbeek": (50.8352, 4.3896),
+    "evere": (50.8737, 4.4023),
+    "forest": (50.8113, 4.3309),
+    "ganshoren": (50.8815, 4.3149),
+    "ixelles": (50.8271, 4.3707),
+    "jette": (50.8875, 4.3282),
+    "koekelberg": (50.8674, 4.3341),
+    "molenbeek": (50.8613, 4.3123),
+    "saint-gilles": (50.8261, 4.3454),
+    "saint-josse": (50.8545, 4.3697),
+    "schaerbeek": (50.8663, 4.3787),
+    "uccle": (50.7960, 4.3556),
+    "watermael-boitsfort": (50.7997, 4.4253),
+    "woluwe-saint-lambert": (50.8416, 4.4338),
+    "woluwe-saint-pierre": (50.8202, 4.4555),
+}
+
 # Build reverse lookup: postal_code → slug
 _POSTAL_TO_SLUG: dict[int, str] = {}
 for _slug, (_fr, _nl, _codes, _aliases) in COMMUNES.items():

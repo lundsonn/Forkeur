@@ -1,14 +1,19 @@
-import HomepageClient from '@/components/HomepageClient'
-import { getRestaurants } from '@/lib/queries'
+import HomepageV2 from '@/components/HomepageV2'
+import { getNearMe } from '@/lib/queries'
 
-export const revalidate = 3600
+export const revalidate = 300
 
 export default async function Home() {
-  const { restaurants, cuisines } = await getRestaurants()
+  let restaurants
+  try {
+    restaurants = await getNearMe('bruxelles')
+  } catch {
+    restaurants = []
+  }
 
   return (
     <div className="min-h-screen bg-white">
-      <HomepageClient restaurants={restaurants} cuisines={cuisines} />
+      <HomepageV2 initialRestaurants={restaurants} initialCommune="bruxelles" />
     </div>
   )
 }

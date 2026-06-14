@@ -329,5 +329,39 @@
     "heading": "{cuisine} à {commune}",
     "count": "{count} restaurants comparés",
     "back": "← {cuisine} à Bruxelles"
+  },
+  "owners_proof": {
+    "eyebrow": "VOTRE RESTAURANT SUR FORKEUR",
+    "for_owners_link": "Pour les restaurateurs",
+    "platforms_generic": "les plateformes de livraison",
+    "hero_commission": "Chaque commande directe vous rapporte ~{amount} de plus que ce que {platform} prend en commission sur une commande typique de {order}. ~{pct}% par commande — volatilisés.",
+    "rank_claim": "Les clients qui commandent {name} en direct obtiennent la meilleure offre sur Forkeur.",
+    "section_keep": "CE QUE VOUS GARDEZ · PAR COMMANDE DE {order}",
+    "keep_label": "VOUS GARDEZ",
+    "direct_approx": "≈ après frais de paiement (~3%)",
+    "commission_taken": "−{amount} de commission",
+    "estimate_note": "Le % de commission est une estimation sectorielle (les plateformes prennent généralement 25–30%). Votre taux réel peut varier.",
+    "firewall_bold": "Impossible de payer pour être classé le moins cher.",
+    "firewall_body": "Les classements sont basés uniquement sur les prix réels. La commande directe gagne quand elle coûte réellement moins cher — parce qu'elle évite la commission de la plateforme.",
+    "claim_heading": "Revendiquer {name}",
+    "claim_body": "Vérifiez votre propriété pour corriger votre lien direct, mettre à jour vos horaires et activer Commande Directe.",
+    "claim_cta": "Revendiquer {name} →"
+  },
+  "discovery": {
+    "commune_label": "Près de",
+    "decide_btn": "Choisir pour moi",
+    "decide_not_feeling": "Pas convaincu ?",
+    "decide_exhausted": "C'est le meilleur près de chez vous ce soir",
+    "decide_browse_all": "Voir tous les restaurants →",
+    "shelf_best_value": "Meilleur rapport qualité-prix",
+    "shelf_direct": "Évitez les frais · commandez en direct",
+    "shelf_deals": "Promos du soir",
+    "no_platform_fee": "Sans frais de plateforme",
+    "loading": "Chargement…",
+    "thin_hint": "{count} restaurants comparés ici",
+    "save_label": "Économisez {amount}",
+    "from_label": "à partir de {amount} sur {platform}",
+    "free_delivery": "Livraison offerte",
+    "deals_promo": "{label}"
   }
 }

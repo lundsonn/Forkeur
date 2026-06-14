@@ -329,5 +329,39 @@
     "heading": "{cuisine} in {commune}",
     "count": "{count} restaurants compared",
     "back": "← {cuisine} in Brussels"
+  },
+  "owners_proof": {
+    "eyebrow": "YOUR RESTAURANT ON FORKEUR",
+    "for_owners_link": "For owners",
+    "platforms_generic": "delivery platforms",
+    "hero_commission": "Every direct order keeps you ~{amount} that {platform} takes as commission on a typical {order} order. ~{pct}% per order — gone.",
+    "rank_claim": "Customers ordering {name} direct get the cheapest deal on Forkeur.",
+    "section_keep": "WHAT YOU KEEP · PER {order} ORDER",
+    "keep_label": "YOU KEEP",
+    "direct_approx": "≈ after payment processing (~3%)",
+    "commission_taken": "−{amount} commission",
+    "estimate_note": "Commission % is an industry estimate (platforms typically take 25–30%). Your actual rate may vary.",
+    "firewall_bold": "You can't pay to be ranked cheapest.",
+    "firewall_body": "Rankings are based on real prices only. Direct ordering wins when it genuinely costs customers less — because it skips the platform commission.",
+    "claim_heading": "Claim {name}",
+    "claim_body": "Verify ownership to fix your direct link, update hours, and turn on Order Direct.",
+    "claim_cta": "Claim {name} →"
+  },
+  "discovery": {
+    "commune_label": "Near",
+    "decide_btn": "Decide for me",
+    "decide_not_feeling": "Not feeling it?",
+    "decide_exhausted": "That's tonight's best near you",
+    "decide_browse_all": "Browse all restaurants →",
+    "shelf_best_value": "Best value right now",
+    "shelf_direct": "Skip the fees · order direct",
+    "shelf_deals": "Tonight's deals",
+    "no_platform_fee": "No platform fee",
+    "loading": "Loading…",
+    "thin_hint": "{count} restaurants compared here",
+    "save_label": "Save {amount}",
+    "from_label": "from {amount} on {platform}",
+    "free_delivery": "Free delivery",
+    "deals_promo": "{label}"
   }
 }

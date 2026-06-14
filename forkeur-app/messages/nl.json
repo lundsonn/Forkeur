@@ -329,5 +329,39 @@
     "heading": "{cuisine} in {commune}",
     "count": "{count} restaurants vergeleken",
     "back": "← {cuisine} in Brussel"
+  },
+  "owners_proof": {
+    "eyebrow": "UW RESTAURANT OP FORKEUR",
+    "for_owners_link": "Voor restauranthouders",
+    "platforms_generic": "bezorgplatforms",
+    "hero_commission": "Elke directe bestelling levert u ~{amount} meer op dan wat {platform} als commissie inhoudt op een typische bestelling van {order}. ~{pct}% per bestelling — weg.",
+    "rank_claim": "Klanten die {name} direct bestellen krijgen de goedkoopste deal op Forkeur.",
+    "section_keep": "WAT U HOUDT · PER BESTELLING VAN {order}",
+    "keep_label": "U HOUDT",
+    "direct_approx": "≈ na betalingskosten (~3%)",
+    "commission_taken": "−{amount} commissie",
+    "estimate_note": "Het commissiepercentage is een sectorschatting (platforms nemen doorgaans 25–30%). Uw werkelijke tarief kan afwijken.",
+    "firewall_bold": "U kunt niet betalen om het goedkoopst gerangschikt te worden.",
+    "firewall_body": "Rankings zijn uitsluitend gebaseerd op echte prijzen. Direct bestellen wint wanneer het klanten daadwerkelijk minder kost — omdat de platformcommissie wordt omzeild.",
+    "claim_heading": "{name} claimen",
+    "claim_body": "Verifieer eigendom om uw directe link te corrigeren, openingstijden bij te werken en Direct Bestellen in te schakelen.",
+    "claim_cta": "{name} claimen →"
+  },
+  "discovery": {
+    "commune_label": "Dichtbij",
+    "decide_btn": "Kies voor mij",
+    "decide_not_feeling": "Toch niet?",
+    "decide_exhausted": "Dit is het beste bij jou in de buurt vanavond",
+    "decide_browse_all": "Bekijk alle restaurants →",
+    "shelf_best_value": "Beste prijs-kwaliteit nu",
+    "shelf_direct": "Geen platformkosten · bestel direct",
+    "shelf_deals": "Aanbiedingen van vanavond",
+    "no_platform_fee": "Geen platformkosten",
+    "loading": "Laden…",
+    "thin_hint": "{count} restaurants vergeleken hier",
+    "save_label": "Bespaar {amount}",
+    "from_label": "vanaf {amount} op {platform}",
+    "free_delivery": "Gratis levering",
+    "deals_promo": "{label}"
   }
 }

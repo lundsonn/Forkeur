@@ -24,7 +24,7 @@ export type RestaurantSummary = {
   is_chain: boolean
   platform_count: number
   has_comparison: boolean
-  listings: { platform: Platform; delivery_fee_cents: number | null; min_order_cents: number | null; eta_min: number | null; is_available: boolean; opening_hours: OpeningHours | null }[]
+  listings: { platform: Platform; delivery_fee_cents: number | null; min_order_cents: number | null; eta_min: number | null; is_available: boolean; opening_hours: OpeningHours | null; promotions?: PromoItem[] }[]
   cheapest: {
     platform: Platform
     fee_label: string
@@ -99,6 +99,7 @@ type RawListingShort = {
   is_available: boolean | null
   opening_hours: OpeningHours | null
   last_scraped_at: string | null
+  promotions?: RawPromoItemRow[]
 }
 
 type RawRestaurantRow = {
@@ -301,6 +302,84 @@ export async function getRestaurants(): Promise<{
     .slice(0, 8)
 
   return { restaurants, cuisines }
+}
+
+export async function getNearMe(commune: string): Promise<RestaurantSummary[]> {
+  const data = await backendFetch<RawRestaurantRow[]>(`/api/public/near-me?commune=${encodeURIComponent(commune)}`, { revalidate: 300 })
+
+  return ((data ?? []) as unknown as RawRestaurantRow[]).map((r) => {
+    const rawListings = (r.platform_listings ?? []) as (RawListingShort & { promotions?: RawPromoItemRow[] })[]
+
+    const listings = rawListings.map((l) => ({
+      platform: l.platform as Platform,
+      delivery_fee_cents: feeCents(l.delivery_fee),
+      min_order_cents: feeCents(l.min_order),
+      eta_min: l.eta_min ?? null,
+      is_available: l.is_available !== false,
+      opening_hours: l.opening_hours ?? null,
+      promotions: (l.promotions ?? []).map((p) => ({ promo_type: p.promo_type, label: p.label, value: p.value })),
+    }))
+
+    const directListing = rawListings.find((l) => l.platform === 'direct') ?? null
+    const direct_url_type: string | null = directListing?.url_type ?? null
+
+    const available = listings.filter((l) => l.platform !== 'direct' && l.delivery_fee_cents !== null)
+
+    const lat = r.lat != null ? Number(r.lat) : null
+    const lng = r.lng != null ? Number(r.lng) : null
+
+    if (available.length === 0) {
+      return {
+        id: r.id,
+        name: r.name,
+        slug: r.slug ?? null,
+        commune: r.commune ?? null,
+        neighborhood: r.neighborhood ?? null,
+        cuisine: r.cuisine ? [r.cuisine] : [],
+        lat,
+        lng,
+        order_url: r.order_url ?? null,
+        image_url: r.image_url ?? null,
+        rating: null,
+        direct_url_type,
+        is_chain: r.is_chain ?? false,
+        platform_count: r.platform_count ?? 0,
+        has_comparison: r.has_comparison ?? true,
+        listings,
+        cheapest: null,
+      }
+    }
+
+    const withEff = available.map((l) => ({ ...l, eff: l.delivery_fee_cents ?? 0 })).sort((a, b) => a.eff - b.eff)
+    const cheapest = withEff[0]
+    const nextCheapest = withEff[1] ?? null
+
+    return {
+      id: r.id,
+      name: r.name,
+      slug: r.slug ?? null,
+      commune: r.commune ?? null,
+      neighborhood: r.neighborhood ?? null,
+      cuisine: r.cuisine ? [r.cuisine] : [],
+      lat,
+      lng,
+      order_url: r.order_url ?? null,
+      image_url: r.image_url ?? null,
+      rating: null,
+      direct_url_type,
+      is_chain: r.is_chain ?? false,
+      platform_count: r.platform_count ?? 0,
+      has_comparison: r.has_comparison ?? true,
+      listings,
+      cheapest: {
+        platform: cheapest.platform,
+        fee_label: feeLabel(cheapest.delivery_fee_cents !== null ? cheapest.delivery_fee_cents / 100 : null) ?? '?',
+        savings_cents: nextCheapest !== null ? nextCheapest.eff - cheapest.eff : 0,
+        delivery_fee_cents: cheapest.delivery_fee_cents,
+        min_order_cents: cheapest.min_order_cents,
+      },
+    }
+  })
 }
 
 export async function getDeals(): Promise<DealItem[]> {

@@ -29,6 +29,11 @@ async def public_restaurant_detail(restaurant_id: str):
     return row
 
 
+@router.get("/near-me")
+async def public_near_me(commune: str = "bruxelles"):
+    return await asyncio.to_thread(db.get_public_near_me, commune)
+
+
 @router.get("/deals")
 async def public_deals():
     return await asyncio.to_thread(db.get_public_deals)

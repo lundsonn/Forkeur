@@ -4,7 +4,7 @@ import json as _json
 from uuid import UUID
 
 import pgpool
-from communes import resolve_commune
+from communes import resolve_commune, COMMUNE_CENTROIDS
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -920,6 +920,84 @@ def get_public_restaurants() -> list[dict]:
     for row in rows:
         row["commune"] = resolve_commune(row.pop("postal_code"), row.get("neighborhood"))
     return rows
+
+def get_public_near_me(commune_slug: str, radius_m: float = 3000.0) -> list[dict]:
+    """Near-me: restaurants with comparison data within radius_m of commune centroid."""
+    centroid = COMMUNE_CENTROIDS.get(commune_slug) or COMMUNE_CENTROIDS["bruxelles"]
+    lat, lng = centroid
+    rows = pgpool.fetchall(
+        """
+        SELECT sub.*
+        FROM (
+          SELECT r.id, r.name, r.cuisine, r.neighborhood, r.lat, r.lng,
+                 r.order_url, r.image_url, r.is_chain, r.slug,
+                 (
+                   SELECT pl_pc.postal_code
+                   FROM platform_listings pl_pc
+                   WHERE pl_pc.restaurant_id = r.id
+                     AND pl_pc.postal_code IS NOT NULL
+                   ORDER BY
+                     CASE pl_pc.platform
+                       WHEN 'uber_eats'  THEN 1
+                       WHEN 'deliveroo'  THEN 2
+                       ELSE 3
+                     END
+                   LIMIT 1
+                 ) AS postal_code,
+                 COUNT(DISTINCT pl.platform) FILTER (WHERE pl.id IS NOT NULL) AS platform_count,
+                 6371000.0 * acos(LEAST(1.0,
+                   sin(radians(%s)) * sin(radians(r.lat)) +
+                   cos(radians(%s)) * cos(radians(r.lat)) * cos(radians(r.lng) - radians(%s))
+                 )) AS dist_m,
+                 COALESCE(
+                   json_agg(
+                     json_build_object(
+                       'platform', pl.platform,
+                       'delivery_fee', pl.delivery_fee,
+                       'min_order', pl.min_order,
+                       'eta_min', pl.eta_min,
+                       'url_type', pl.url_type,
+                       'is_available', pl.is_available,
+                       'opening_hours', pl.opening_hours,
+                       'last_scraped_at', pl.last_scraped_at,
+                       'promotions', COALESCE((
+                         SELECT json_agg(json_build_object(
+                           'promo_type', pr.promo_type,
+                           'label', pr.label,
+                           'value', pr.value
+                         ))
+                         FROM promotions pr WHERE pr.listing_id = pl.id
+                       ), '[]'::json)
+                     )
+                   ) FILTER (WHERE pl.id IS NOT NULL),
+                   '[]'::json
+                 ) AS platform_listings
+          FROM restaurants r
+          LEFT JOIN platform_listings pl ON pl.restaurant_id = r.id
+            AND pl.last_scraped_at > now() - interval '72 hours'
+          WHERE r.merged_into IS NULL
+            AND r.exclude_reason IS NULL
+            AND r.lat IS NOT NULL
+            AND r.lng IS NOT NULL
+          GROUP BY r.id
+          HAVING COUNT(DISTINCT pl.platform) FILTER (WHERE pl.id IS NOT NULL) >= 2
+            AND EXISTS (
+              SELECT 1 FROM menu_items mi
+              JOIN platform_listings pl2 ON pl2.id = mi.listing_id
+              WHERE pl2.restaurant_id = r.id
+                AND pl2.last_scraped_at > now() - interval '72 hours'
+            )
+        ) sub
+        WHERE sub.dist_m <= %s
+        ORDER BY sub.dist_m
+        """,
+        [lat, lat, lng, radius_m],
+    )
+    for row in rows:
+        row["commune"] = resolve_commune(row.pop("postal_code"), row.get("neighborhood"))
+        row["has_comparison"] = True  # HAVING guarantees it
+    return rows
+
 
 def get_public_restaurant_detail(restaurant_id: str) -> dict | None:
     """Detail page: one restaurant, listings with nested menu_items + promotions."""

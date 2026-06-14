@@ -1,4 +1,6 @@
 export const MIN_COMPARISON_RESTAURANTS = 3
+export const THIN_THRESHOLD = 10
+export const RADIUS_CAP = 3000
 
 export const COMMUNE_SLUGS = [
   'anderlecht',
