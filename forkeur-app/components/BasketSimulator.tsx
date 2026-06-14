@@ -266,7 +266,7 @@ export default function BasketSimulator({
           coverages={coverages}
           cheapestPlatform={effectiveCheapestPlatform}
           menuDirectSavingsCents={menuDirectSavingsCents}
-          phone={phone}
+          phone={phone ?? undefined}
           orderChannel={orderChannel ?? undefined}
           isFeesOnly={isFeesOnly}
         />
