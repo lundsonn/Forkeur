@@ -17,7 +17,7 @@ async def public_restaurants():
     return await asyncio.to_thread(db.get_public_restaurants)
 
 
-@router.get("/restaurants/{restaurant_id}")
+@router.get("/restaurants/{restaurant_id:path}")
 async def public_restaurant_detail(restaurant_id: str):
     try:
         row = await asyncio.to_thread(db.get_public_restaurant_detail, restaurant_id)

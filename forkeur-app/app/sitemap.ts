@@ -29,10 +29,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const crossCount = new Map<string, number>()
 
   for (const r of compared) {
-    if (r.cuisine) cuisineCount.set(r.cuisine, (cuisineCount.get(r.cuisine) ?? 0) + 1)
+    const cuisine = r.cuisine?.toLowerCase()
+    if (cuisine) cuisineCount.set(cuisine, (cuisineCount.get(cuisine) ?? 0) + 1)
     if (r.commune) communeCount.set(r.commune, (communeCount.get(r.commune) ?? 0) + 1)
-    if (r.cuisine && r.commune) {
-      const key = `${r.cuisine}/${r.commune}`
+    if (cuisine && r.commune) {
+      const key = `${cuisine}/${r.commune}`
       crossCount.set(key, (crossCount.get(key) ?? 0) + 1)
     }
   }
