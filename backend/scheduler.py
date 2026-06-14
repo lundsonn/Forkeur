@@ -9,6 +9,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.combining import OrTrigger
 from models import ScraperConfig, ScheduleConfigIn, ScheduleConfigOut
 from scrapers.base import CloudflareBlockedError
+from scrapers.metrics import RamSampler, RunMetrics
 import alerting
 import db
 
@@ -47,18 +48,25 @@ async def _run_scraper(platform: str) -> None:
 
         if platform == "direct_menu":
             run_id = db.create_run(platform)
+            sampler = RamSampler()
             try:
                 result = await direct_menu.run()
-                db.finish_run(run_id, "success", records_saved=result.get("total_scraped", 0))
+                peak_mb, avg_mb = sampler.stop()
+                db.finish_run(run_id, "success", records_saved=result.get("total_scraped", 0),
+                              peak_ram_mb=peak_mb, avg_ram_mb=avg_mb)
             except asyncio.CancelledError:
                 # Stop requested (or batch cancelled a hung run). CancelledError is a
                 # BaseException, so `except Exception` below misses it — finalize the
                 # run row here or it stays "running" forever, then re-raise so asyncio
                 # teardown proceeds and `finally` clears _running/_tasks.
-                db.finish_run(run_id, "failed", error_msg="cancelled (stop requested or hung)")
+                peak_mb, avg_mb = sampler.stop()
+                db.finish_run(run_id, "failed", error_msg="cancelled (stop requested or hung)",
+                              peak_ram_mb=peak_mb, avg_ram_mb=avg_mb)
                 raise
             except Exception as e:
-                db.finish_run(run_id, "failed", error_msg=str(e))
+                peak_mb, avg_mb = sampler.stop()
+                db.finish_run(run_id, "failed", error_msg=str(e),
+                              peak_ram_mb=peak_mb, avg_ram_mb=avg_mb)
                 alerting.send_failure_alert(platform, str(e), run_id)
             return
 
@@ -76,20 +84,38 @@ async def _run_scraper(platform: str) -> None:
         # their asyncio waits interleave so concurrent runs are safe.
         run_id = db.create_run(platform)
         scraper_fn = SCRAPERS[platform]
-        kwargs = {"run_id": run_id} if "run_id" in inspect.signature(scraper_fn).parameters else {}
+        metrics = RunMetrics()
+        sampler = RamSampler()
+        sig = inspect.signature(scraper_fn).parameters
+        kwargs = {"run_id": run_id} if "run_id" in sig else {}
+        if "metrics" in sig:
+            kwargs["metrics"] = metrics
+
+        def _finish(status: str, records_saved: int = 0, error_msg: str | None = None) -> None:
+            peak_mb, avg_mb = sampler.stop()
+            db.finish_run(
+                run_id, status, records_saved=records_saved, error_msg=error_msg,
+                peak_ram_mb=peak_mb, avg_ram_mb=avg_mb,
+                phase_durations=metrics.phase_durations,
+                cooldown_hits=metrics.cooldown_hits,
+                items_attempted=metrics.items_attempted,
+                items_skipped=metrics.items_skipped,
+                items_failed=metrics.items_failed,
+            )
+
         try:
             result = await scraper_fn(ScraperConfig(), _noop, **kwargs)
-            db.finish_run(run_id, "success", records_saved=result.records_saved)
+            _finish("success", records_saved=result.records_saved)
         except asyncio.CancelledError:
             # See direct_menu branch: CancelledError bypasses `except Exception`, so
             # finalize the run here (else it orphans as "running") and re-raise.
-            db.finish_run(run_id, "failed", error_msg="cancelled (stop requested or hung)")
+            _finish("failed", error_msg="cancelled (stop requested or hung)")
             raise
         except CloudflareBlockedError as e:
-            db.finish_run(run_id, "blocked", error_msg=str(e))
+            _finish("blocked", error_msg=str(e))
             alerting.send_failure_alert(platform, str(e), run_id)
         except Exception as e:
-            db.finish_run(run_id, "failed", error_msg=str(e))
+            _finish("failed", error_msg=str(e))
             alerting.send_failure_alert(platform, str(e), run_id)
     finally:
         _running.discard(platform)
@@ -230,24 +256,34 @@ async def _run_batch_all() -> None:
 async def _run_match() -> None:
     from scrapers import match as _match
     run_id = db.create_run("match")
+    sampler = RamSampler()
     try:
         result = await asyncio.to_thread(_match.run_sync, dry_run=False, log_fn=_noop)
-        db.finish_run(run_id, "success", records_saved=result["auto_merge"])
+        peak_mb, avg_mb = sampler.stop()
+        db.finish_run(run_id, "success", records_saved=result["auto_merge"],
+                      peak_ram_mb=peak_mb, avg_ram_mb=avg_mb)
     except Exception as e:
-        db.finish_run(run_id, "failed", error_msg=str(e))
+        peak_mb, avg_mb = sampler.stop()
+        db.finish_run(run_id, "failed", error_msg=str(e),
+                      peak_ram_mb=peak_mb, avg_ram_mb=avg_mb)
         alerting.send_failure_alert("match", str(e), run_id)
 
 
 async def _run_daily_cleanup() -> None:
     run_id = db.create_run("cleanup")
+    sampler = RamSampler()
     try:
         deleted = await asyncio.to_thread(db.delete_stale_listings, days=30)
         pruned = await asyncio.to_thread(db.prune_stale_menu_items, days=30)
-        db.finish_run(run_id, "success", records_saved=deleted + pruned)
+        peak_mb, avg_mb = sampler.stop()
+        db.finish_run(run_id, "success", records_saved=deleted + pruned,
+                      peak_ram_mb=peak_mb, avg_ram_mb=avg_mb)
         if deleted or pruned:
             _noop(f"Daily cleanup: deleted {deleted} stale listings, pruned {pruned} menu items")
     except Exception as e:
-        db.finish_run(run_id, "failed", error_msg=str(e))
+        peak_mb, avg_mb = sampler.stop()
+        db.finish_run(run_id, "failed", error_msg=str(e),
+                      peak_ram_mb=peak_mb, avg_ram_mb=avg_mb)
         alerting.send_failure_alert("cleanup", str(e), run_id)
 
 
