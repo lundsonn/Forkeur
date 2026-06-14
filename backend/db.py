@@ -4,6 +4,7 @@ import json as _json
 from uuid import UUID
 
 import pgpool
+from communes import resolve_commune
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -869,10 +870,34 @@ def load_listing_addresses_for_match() -> dict[str, dict]:
 
 def get_public_restaurants() -> list[dict]:
     """Homepage: every non-merged restaurant with its listings (short shape)."""
-    return pgpool.fetchall(
+    rows = pgpool.fetchall(
         """
         SELECT r.id, r.name, r.cuisine, r.neighborhood, r.lat, r.lng,
-               r.order_url, r.image_url, r.is_chain,
+               r.order_url, r.image_url, r.is_chain, r.slug,
+               (
+                 SELECT pl_pc.postal_code
+                 FROM platform_listings pl_pc
+                 WHERE pl_pc.restaurant_id = r.id
+                   AND pl_pc.postal_code IS NOT NULL
+                 ORDER BY
+                   CASE pl_pc.platform
+                     WHEN 'uber_eats'  THEN 1
+                     WHEN 'deliveroo'  THEN 2
+                     ELSE 3
+                   END
+                 LIMIT 1
+               ) AS postal_code,
+               COUNT(DISTINCT pl.platform) FILTER (WHERE pl.id IS NOT NULL) AS platform_count,
+               CASE
+                 WHEN COUNT(DISTINCT pl.platform) FILTER (WHERE pl.id IS NOT NULL) >= 2
+                      AND EXISTS (
+                        SELECT 1 FROM menu_items mi
+                        JOIN platform_listings pl2 ON pl2.id = mi.listing_id
+                        WHERE pl2.restaurant_id = r.id
+                          AND pl2.last_scraped_at > now() - interval '72 hours'
+                      )
+                 THEN true ELSE false
+               END AS has_comparison,
                COALESCE(
                  json_agg(
                    json_build_object(
@@ -892,13 +917,16 @@ def get_public_restaurants() -> list[dict]:
         GROUP BY r.id
         """
     )
+    for row in rows:
+        row["commune"] = resolve_commune(row.pop("postal_code"), row.get("neighborhood"))
+    return rows
 
 def get_public_restaurant_detail(restaurant_id: str) -> dict | None:
     """Detail page: one restaurant, listings with nested menu_items + promotions."""
     _validate_uuid(restaurant_id)
     return pgpool.fetchone(
         """
-        SELECT r.id, r.name, r.neighborhood, r.cuisine, r.phone,
+        SELECT r.id, r.slug, r.name, r.neighborhood, r.cuisine, r.phone,
                r.phone_confidence, r.order_channel,
                r.order_url, r.image_url,
                COALESCE(
@@ -930,6 +958,44 @@ def get_public_restaurant_detail(restaurant_id: str) -> dict | None:
         """,
         [restaurant_id],
     )
+
+def get_public_restaurant_by_slug(slug: str) -> dict | None:
+    """Detail page lookup by slug (no UUID validation — slug is a plain string)."""
+    return pgpool.fetchone(
+        """
+        SELECT r.id, r.slug, r.name, r.neighborhood, r.cuisine, r.phone,
+               r.phone_confidence, r.order_channel,
+               r.order_url, r.image_url,
+               COALESCE(
+                 json_agg(
+                   json_build_object(
+                     'id', pl.id, 'platform', pl.platform, 'url', pl.url,
+                     'url_type', pl.url_type, 'is_available', pl.is_available,
+                     'opening_hours', pl.opening_hours, 'delivery_fee', pl.delivery_fee,
+                     'min_order', pl.min_order, 'eta_min', pl.eta_min,
+                     'eta_max', pl.eta_max, 'rating', pl.rating,
+                     'last_scraped_at', pl.last_scraped_at,
+                     'menu_items', COALESCE((
+                       SELECT json_agg(json_build_object(
+                         'title', mi.title, 'price', mi.price,
+                         'catalog_name', mi.catalog_name, 'image_url', mi.image_url,
+                         'description', mi.description))
+                       FROM menu_items mi WHERE mi.listing_id = pl.id), '[]'),
+                     'promotions', COALESCE((
+                       SELECT json_agg(json_build_object(
+                         'promo_type', pr.promo_type, 'label', pr.label, 'value', pr.value))
+                       FROM promotions pr WHERE pr.listing_id = pl.id), '[]')
+                   )
+                 ) FILTER (WHERE pl.id IS NOT NULL), '[]'
+               ) AS platform_listings
+        FROM restaurants r
+        LEFT JOIN platform_listings pl ON pl.restaurant_id = r.id
+        WHERE r.slug = %s
+        GROUP BY r.id
+        """,
+        [slug],
+    )
+
 
 def get_public_deals() -> list[dict]:
     """Deals page: promotions joined to listing + restaurant (nested shape)."""

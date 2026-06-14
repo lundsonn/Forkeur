@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Image from 'next/image'
-import { notFound } from 'next/navigation'
+import { notFound, permanentRedirect } from 'next/navigation'
 import { Suspense } from 'react'
 
 export const revalidate = 3600
@@ -16,6 +16,8 @@ import BasketSimulator from '@/components/BasketSimulator'
 import MenuPriceBars from '@/components/MenuPriceBars'
 import OpenStatusBadge from '@/components/OpenStatusBadge'
 import PlatformLogo from '@/components/ui/PlatformLogo'
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function promoBadgeText(tBadge: any, promo: PromoItem): string {
@@ -33,10 +35,10 @@ function promoBadgeText(tBadge: any, promo: PromoItem): string {
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ id: string }>
+  params: Promise<{ slug: string }>
 }): Promise<Metadata> {
-  const { id } = await params
-  const data = await getRestaurantWithListings(id)
+  const { slug } = await params
+  const data = await getRestaurantWithListings(slug)
   if (!data) return { title: 'Restaurant — Forkeur' }
 
   const t = await getTranslations('detail')
@@ -50,7 +52,7 @@ export async function generateMetadata({
   )
   const hasComparison = recentDeliveryListings.length >= 2 && data.menuItems.length > 0
 
-  const canonical = restaurantCanonical(id)
+  const canonical = restaurantCanonical(data.id, data.slug)
 
   return {
     title,
@@ -74,11 +76,11 @@ export async function generateMetadata({
 export default async function Page({
   params,
 }: {
-  params: Promise<{ id: string }>
+  params: Promise<{ slug: string }>
 }) {
-  const { id } = await params
+  const { slug } = await params
   const [data, tDirect, tCard, tDetail, tBadge, tOwners, tCompare, tDeals] = await Promise.all([
-    getRestaurantWithListings(id),
+    getRestaurantWithListings(slug),
     getTranslations('direct'),
     getTranslations('card'),
     getTranslations('detail'),
@@ -88,6 +90,9 @@ export default async function Page({
     getTranslations('deals'),
   ])
   if (!data) notFound()
+
+  // UUID in the URL → 301 to the canonical slug URL
+  if (data.slug && UUID_RE.test(slug)) permanentRedirect(`/restaurant/${data.slug}`)
 
   const { matchRate } = data
   const tier = matchRate >= 0.7 ? 1 : matchRate >= 0.3 ? 2 : 3
@@ -125,9 +130,9 @@ export default async function Page({
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Restaurant',
-    '@id': restaurantCanonical(id),
+    '@id': restaurantCanonical(data.id, data.slug),
     name: data.name,
-    url: restaurantCanonical(id),
+    url: restaurantCanonical(data.id, data.slug),
     ...(data.image_url ? { image: data.image_url } : {}),
     ...((data.cuisine ?? []).length > 0 ? { servesCuisine: data.cuisine } : {}),
     address: {
@@ -463,7 +468,7 @@ export default async function Page({
                   </div>
                 ) : (
                   <Suspense fallback={null}>
-                    <BasketSimulator menuItems={data.menuItems} listings={data.listings} phone={data.phone} phoneConfidence={data.phone_confidence} orderChannel={data.order_channel} matchRate={matchRate} restaurantId={id} />
+                    <BasketSimulator menuItems={data.menuItems} listings={data.listings} phone={data.phone} phoneConfidence={data.phone_confidence} orderChannel={data.order_channel} matchRate={matchRate} restaurantId={data.id} />
                   </Suspense>
                 )}
               </div>

@@ -13,6 +13,7 @@ export type RestaurantSummary = {
   id: string
   name: string
   slug: string | null
+  commune: string | null
   neighborhood: string | null
   cuisine: string[]
   lat: number | null
@@ -75,6 +76,7 @@ export type MenuItemWithPrices = {
 export type RestaurantDetail = {
   id: string
   name: string
+  slug: string | null
   city: string
   cuisine: string[]
   phone: string | null
@@ -104,6 +106,7 @@ type RawRestaurantRow = {
   id: string
   name: string
   slug: string | null
+  commune: string | null
   cuisine: string | null
   neighborhood: string | null
   lat: number | null
@@ -165,6 +168,7 @@ type RawListingDetail = {
 type RawRestaurantDetail = {
   id: string
   name: string
+  slug: string | null
   neighborhood: string | null
   cuisine: string | null
   phone: string | null
@@ -225,6 +229,7 @@ export async function getRestaurants(): Promise<{
           id: r.id,
           name: r.name,
           slug: r.slug ?? null,
+          commune: r.commune ?? null,
           neighborhood,
           cuisine: r.cuisine ? [r.cuisine] : [],
           lat,
@@ -252,6 +257,7 @@ export async function getRestaurants(): Promise<{
         id: r.id,
         name: r.name,
         slug: r.slug ?? null,
+        commune: r.commune ?? null,
         neighborhood,
         cuisine: r.cuisine ? [r.cuisine] : [],
         lat,
@@ -467,6 +473,7 @@ export const getRestaurantWithListings = cache(async (
   return {
     id: raw.id,
     name: raw.name,
+    slug: raw.slug ?? null,
     city: raw.neighborhood ?? 'Brussels',
     cuisine: raw.cuisine ? [raw.cuisine] : [],
     phone: raw.phone ?? null,

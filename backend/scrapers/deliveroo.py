@@ -444,6 +444,15 @@ _LISTING_JS = """anchors => {
         );
         const heroImg = card.querySelector('img[src]');
         const isClosed = lines.some(l => /^(ferm[eé]|closed|gesloten|pr[eé]-?commande|pre-?order|vooruitbestellen)/i.test(l));
+        // Capture "Opens at HH:MM" / "Ouvre à HHhMM" / "Opent om HH:MM" from closed cards
+        // and "Closes at HH:MM" / "Ferme à HHhMM" / "Sluit om HH:MM" from open cards.
+        // These texts only appear when restaurant is closed/closing-soon; null when open mid-service.
+        const _timeRe = /(?:ouvre?\s+[àa]|opens?\s+at|opent\s+om|ferme\s+[àa]|closes?\s+at|sluit\s+om)\s+(\d{1,2}[h:]\d{2})/i;
+        const _openRe = /(?:ouvre?\s+[àa]|opens?\s+at|opent\s+om)\s+(\d{1,2}[h:]\d{2})/i;
+        const _closeRe = /(?:ferme\s+[àa]|closes?\s+at|sluit\s+om)\s+(\d{1,2}[h:]\d{2})/i;
+        const timeLine = lines.find(l => _timeRe.test(l)) || null;
+        const nextOpenM = timeLine ? timeLine.match(_openRe) : null;
+        const closesAtM = timeLine ? timeLine.match(_closeRe) : null;
         return {
             name, url: a.href, slug,
             rating: ratingMatch ? ratingMatch[1] : 'N/A',
@@ -453,6 +462,8 @@ _LISTING_JS = """anchors => {
             promoLines,
             image_url: heroImg ? heroImg.src : null,
             is_closed: isClosed,
+            next_open: nextOpenM ? nextOpenM[1] : null,
+            closes_at: closesAtM ? closesAtM[1] : null,
         };
     });
 }"""
@@ -618,6 +629,16 @@ async def run(config: ScraperConfig, log_fn: Callable[[str], None] = noop_log, m
             })
             promos = parse_promo_texts(r.get("promoLines") or [])
             promo_total += db.upsert_promotions(lid, promos)
+            next_open = r.get("next_open")
+            closes_at = r.get("closes_at")
+            if next_open or closes_at:
+                import json as _json
+                hours_data: dict = {"source": "listing_card"}
+                if next_open:
+                    hours_data["next_open"] = next_open
+                if closes_at:
+                    hours_data["closes_at"] = closes_at
+                db.patch_listing(lid, {"opening_hours": _json.dumps(hours_data)})
             records_saved += 1
             saved.append((r, rid, lid))
 

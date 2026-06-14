@@ -308,5 +308,26 @@
     "savingsNearAll": "Bespaar tot €{amount} door heel Brussel",
     "allBrussels": "Heel Brussel",
     "coverageFooter": "Prijzen dagelijks bijgewerkt · {count} restaurants vergeleken"
+  },
+  "cuisine_page": {
+    "title": "{cuisine} bezorging in Brussel — prijzen vergelijken",
+    "description": "Vergelijk {cuisine} bezorgprijzen op UberEats, Deliveroo, Takeaway en directe bestelling in Brussel. Vind de goedkoopste optie.",
+    "heading": "{cuisine} in Brussel",
+    "count": "{count} restaurants vergeleken",
+    "back": "← Alle restaurants"
+  },
+  "commune_page": {
+    "title": "Eten bezorgen in {commune} — prijzen vergelijken",
+    "description": "Vergelijk bezorgprijzen op UberEats, Deliveroo, Takeaway en directe bestelling in {commune}, Brussel. Vind de goedkoopste optie.",
+    "heading": "Bezorging in {commune}",
+    "count": "{count} restaurants vergeleken",
+    "back": "← Alle restaurants"
+  },
+  "cross_page": {
+    "title": "{cuisine} bezorging in {commune} — prijzen vergelijken",
+    "description": "Vergelijk {cuisine} bezorgprijzen in {commune}, Brussel op UberEats, Deliveroo, Takeaway en directe bestelling.",
+    "heading": "{cuisine} in {commune}",
+    "count": "{count} restaurants vergeleken",
+    "back": "← {cuisine} in Brussel"
   }
 }

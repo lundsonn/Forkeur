@@ -22,7 +22,8 @@ async def public_restaurant_detail(restaurant_id: str):
     try:
         row = await asyncio.to_thread(db.get_public_restaurant_detail, restaurant_id)
     except ValueError:
-        raise HTTPException(status_code=404, detail="Not found")
+        # Not a UUID — try as slug
+        row = await asyncio.to_thread(db.get_public_restaurant_by_slug, restaurant_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Not found")
     return row

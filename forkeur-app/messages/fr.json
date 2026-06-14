@@ -308,5 +308,26 @@
     "savingsNearAll": "Économisez jusqu'à €{amount} dans tout Bruxelles",
     "allBrussels": "Tout Bruxelles",
     "coverageFooter": "Prix mis à jour quotidiennement · {count} restaurants comparés"
+  },
+  "cuisine_page": {
+    "title": "Livraison {cuisine} à Bruxelles — comparer les prix",
+    "description": "Comparez les prix de livraison {cuisine} sur UberEats, Deliveroo, Takeaway et la commande directe à Bruxelles. Trouvez l'option la moins chère.",
+    "heading": "{cuisine} à Bruxelles",
+    "count": "{count} restaurants comparés",
+    "back": "← Tous les restaurants"
+  },
+  "commune_page": {
+    "title": "Livraison à {commune} — comparer les prix",
+    "description": "Comparez les prix de livraison sur UberEats, Deliveroo, Takeaway et la commande directe à {commune}, Bruxelles. Trouvez l'option la moins chère.",
+    "heading": "Livraison à {commune}",
+    "count": "{count} restaurants comparés",
+    "back": "← Tous les restaurants"
+  },
+  "cross_page": {
+    "title": "Livraison {cuisine} à {commune} — comparer les prix",
+    "description": "Comparez les prix de livraison {cuisine} à {commune}, Bruxelles sur UberEats, Deliveroo, Takeaway et la commande directe.",
+    "heading": "{cuisine} à {commune}",
+    "count": "{count} restaurants comparés",
+    "back": "← {cuisine} à Bruxelles"
   }
 }

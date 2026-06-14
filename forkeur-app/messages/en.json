@@ -308,5 +308,26 @@
     "savingsNearAll": "Save up to €{amount} across Brussels",
     "allBrussels": "All of Brussels",
     "coverageFooter": "Prices updated daily · {count} restaurants compared"
+  },
+  "cuisine_page": {
+    "title": "{cuisine} delivery in Brussels — compare prices",
+    "description": "Compare {cuisine} delivery prices across UberEats, Deliveroo, Takeaway and direct ordering in Brussels. Find the cheapest option for your order.",
+    "heading": "{cuisine} in Brussels",
+    "count": "{count} restaurants compared",
+    "back": "← All restaurants"
+  },
+  "commune_page": {
+    "title": "Food delivery in {commune} — compare prices",
+    "description": "Compare food delivery prices across UberEats, Deliveroo, Takeaway and direct ordering in {commune}, Brussels. Find the cheapest option.",
+    "heading": "Delivery in {commune}",
+    "count": "{count} restaurants compared",
+    "back": "← All restaurants"
+  },
+  "cross_page": {
+    "title": "{cuisine} delivery in {commune} — compare prices",
+    "description": "Compare {cuisine} delivery prices in {commune}, Brussels across UberEats, Deliveroo, Takeaway and direct ordering.",
+    "heading": "{cuisine} in {commune}",
+    "count": "{count} restaurants compared",
+    "back": "← {cuisine} in Brussels"
   }
 }
