@@ -129,16 +129,17 @@ export default function HomepageClient({
       return ma - mb
     })
 
-    // Open first; within closed group sort by next opening time soonest first;
-    // within each group, direct ordering websites float to the top
+    // Primary: more platforms first; within group, direct website first; then open/closed
     const now = new Date()
     return [...result].sort((a, b) => {
       const ca = getClosedSortKey(a, now)
       const cb = getClosedSortKey(b, now)
       if (ca.isClosed !== cb.isClosed) return ca.isClosed ? 1 : -1
       if (ca.isClosed && cb.isClosed) return ca.opensAtKey - cb.opensAtKey
-      const da = a.direct_url_type === 'ordering' ? -1 : 0
-      const db = b.direct_url_type === 'ordering' ? -1 : 0
+      const pc = b.listings.length - a.listings.length
+      if (pc !== 0) return pc
+      const da = a.direct_url_type != null ? -1 : 0
+      const db = b.direct_url_type != null ? -1 : 0
       return da - db
     })
   }, [restaurants, search, selectedNeighborhood, selectedCuisine, sortBy, etaMap])
