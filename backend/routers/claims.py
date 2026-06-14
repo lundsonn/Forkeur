@@ -20,6 +20,52 @@ from routers.auth_router import require_auth
 
 logger = logging.getLogger("forkeur.audit")
 
+_RECAPTCHA_API_KEY = os.getenv("RECAPTCHA_API_KEY", "")
+_RECAPTCHA_PROJECT_ID = os.getenv("RECAPTCHA_PROJECT_ID", "")
+_RECAPTCHA_SITE_KEY = os.getenv("RECAPTCHA_SITE_KEY", "") or os.getenv("NEXT_PUBLIC_RECAPTCHA_SITE_KEY", "")
+_RECAPTCHA_SCORE_THRESHOLD = float(os.getenv("RECAPTCHA_SCORE_THRESHOLD", "0.5"))
+
+
+async def _verify_recaptcha(token: str | None) -> None:
+    """Verify a reCAPTCHA Enterprise token. Soft-fails if env vars not configured
+    (dev/unconfigured). Hard-fails if configured but token is missing/invalid."""
+    if not _RECAPTCHA_API_KEY or not _RECAPTCHA_PROJECT_ID:
+        if not token:
+            logger.warning("reCAPTCHA not configured — skipping bot check on claims endpoint")
+        return
+    if not token:
+        raise HTTPException(403, "Bot check token required")
+    url = (
+        f"https://recaptchaenterprise.googleapis.com/v1/projects/"
+        f"{_RECAPTCHA_PROJECT_ID}/assessments?key={_RECAPTCHA_API_KEY}"
+    )
+    payload = {
+        "event": {
+            "token": token,
+            "siteKey": _RECAPTCHA_SITE_KEY,
+            "expectedAction": "submit_claim",
+        }
+    }
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            resp = await client.post(url, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("reCAPTCHA verification request failed: %s", exc)
+        raise HTTPException(503, "Bot check temporarily unavailable")
+    token_props = data.get("tokenProperties", {})
+    if not token_props.get("valid"):
+        raise HTTPException(403, "Invalid bot check token")
+    if token_props.get("action") != "submit_claim":
+        raise HTTPException(403, "Bot check action mismatch")
+    score = data.get("riskAnalysis", {}).get("score", 0.0)
+    if score < _RECAPTCHA_SCORE_THRESHOLD:
+        logger.warning("reCAPTCHA score %.2f below threshold %.2f", score, _RECAPTCHA_SCORE_THRESHOLD)
+        raise HTTPException(403, "Bot check score too low")
+
 
 def _parse_trusted_proxies() -> list:
     """TRUSTED_PROXIES is a comma-separated list of CIDRs whose X-Forwarded-For
@@ -68,6 +114,7 @@ class ClaimIn(BaseModel):
     restaurant_id: UUID | None = None
     direct_order_url: HttpUrl | None = None
     restaurant_name_free: str | None = None
+    recaptcha_token: str | None = None
 
     @model_validator(mode="after")
     def check_fields(self) -> "ClaimIn":
@@ -145,6 +192,7 @@ def _rate_check(ip: str) -> None:
 @router.post("", status_code=201)
 async def submit_claim(body: ClaimIn, request: Request):
     _rate_check(_client_ip(request))
+    await _verify_recaptcha(body.recaptcha_token)
 
     # Vet the URL before persisting — previously only checked at approval time,
     # so the DB could accumulate malicious or internal URLs.
