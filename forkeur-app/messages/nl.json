@@ -273,6 +273,24 @@
     "deltaVsBest": "+{amount} vs beste",
     "directSavings": "Bespaar {amount} door direct te bestellen",
     "directPartialCoverage": "Bestellen per telefoon — {matched} van {total} items in het menu",
-    "closeModal": "Sluiten"
+    "closeModal": "Sluiten",
+    "winnerLabel": "BESTE NU",
+    "totalLabel": "totaal · bezorging inbegrepen",
+    "savingsLine1": "U bespaart {saving} — {pct}% minder",
+    "savingsLine2": "dan hetzelfde bestellen via {platform}",
+    "nextBestLabel": "Op één na beste:",
+    "showDetails": "Alle platforms tonen",
+    "hideDetails": "Details verbergen",
+    "allPlatformsTitle": "ALLE PLATFORMS · ACTUELE PRIJZEN",
+    "feeBreakdownTitle": "{platform} · wat u betaalt",
+    "feeItems": "Artikelen",
+    "feeDelivery": "Bezorging",
+    "feeTotal": "Totaal",
+    "feeServiceNote": "Servicekosten nog niet weergegeven — binnenkort beschikbaar",
+    "whyWinner": "Waarom {platform}? Laagste totaal voor uw mandje — en snelst beschikbaar.",
+    "coverageComplete": "alle artikelen gevonden op elk platform",
+    "coveragePartialShort": "{matched} van {total} gevonden",
+    "coveragePartialFull": "{matched} van {total} gevonden — {missing} konden we niet vergelijken",
+    "feesOnlyFallback": "Bezorgkosten vergelijken — voeg artikelen toe om mand totalen te vergelijken"
   }
 }

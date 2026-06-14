@@ -273,6 +273,24 @@
     "deltaVsBest": "+{amount} vs best",
     "directSavings": "Save {amount} ordering direct",
     "directPartialCoverage": "Order by phone — {matched} of {total} items on menu",
-    "closeModal": "Close"
+    "closeModal": "Close",
+    "winnerLabel": "BEST RIGHT NOW",
+    "totalLabel": "total · delivery included",
+    "savingsLine1": "You save {saving} — {pct}% less",
+    "savingsLine2": "than ordering the same thing on {platform}",
+    "nextBestLabel": "Next best:",
+    "showDetails": "Show all platforms",
+    "hideDetails": "Hide details",
+    "allPlatformsTitle": "ALL PLATFORMS · LIVE PRICES",
+    "feeBreakdownTitle": "{platform} · what you pay",
+    "feeItems": "Items",
+    "feeDelivery": "Delivery",
+    "feeTotal": "Total",
+    "feeServiceNote": "Service fees not yet shown — coming soon",
+    "whyWinner": "Why {platform}? Lowest total for your basket — and fastest right now.",
+    "coverageComplete": "all items matched on every platform",
+    "coveragePartialShort": "Matched {matched} of {total}",
+    "coveragePartialFull": "Matched {matched} of {total} — {missing} we couldn't compare",
+    "feesOnlyFallback": "Comparing delivery fees — add items to compare basket totals"
   }
 }

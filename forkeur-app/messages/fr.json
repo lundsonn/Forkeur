@@ -273,6 +273,24 @@
     "deltaVsBest": "+{amount} vs meilleur",
     "directSavings": "Économisez {amount} en commandant directement",
     "directPartialCoverage": "Commander par téléphone — {matched} sur {total} articles au menu",
-    "closeModal": "Fermer"
+    "closeModal": "Fermer",
+    "winnerLabel": "MEILLEUR MAINTENANT",
+    "totalLabel": "total · livraison incluse",
+    "savingsLine1": "Vous économisez {saving} — {pct}% de moins",
+    "savingsLine2": "qu'en commandant la même chose sur {platform}",
+    "nextBestLabel": "Meilleur suivant :",
+    "showDetails": "Voir toutes les plateformes",
+    "hideDetails": "Masquer les détails",
+    "allPlatformsTitle": "TOUTES LES PLATEFORMES · PRIX EN DIRECT",
+    "feeBreakdownTitle": "{platform} · ce que vous payez",
+    "feeItems": "Articles",
+    "feeDelivery": "Livraison",
+    "feeTotal": "Total",
+    "feeServiceNote": "Frais de service non encore affichés — à venir",
+    "whyWinner": "Pourquoi {platform} ? Total le moins cher pour votre panier — et le plus rapide.",
+    "coverageComplete": "tous les articles correspondants sur chaque plateforme",
+    "coveragePartialShort": "{matched} sur {total} correspondants",
+    "coveragePartialFull": "{matched} sur {total} correspondants — {missing} non comparables",
+    "feesOnlyFallback": "Comparaison des frais de livraison — ajoutez des articles pour comparer les totaux"
   }
 }
