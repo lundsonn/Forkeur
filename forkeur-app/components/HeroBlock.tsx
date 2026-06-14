@@ -28,6 +28,8 @@ function fmtFee(cents: number): string {
 type SavingsExample = {
   name: string
   commune: string | null
+  slug: string | null
+  id: string
   rows: { platform: Platform; feeCents: number }[]
   savingCents: number
   winner: Platform
@@ -46,7 +48,7 @@ function buildExamples(restaurants: RestaurantSummary[]): SavingsExample[] {
     if (rows.length < 2) continue
     const savingCents = rows[1].feeCents - rows[0].feeCents
     if (savingCents < 50) continue
-    results.push({ name: r.name, commune: r.commune, rows, savingCents, winner: rows[0].platform })
+    results.push({ name: r.name, commune: r.commune, slug: r.slug, id: r.id, rows, savingCents, winner: rows[0].platform })
   }
 
   return results
@@ -83,8 +85,9 @@ export default function HeroBlock({ restaurants }: Props) {
       <p className="text-sm text-stone-500 text-center">{t('hero.credibility')}</p>
 
       {ex ? (
-        <div
-          className="rounded-2xl border border-stone-200 bg-white shadow-sm overflow-hidden transition-opacity duration-300"
+        <a
+          href={`/restaurant/${ex.slug ?? ex.id}`}
+          className="block rounded-2xl border border-stone-200 bg-white shadow-sm overflow-hidden transition-all duration-300 cursor-pointer hover:shadow-md hover:border-stone-300"
           style={{ opacity: visible ? 1 : 0 }}
         >
           {/* header */}
@@ -134,7 +137,7 @@ export default function HeroBlock({ restaurants }: Props) {
                 {examples.map((_, i) => (
                   <button
                     key={i}
-                    onClick={() => { setVisible(false); setTimeout(() => { setIdx(i); setVisible(true) }, 200) }}
+                    onClick={(e) => { e.preventDefault(); setVisible(false); setTimeout(() => { setIdx(i); setVisible(true) }, 200) }}
                     className={`w-1.5 h-1.5 rounded-full transition-colors ${i === idx ? 'bg-orange-400' : 'bg-stone-200'}`}
                     aria-label={`Example ${i + 1}`}
                   />
@@ -142,7 +145,7 @@ export default function HeroBlock({ restaurants }: Props) {
               </div>
             )}
           </div>
-        </div>
+        </a>
       ) : textExample !== null ? (
         <>
           <p className="text-sm font-semibold text-stone-700 text-center">{t('hero.rightNow')}</p>
