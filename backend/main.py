@@ -14,10 +14,10 @@ from starlette.requests import Request
 import auth
 import scheduler as sched
 import ws as ws_mod
-from routers import scrapers, runs, schedule, data, websites, claims as claims_router_mod, cleanup, public, metrics
+from routers import scrapers, runs, schedule, data, websites, claims as claims_router_mod, cleanup, public, metrics, altcha as altcha_router_mod
 from routers.auth_router import router as auth_router
 
-_PUBLIC_PATHS = {"/api/auth/login"}
+_PUBLIC_PATHS = {"/api/auth/login", "/api/altcha/challenge"}
 _PUBLIC_POST_PATHS = {"/api/claims"}
 # Only paths under these prefixes require auth; everything else (static assets) is public.
 _AUTH_PREFIXES = ("/api/", "/ws/")
@@ -140,6 +140,7 @@ app.include_router(claims_router_mod.router, prefix="/api")
 app.include_router(cleanup.router, prefix="/api")
 app.include_router(public.router, prefix="/api")
 app.include_router(metrics.router, prefix="/api")
+app.include_router(altcha_router_mod.router, prefix="/api")
 
 
 @app.websocket("/ws/{run_id}")
