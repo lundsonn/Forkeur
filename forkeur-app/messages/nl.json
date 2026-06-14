@@ -362,6 +362,13 @@
     "save_label": "Bespaar {amount}",
     "from_label": "vanaf {amount} op {platform}",
     "free_delivery": "Gratis levering",
-    "deals_promo": "{label}"
+    "deals_promo": "{label}",
+    "craving_heading": "Waar heb je zin in?",
+    "craving_more": "Meer",
+    "craving_less": "Minder",
+    "search_link": "Ken je een specifiek restaurant? Zoeken →",
+    "top_saver_badge": "Grootste besparing",
+    "eta_label": "{min} min",
+    "craving_results_label": "{cuisine} · {count} restaurants"
   }
 }

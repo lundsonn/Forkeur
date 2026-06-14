@@ -191,7 +191,7 @@ export default function HomepageV2({ initialRestaurants, initialCommune }: Props
         </Link>
         <div className="flex-1" />
         <LangToggle />
-        <Link href="/owners" className="text-sm text-stone-500 hover:text-stone-700 hidden sm:block">
+        <Link href="/owners" className="text-sm text-stone-500 hover:text-stone-700">
           Owners
         </Link>
         <Link href="/deals" className="text-sm font-medium text-stone-700 hover:text-orange-500">

@@ -362,6 +362,13 @@
     "save_label": "Save {amount}",
     "from_label": "from {amount} on {platform}",
     "free_delivery": "Free delivery",
-    "deals_promo": "{label}"
+    "deals_promo": "{label}",
+    "craving_heading": "What are you craving?",
+    "craving_more": "More",
+    "craving_less": "Less",
+    "search_link": "Know a specific restaurant? Search →",
+    "top_saver_badge": "Top saver",
+    "eta_label": "{min} min",
+    "craving_results_label": "{cuisine} · {count} restaurants"
   }
 }

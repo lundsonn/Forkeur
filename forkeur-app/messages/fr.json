@@ -362,6 +362,13 @@
     "save_label": "Économisez {amount}",
     "from_label": "à partir de {amount} sur {platform}",
     "free_delivery": "Livraison offerte",
-    "deals_promo": "{label}"
+    "deals_promo": "{label}",
+    "craving_heading": "Qu'est-ce qui vous fait envie ?",
+    "craving_more": "Plus",
+    "craving_less": "Moins",
+    "search_link": "Vous connaissez un resto ? Rechercher →",
+    "top_saver_badge": "Top économie",
+    "eta_label": "{min} min",
+    "craving_results_label": "{cuisine} · {count} restaurants"
   }
 }
