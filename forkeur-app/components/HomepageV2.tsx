@@ -397,7 +397,7 @@ export default function HomepageV2({ initialRestaurants, initialCommune }: Props
           return (
             <section className="space-y-3">
               <p className="text-sm font-semibold text-stone-500">
-                {t('craving_results_label', { cuisine: selectedCuisine, count: savingsRanked.length })}
+                {t('craving_results_label', { cuisine: selectedCuisine!, count: savingsRanked.length })}
               </p>
 
               {/* Hero card */}
