@@ -1,10 +1,10 @@
 import HomepageV2 from '@/components/HomepageV2'
-import { getNearMe } from '@/lib/queries'
+import { getNearMe, type RestaurantSummary } from '@/lib/queries'
 
 export const revalidate = 300
 
 export default async function Home() {
-  let restaurants
+  let restaurants: RestaurantSummary[]
   try {
     restaurants = await getNearMe('bruxelles')
   } catch {
