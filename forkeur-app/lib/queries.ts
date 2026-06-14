@@ -4,7 +4,6 @@ import type { DealItem, DealType } from '@/lib/deals'
 import { normalizeTitle, normalizeForFuzzy } from '@/lib/normalize-title'
 import { jaroWinkler } from '@/lib/fuzzy-title'
 import { backendFetch } from '@/lib/backend'
-import { effectiveTotal } from '@/lib/savings'
 export { normalizeTitle }
 
 const EMOJI_RE = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu
@@ -248,7 +247,7 @@ export async function getRestaurants(): Promise<{
 
       const withEff = available.map((l) => ({
         ...l,
-        eff: effectiveTotal(null, l.min_order_cents ?? 0, l.delivery_fee_cents ?? 0),
+        eff: l.delivery_fee_cents ?? 0,
       })).sort((a, b) => a.eff - b.eff)
       const cheapest = withEff[0]
       const nextCheapest = withEff[1] ?? null
