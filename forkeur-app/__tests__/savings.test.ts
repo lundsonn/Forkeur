@@ -123,17 +123,19 @@ describe('findBestSavingExample', () => {
     expect(result?.restaurant.id).toBe('2')
   })
 
-  it('returns null when effective-total delta is zero despite positive savings_cents', () => {
-    // savings_cents > 0 but min_order_cents equalizes the totals
+  it('ignores min_order_cents — savings based on delivery fee only', () => {
+    // deliveroo fee 50 < uber_eats fee 100, despite min_order equalizing old totals
     const r = makeRestaurant({
       cheapest: { platform: 'deliveroo', fee_label: '€0.50', savings_cents: 50, delivery_fee_cents: 50, min_order_cents: 250 },
       listings: [
-        { platform: 'uber_eats', delivery_fee_cents: 100, min_order_cents: 200, eta_min: 30, is_available: true, opening_hours: null },  // total 300
-        { platform: 'deliveroo', delivery_fee_cents: 50,  min_order_cents: 250, eta_min: 35, is_available: true, opening_hours: null },  // total 300
+        { platform: 'uber_eats', delivery_fee_cents: 100, min_order_cents: 200, eta_min: 30, is_available: true, opening_hours: null },
+        { platform: 'deliveroo', delivery_fee_cents: 50,  min_order_cents: 250, eta_min: 35, is_available: true, opening_hours: null },
       ],
     })
-    // effective totals are equal (300 = 300), so delta is 0, must return null
-    expect(findBestSavingExample([r])).toBeNull()
+    const result = findBestSavingExample([r])
+    expect(result).not.toBeNull()
+    expect(result!.savingsCents).toBe(50)
+    expect(result!.winner.platform).toBe('deliveroo')
   })
 
   it('returns winner/loser/savingsCents breakdown', () => {

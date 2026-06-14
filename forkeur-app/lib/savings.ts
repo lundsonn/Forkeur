@@ -26,7 +26,7 @@ export function platformSavingsSelector(listings: ListingLike[]): SavingsSelecti
     .filter((l): l is ListingLike & { delivery_fee_cents: number } => l.delivery_fee_cents !== null)
     .map((l) => ({
       ...l,
-      total: effectiveTotal(null, l.min_order_cents ?? 0, l.delivery_fee_cents),
+      total: l.delivery_fee_cents,
     }))
     .sort((a, b) => a.total - b.total)
 
@@ -75,7 +75,7 @@ export function findBestSavingExample(restaurants: RestaurantSummary[]): BestSav
         .filter((l) => l.platform !== sel.winner && l.delivery_fee_cents !== null)
         .map((l) => ({
           ...l,
-          total: effectiveTotal(null, l.min_order_cents ?? 0, l.delivery_fee_cents!),
+          total: l.delivery_fee_cents!,
         }))
         .sort((a, b) => a.total - b.total)[0]
       if (!loserEntry) continue
