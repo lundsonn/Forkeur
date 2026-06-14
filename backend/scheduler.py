@@ -46,6 +46,20 @@ async def _run_scraper(platform: str) -> None:
         from scrapers import ubereats, deliveroo, takeaway, direct, direct_menu
         from scrapers import dom_menu
 
+        if platform == "match":
+            # Wait up to 30 min for heavy scrapers to clear before reconciling,
+            # so match always sees the freshest data from the preceding batch.
+            _HEAVY = {"ubereats", "deliveroo", "takeaway", "dom_menu", "direct_menu"}
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + 30 * 60
+            while (_HEAVY & _running) and loop.time() < deadline:
+                _noop(f"Scheduler: match waiting — {sorted(_HEAVY & _running)} still running")
+                await asyncio.sleep(60)
+            if _HEAVY & _running:
+                _noop(f"Scheduler: match proceeding despite {sorted(_HEAVY & _running)} still running (30 min wait expired)")
+            await _run_match()
+            return
+
         if platform == "direct_menu":
             run_id = db.create_run(platform)
             sampler = RamSampler()
